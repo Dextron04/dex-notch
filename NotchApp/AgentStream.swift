@@ -1,6 +1,6 @@
 import Foundation
 
-enum Backend: String { case gemma, claude, codex }
+enum Backend: String, Codable { case gemma, claude, codex }
 struct Route: Equatable { var backend: Backend; var work: Bool; var prompt: String }
 struct Snippet: Equatable { var title: String; var source: String; var snippet: String }
 enum AgentEvent: Equatable { case text(String), tool(String), session(String), final(String), error(String) }

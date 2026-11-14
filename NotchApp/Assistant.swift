@@ -56,6 +56,28 @@ final class Assistant {
     var summarizing = false
 
     private var closedAt: Date?
+    private let storeURL: URL
+
+    init(storeURL: URL = ConversationStore.defaultURL) { self.storeURL = storeURL; restore() }
+
+    // MARK: persistence — the open conversation survives quitting the app
+
+    func persist() {
+        let c = SavedConversation(turns: turns.map { SavedTurn(role: $0.role, text: $0.text) }, backend: backend, work: work,
+                                  sessions: Dictionary(uniqueKeysWithValues: sessions.map { ($0.key.rawValue, $0.value) }),
+                                  draft: draft, recalled: recalled, closedAt: closedAt ?? Date())
+        try? ConversationStore.save(c, to: storeURL) // best effort: a full disk must never break the notch
+    }
+
+    private func restore() {
+        guard let c = ConversationStore.load(from: storeURL) else { return }
+        turns = c.turns.map { Turn(role: $0.role, text: $0.text) }
+        backend = c.backend; work = c.work; recalled = c.recalled
+        sessions = Dictionary(uniqueKeysWithValues: c.sessions.compactMap { k, v in Backend(rawValue: k).map { ($0, v) } })
+        closedAt = c.closedAt
+        draft = c.draft
+    }
+
     private var task: Task<Void, Never>?
     private var summaryTask: Task<Void, Never>?
     private var token: String?
@@ -93,12 +115,13 @@ final class Assistant {
         closedAt = Date()
         isOpen = false
         onOpenChange?(false)
+        persist()
     }
 
     /// ⌘N / the new-chat button: drop the conversation (and stop a running answer) on purpose.
     func newConversation() { task?.cancel(); reset() }
 
-    private func reset() { turns = []; draft = ""; error = nil; backend = .gemma; work = false; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false }
+    private func reset() { turns = []; draft = ""; error = nil; backend = .gemma; work = false; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; persist() }
 
     // MARK: ask
 
@@ -114,6 +137,7 @@ final class Assistant {
         turns.append(Turn(role: "user", text: r.prompt))
         turns.append(Turn(role: "assistant", text: ""))
         waiting = true
+        persist() // the question is safe even if the app dies mid-answer
 
         let messages = [["role": "system", "content": Self.system]]
             + turns.dropLast().map { ["role": $0.role, "content": $0.text] }
@@ -127,6 +151,7 @@ final class Assistant {
                     let extra = AgentStream.memoryPrompt(hits)
                     if !extra.isEmpty { messages[0]["content"] = Self.system + "\n\n" + extra }
                     try await streamChat(messages) { t in
+                        guard !turns.isEmpty else { return }
                         waiting = false; streaming = true
                         turns[turns.count - 1].text += t
                     }
@@ -183,6 +208,7 @@ final class Assistant {
     private func runAgent(_ r: Route) async throws {
         var gotText = false, needBreak = false
         func add(_ t: String) {
+            guard !turns.isEmpty else { return } // ⌘N during an answer can empty the list under us
             waiting = false; streaming = true; toolNote = nil
             if needBreak, !turns[turns.count - 1].text.isEmpty { turns[turns.count - 1].text += "\n\n" }
             needBreak = false; gotText = true
@@ -202,6 +228,7 @@ final class Assistant {
     }
 
     private func finish() {
+        defer { persist() }
         waiting = false; streaming = false; toolNote = nil
         if turns.last?.role == "assistant", turns.last?.text.isEmpty == true, error != nil { turns.removeLast() }
     }

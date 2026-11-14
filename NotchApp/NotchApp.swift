@@ -35,4 +35,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in MainActor.assumeIsolated { self?.notch?.show() } }
     }
+
+    func applicationWillTerminate(_ note: Notification) { assistant.persist() } // ⌘Q / logout mid-thought still keeps the conversation
 }
