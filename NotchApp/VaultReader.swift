@@ -34,7 +34,11 @@ struct VaultSnapshot: Equatable {
 /// Reads the vault the Python recorder writes (header of each note + .recorder/status.json). No UI deps.
 // ponytail: scans every note header per call (~ms for hundreds of notes). Cache by mtime if the vault grows past a few thousand.
 enum VaultReader {
-    static var defaultVault: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Vault") }
+    /// ~/Vault, or $NOTCH_VAULT (demo data for screenshots, or a second vault).
+    static var defaultVault: URL {
+        if let p = ProcessInfo.processInfo.environment["NOTCH_VAULT"], !p.isEmpty { return URL(fileURLWithPath: p) }
+        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Vault")
+    }
 
     private struct Note { let agent: String; let title: String; let project: String; let started: Date; let updated: Date; let turns: Int; let url: URL }
 

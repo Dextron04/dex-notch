@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 600" width="1600" height="600" role="img" aria-label="dex-notch: the Mac notch, wired to every AI you use">
+<title>dex-notch</title>
+<defs>
+  <radialGradient id="glow" cx="50%" cy="0%" r="70%"><stop offset="0" stop-color="#ffb059" stop-opacity=".34"/><stop offset=".45" stop-color="#ee6b2e" stop-opacity=".10"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+  <linearGradient id="rule" x1="0" x2="1"><stop offset="0" stop-color="#ffb059" stop-opacity="0"/><stop offset=".5" stop-color="#ffb059" stop-opacity=".7"/><stop offset="1" stop-color="#ffb059" stop-opacity="0"/></linearGradient>
+  <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="14"/></filter>
+</defs>
+<style>
+  .dot { animation: pulse 2.6s ease-in-out infinite; transform-origin: 506px 27px; }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.45 } }
+  .ul { animation: slide 9s cubic-bezier(.3,.7,.2,1) infinite; }
+  @keyframes slide { 0%,28% { transform: translateX(0) } 36%,61% { transform: translateX(96px) } 69%,94% { transform: translateX(188px) } 100% { transform: translateX(0) } }
+  .l1 { animation: a1 9s infinite } .l2 { animation: a2 9s infinite } .l3 { animation: a3 9s infinite }
+  @keyframes a1 { 0%,30% { fill:#ffb059 } 36%,94% { fill:#8d867b } 100% { fill:#ffb059 } }
+  @keyframes a2 { 0%,30% { fill:#8d867b } 36%,61% { fill:#ffb059 } 69%,100% { fill:#8d867b } }
+  @keyframes a3 { 0%,64% { fill:#8d867b } 69%,94% { fill:#ffb059 } 100% { fill:#8d867b } }
+  @media (prefers-reduced-motion: reduce) { .dot,.ul,.l1,.l2,.l3 { animation: none } .l1 { fill:#ffb059 } }
+</style>
+<rect width="1600" height="600" fill="#050404"/>
+<rect width="1600" height="600" fill="url(#glow)"/>
+<ellipse cx="800" cy="0" rx="430" ry="150" fill="#ffb059" opacity=".22" filter="url(#soft)"/>
+
+<!-- the notch, open -->
+<path d="M452 0 H1148 V118 a36 36 0 0 1 -36 36 H488 a36 36 0 0 1 -36 -36 Z" fill="#000" stroke="#ffb059" stroke-opacity=".10"/>
+<circle class="dot" cx="506" cy="27" r="4.5" fill="#ffb059"/>
+<text x="522" y="32" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="15" fill="#8d867b" letter-spacing=".3">gemma · mac-mini</text>
+<text x="1094" y="32" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="15" fill="#8d867b" text-anchor="end" letter-spacing=".3">⇥ model    esc close</text>
+<text x="506" y="108" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="34" font-style="italic" fill="#8d867b">Ask anything</text>
+<g font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="21" text-anchor="middle">
+  <text class="l1" x="852" y="104">gemma</text><text class="l2" x="948" y="104">claude</text><text class="l3" x="1040" y="104">codex</text>
+</g>
+<rect class="ul" x="822" y="116" width="60" height="2" rx="1" fill="#ffb059"/>
+<text x="1128" y="108" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="26" fill="#8d867b" text-anchor="end" opacity=".6">↩</text>
+
+<text x="800" y="318" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="132" font-weight="600" fill="#f3ebdd" text-anchor="middle" letter-spacing="-3">dex-notch</text>
+<text x="800" y="384" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="38" font-style="italic" fill="#cfc5b3" text-anchor="middle">The Mac notch, wired to every AI you use.</text>
+<text x="800" y="432" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="23" fill="#ffb059" text-anchor="middle" letter-spacing=".4">One hotkey. Three models. One memory they all share.</text>
+<g transform="translate(429,470)">
+      <rect width="145" height="46" rx="23" fill="#0c0b0a" stroke="#ffb059" stroke-opacity=".22"/>
+      <text x="20" y="30" font-family="'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="17" fill="#ffb059">⌥ Space</text>
+      <text x="112" y="30" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="18" font-style="italic" fill="#8d867b">ask</text></g><g transform="translate(592,470)">
+      <rect width="187" height="46" rx="23" fill="#0c0b0a" stroke="#ffb059" stroke-opacity=".22"/>
+      <text x="20" y="30" font-family="'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="17" fill="#ffb059">⌥⇧ Space</text>
+      <text x="124" y="30" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="18" font-style="italic" fill="#8d867b">recall</text></g><g transform="translate(797,470)">
+      <rect width="167" height="46" rx="23" fill="#0c0b0a" stroke="#ffb059" stroke-opacity=".22"/>
+      <text x="20" y="30" font-family="'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="17" fill="#ffb059">⇥</text>
+      <text x="44" y="30" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="18" font-style="italic" fill="#8d867b">switch model</text></g><g transform="translate(982,470)">
+      <rect width="189" height="46" rx="23" fill="#0c0b0a" stroke="#ffb059" stroke-opacity=".22"/>
+      <text x="20" y="30" font-family="'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="17" fill="#ffb059">⌘F</text>
+      <text x="55" y="30" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="18" font-style="italic" fill="#8d867b">pick a folder</text></g>
+<rect x="300" y="566" width="1000" height="1.5" fill="url(#rule)"/>
+</svg>

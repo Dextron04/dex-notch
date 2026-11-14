@@ -120,3 +120,19 @@ final class VaultReaderTests: XCTestCase {
         XCTAssertEqual(VaultReader.sessions(on: ISO8601DateFormatter().date(from: "2026-11-12T00:00:00Z")!, vault: vault, calendar: utc).map(\.lastTitle), ["Long one"])
     }
 }
+
+final class VaultLocationTests: XCTestCase {
+    override func tearDown() { unsetenv("NOTCH_VAULT") }
+    func testDefaultsToVaultInHome() {
+        unsetenv("NOTCH_VAULT")
+        XCTAssertEqual(VaultReader.defaultVault, FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Vault"))
+    }
+    func testEnvironmentOverridePointsTheAppAtAnotherVault() {
+        setenv("NOTCH_VAULT", "/tmp/demo-vault", 1)
+        XCTAssertEqual(VaultReader.defaultVault.path, "/tmp/demo-vault")
+    }
+    func testEmptyOverrideIsIgnored() {
+        setenv("NOTCH_VAULT", "", 1)
+        XCTAssertEqual(VaultReader.defaultVault.lastPathComponent, "Vault")
+    }
+}
