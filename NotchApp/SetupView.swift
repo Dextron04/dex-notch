@@ -106,7 +106,12 @@ struct SetupView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Set up dex-notch").font(.system(size: 31, weight: .semibold, design: .serif)).foregroundStyle(Ink.text)
-            Text("Three quick choices, all changeable later.").font(.system(size: 16, design: .serif)).italic().foregroundStyle(Ink.dim)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Three quick choices, all changeable later.").font(.system(size: 16, design: .serif)).italic().foregroundStyle(Ink.dim)
+                Spacer(minLength: 12)
+                Button { a.openSettings() } label: { Text("Edit settings.json").font(.system(size: 13, design: .serif)).foregroundStyle(Ink.dim).underline() }
+                    .buttonStyle(.plain).help("Open the raw file in your text editor")
+            }
         }
     }
 
@@ -248,13 +253,13 @@ struct SetupView: View {
                 if let msg = m.message {
                     Text(msg).font(.system(size: 13, design: .serif)).foregroundStyle(Ink.emberDeep).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 } else {
-                    Text("Press ⌥ Space any time to ask.").font(.system(size: 13, design: .serif)).italic().foregroundStyle(Ink.dim)
+                    Text("Press ⌥ Space any time to ask.").font(.system(size: 13, design: .serif)).italic().foregroundStyle(Ink.dim).lineLimit(1)
                 }
                 Spacer(minLength: 12)
                 Button("Cancel") { done() }.buttonStyle(.plain).font(.system(size: 15, design: .serif)).foregroundStyle(Ink.dim)
                     .keyboardShortcut(.cancelAction)
                 Button { if m.save() { done() } } label: {
-                    Text("Save and start").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(.black)
+                    Text("Save and start").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(.black).lineLimit(1).fixedSize()
                         .padding(.horizontal, 20).padding(.vertical, 9).background(Capsule().fill(Ink.ember))
                 }.buttonStyle(.plain).keyboardShortcut(.defaultAction)
             }

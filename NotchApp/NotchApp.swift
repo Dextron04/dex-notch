@@ -10,6 +10,7 @@ struct NotchApp: App {
             Button("Ask…  ⌥Space") { delegate.assistant.toggle() }
             Button("Recall…  ⌥⇧Space") { delegate.assistant.toggleRecall() }
             Button("Settings…") { SetupWindow.shared.show(assistant: delegate.assistant) }.keyboardShortcut(",")
+            Button("Open settings.json") { delegate.assistant.openSettings() }
             Button("Check connection") { delegate.assistant.connect() }
             Divider()
             Button("Quit") { NSApp.terminate(nil) }.keyboardShortcut("q")

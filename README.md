@@ -171,13 +171,13 @@ Press `⌥⇧ Space` to see what you and your agents have been doing.
 | `⌘↩` | three-line summary from the model |
 | `/` | search titles, projects and agents |
 
-**Menu bar:** **Settings…** (`⌘ ,`), Recall, Check connection, Quit.
+**Menu bar:** **Settings…** (`⌘ ,`), Recall, **Open settings.json**, Check connection, Quit.
 
 ---
 
 ## Settings
 
-The setup window writes `~/Library/Application Support/NotchApp/settings.json`. You can also edit it by hand. Every key is optional, unknown keys are kept, and the file is re-read whenever you press `⌥ Space` or **Check connection**.
+The setup window writes `~/Library/Application Support/NotchApp/settings.json`. To edit the file by hand, use **Open settings.json** in the menu bar, or **Edit settings.json** in the setup window (`~/Library` is hidden in Finder, so these save you the hunt). Every key is optional, unknown keys are kept, and the file is re-read whenever you press `⌥ Space` or **Check connection**.
 
 ```json
 {
