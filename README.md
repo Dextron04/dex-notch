@@ -38,7 +38,7 @@ The app does not read, copy or reuse your login tokens. It starts the same CLIs 
 ## Get started in two minutes
 
 1. **Download** the latest `dex-notch-*.dmg` from [Releases](https://github.com/Dextron04/dex-notch/releases/latest) and drag **dex-notch** into Applications.
-2. **Open it once with a right-click → Open.** The build is not notarized (that needs a paid Apple Developer ID), so macOS asks once. If it still refuses, run `xattr -dr com.apple.quarantine /Applications/dex-notch.app`.
+2. **Open it once and allow it.** The build is not notarized (that needs a paid Apple Developer ID), so macOS says it can't verify the app. On macOS 15 and later, go to **System Settings → Privacy & Security** and click **Open Anyway** next to dex-notch (on macOS 14, right-click → Open). From Terminal, on any version: `xattr -dr com.apple.quarantine /Applications/dex-notch.app`.
 3. **Answer three questions** in the setup window that opens by itself: which model, where it may work, and (optionally) a model on your own server.
 4. **Press `⌥ Space`.**
 
@@ -272,7 +272,7 @@ REMOTE=host:agentvault/Vault sh install.sh   # keeps both vault copies in step
 
 ## Honest limits
 
-- **The DMG is not notarized.** The first launch needs a right-click → Open. Notarizing takes a paid Apple Developer ID.
+- **The DMG is not notarized.** The first launch needs one extra step (Privacy & Security → Open Anyway on macOS 15 and later). Notarizing takes a paid Apple Developer ID.
 - **Memory is a separate install for now.** The recorder and MCP server live in `memory/` and aren't bundled in the app yet. Without them the recall view is empty and the local model has no vault to search.
 - **ChatGPT and Claude.ai chats are not captured live.** Neither exposes chat history to apps, and MCP is pull-only. The connector lets them *read* your vault and *save* a chat when you ask. A full import from the official data export is not built yet.
 - **The local model is a chat model with retrieved snippets, not an agent.** It cannot open a note or run tools.

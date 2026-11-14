@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds dex-notch.app (universal, ad-hoc signed) and packages it as a .dmg and a .zip in build/dist/.
 #   scripts/make-dmg.sh [version]        e.g. scripts/make-dmg.sh v0.1.0
-# Ad-hoc signing means macOS shows a one-time "unidentified developer" prompt (right-click > Open). Notarizing needs a paid
+# Ad-hoc signing means macOS blocks the first launch until it is allowed once (Privacy & Security > Open Anyway on macOS 15+). Notarizing needs a paid
 # Apple Developer ID; see the README's install section.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -40,9 +40,10 @@ cat > "$STAGE/Read me first.txt" <<TXT
 dex-notch $VERSION
 
 1. Drag dex-notch into Applications.
-2. The first time, right-click it and choose Open (macOS asks once, because this build is not notarized).
-   If macOS still refuses: open Terminal and run
-       xattr -dr com.apple.quarantine /Applications/dex-notch.app
+2. Open it once. This build is not notarized, so macOS says it can't verify the app:
+     macOS 15 and later: System Settings > Privacy & Security > scroll down > Open Anyway.
+     macOS 14: right-click the app and choose Open.
+     Any version, from Terminal:  xattr -dr com.apple.quarantine /Applications/dex-notch.app
 3. A setup window opens. Pick Claude or Codex (install one first if you have neither), choose where it may work, and press Save and start.
 4. Press Option+Space.
 
