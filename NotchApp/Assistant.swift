@@ -55,6 +55,7 @@ final class Assistant {
     var summary = ""
     var summarizing = false
 
+    private var closedAt: Date?
     private var task: Task<Void, Never>?
     private var summaryTask: Task<Void, Never>?
     private var token: String?
@@ -79,6 +80,7 @@ final class Assistant {
         mode = m
         if m == .recall { searching = false; recallQuery = ""; page = .chats; refreshRecall(); recallIndex = 0; summary = ""; cursor = max(grid.days.count - 1, 0); loadDay() }
         guard !isOpen else { return } // already open in the other mode: just switch content
+        if !busy && AgentStream.isStale(closedAt: closedAt, now: Date()) { reset() } // away a long time: start fresh
         isOpen = true
         onOpenChange?(true)
         if link != .ready { connect() }
@@ -86,12 +88,15 @@ final class Assistant {
 
     func close() {
         guard isOpen else { return }
-        task?.cancel(); summaryTask?.cancel()
+        summaryTask?.cancel(); summarizing = false; summary = "" // recall-only state
+        // The conversation is NOT cleared and a running answer is NOT cancelled: clicking away must never lose work.
+        closedAt = Date()
         isOpen = false
         onOpenChange?(false)
-        // clear after the collapse animation so the content doesn't snap away mid-close
-        Task { try? await Task.sleep(for: .milliseconds(450)); if !isOpen { reset() } }
     }
+
+    /// ⌘N / the new-chat button: drop the conversation (and stop a running answer) on purpose.
+    func newConversation() { task?.cancel(); reset() }
 
     private func reset() { turns = []; draft = ""; error = nil; backend = .gemma; work = false; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false }
 

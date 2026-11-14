@@ -58,6 +58,9 @@ final class NotchWindow {
             let code = e.keyCode, flags = e.modifierFlags // NSEvent isn't Sendable: copy what we need
             let handled = MainActor.assumeIsolated { () -> Bool in
                 guard assistant.isOpen else { return false }
+                if assistant.mode == .prompt, code == 45, flags.contains(.command), flags.intersection([.option, .control]).isEmpty {
+                    assistant.newConversation(); return true     // ⌘N
+                }
                 if assistant.mode == .prompt {   // model dial: ⇥ / ⇧⇥ cycle, ⌘1 ⌘2 ⌘3 jump, ⌘E toggles edit rights
                     guard !assistant.busy else { return false }
                     let cmd = flags.contains(.command) && flags.intersection([.option, .control]).isEmpty

@@ -190,3 +190,22 @@ final class ModelDialTests: XCTestCase {
         XCTAssertEqual(AgentStream.consumePrefix("@CLAUDE hi")?.backend, .claude)
     }
 }
+
+final class ConversationLifetimeTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func testNeverClosedIsNotStale() { XCTAssertFalse(AgentStream.isStale(closedAt: nil, now: now)) }
+    func testReopenedWithinTheWindowKeepsTheConversation() {
+        XCTAssertFalse(AgentStream.isStale(closedAt: now.addingTimeInterval(-60), now: now))
+        XCTAssertFalse(AgentStream.isStale(closedAt: now.addingTimeInterval(-1799), now: now))
+    }
+    func testLongAbsenceStartsFresh() {
+        XCTAssertTrue(AgentStream.isStale(closedAt: now.addingTimeInterval(-1801), now: now))
+    }
+    func testWindowIsConfigurable() {
+        XCTAssertTrue(AgentStream.isStale(closedAt: now.addingTimeInterval(-61), now: now, after: 60))
+    }
+    func testClockGoingBackwardsDoesNotWipe() {
+        XCTAssertFalse(AgentStream.isStale(closedAt: now.addingTimeInterval(500), now: now))
+    }
+}

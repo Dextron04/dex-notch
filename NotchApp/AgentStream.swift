@@ -20,6 +20,11 @@ enum AgentStream {
         return Route(backend: b, work: work && b != .gemma, prompt: t.dropFirst(word.count).trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
+    /// A conversation survives closing the notch; it only starts fresh after this long away (or on ⌘N).
+    static func isStale(closedAt: Date?, now: Date, after: TimeInterval = 1800) -> Bool {
+        closedAt.map { now.timeIntervalSince($0) > after } ?? false
+    }
+
     static let order: [Backend] = [.gemma, .claude, .codex]
     static func cycle(_ b: Backend, by d: Int) -> Backend {
         let n = order.count

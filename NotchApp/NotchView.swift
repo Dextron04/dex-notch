@@ -165,6 +165,12 @@ struct NotchView: View {
                 .focused($focused)
                 .disabled(a.busy)
                 .onSubmit { a.send() }
+            if hasAnswer && !a.busy {
+                Button { a.newConversation() } label: {
+                    Image(systemName: "square.and.pencil").font(.system(size: 12, weight: .regular)).foregroundStyle(Ink.dim).padding(6).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).help("New conversation  ⌘N").accessibilityLabel("New conversation")
+            }
             dial
             Image(systemName: "return")
                 .font(.system(size: 12, weight: .semibold))
