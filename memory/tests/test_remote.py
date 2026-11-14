@@ -33,7 +33,8 @@ class RemoteTests(unittest.TestCase):
         notes.append_turns(self.vault, SessionMeta("codex", "aaaaaaaaaa1", "auth", "/x", "2026-11-14T10:00:00Z", "Auth lock fix", "/s"),
                            [Turn("user", "why does the keychain prompt appear", "2026-11-14T10:00:00Z")])
         self.store = OAuthStore(root / "oauth.json")
-        self.srv = make_server(self.vault, self.store, "correct horse", PUB, port=0)
+        self.t = [10_000.0]
+        self.srv = make_server(self.vault, self.store, "correct horse", PUB, port=0, now=lambda: self.t[0])
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.addCleanup(self.srv.server_close); self.addCleanup(self.srv.shutdown)
         self.base = "http://127.0.0.1:%d" % self.srv.server_address[1]
@@ -42,11 +43,11 @@ class RemoteTests(unittest.TestCase):
     def register(self, redirs=(REDIR,)):
         return call("POST", self.base + "/register", {"client_name": "ChatGPT", "redirect_uris": list(redirs)})
 
-    def authorize(self, cid, passphrase="correct horse", redir=REDIR):
+    def authorize(self, cid, passphrase="correct horse", redir=REDIR, ip=None):
         v = "v" * 50
         ch = base64.urlsafe_b64encode(hashlib.sha256(v.encode()).digest()).rstrip(b"=").decode()
         q = {"response_type": "code", "client_id": cid, "redirect_uri": redir, "code_challenge": ch, "code_challenge_method": "S256", "state": "st1"}
-        return v, q, call("POST", self.base + "/authorize", dict(q, passphrase=passphrase), form=True)
+        return v, q, call("POST", self.base + "/authorize", dict(q, passphrase=passphrase), {"CF-Connecting-IP": ip} if ip else None, form=True)
 
     def token(self):
         cid = json.loads(self.register()[2])["client_id"]
@@ -153,6 +154,32 @@ class RemoteTests(unittest.TestCase):
         cid = json.loads(self.register()[2])["client_id"]
         for _ in range(5): self.assertEqual(self.authorize(cid, "nope")[2][0], 403)
         self.assertEqual(self.authorize(cid, "correct horse")[2][0], 429)   # locked even for the right passphrase
+
+    def cid(self): return json.loads(self.register()[2])["client_id"]
+
+    def test_lockout_is_per_ip_other_clients_unaffected(self):
+        cid = self.cid()
+        for _ in range(5): self.assertEqual(self.authorize(cid, "nope", ip="203.0.113.5")[2][0], 403)
+        self.assertEqual(self.authorize(cid, ip="203.0.113.5")[2][0], 429)   # the attacker is locked, even with the right passphrase
+        self.assertEqual(self.authorize(cid, ip="198.51.100.7")[2][0], 302)  # the owner from another address is not
+
+    def test_lockout_expires_after_ten_minutes(self):
+        cid = self.cid()
+        for _ in range(5): self.authorize(cid, "nope", ip="203.0.113.5")
+        self.t[0] += 599; self.assertEqual(self.authorize(cid, ip="203.0.113.5")[2][0], 429)
+        self.t[0] += 2;   self.assertEqual(self.authorize(cid, ip="203.0.113.5")[2][0], 302)
+
+    def test_ipv6_addresses_in_one_slash64_share_a_counter(self):
+        cid = self.cid()
+        for i in range(5): self.authorize(cid, "nope", ip="2001:db8:1:2::%x" % (i + 1))     # rotating the low 64 bits does not help
+        self.assertEqual(self.authorize(cid, ip="2001:db8:1:2:ffff::9")[2][0], 429)
+        self.assertEqual(self.authorize(cid, ip="2001:db8:1:3::1")[2][0], 302)             # a different /64 is a different client
+
+    def test_success_resets_that_ips_failures(self):
+        cid = self.cid()
+        for _ in range(4): self.authorize(cid, "nope", ip="203.0.113.5")
+        self.assertEqual(self.authorize(cid, ip="203.0.113.5")[2][0], 302)
+        for _ in range(4): self.assertEqual(self.authorize(cid, "nope", ip="203.0.113.5")[2][0], 403)  # count restarted from zero
 
     def test_token_endpoint_bad_verifier_400(self):
         cid = json.loads(self.register()[2])["client_id"]

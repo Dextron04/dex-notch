@@ -1,5 +1,5 @@
 """HTTP front for the remote connector: OAuth endpoints + MCP over streamable HTTP (plain JSON responses). Stdlib only."""
-import hmac, html, json, time
+import hmac, html, ipaddress, json, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -8,11 +8,20 @@ from .oauth import OAuthError, OAuthStore
 from .tools import REMEMBER, remember
 
 MAX_BODY = 1024 * 1024
-MAX_FAILS, LOCK_SECONDS = 5, 600
+MAX_FAILS, LOCK_SECONDS, MAX_TRACKED = 5, 600, 10_000
 
-def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str, port: int = 8765, host: str = "127.0.0.1") -> ThreadingHTTPServer:
+def client_key(ip: str) -> str:
+    """Who a failed login counts against: the address, or the /64 for IPv6 (one subscriber owns a whole /64, so rotating inside it must not dodge the lock)."""
+    try:
+        a = ipaddress.ip_address(ip.strip())
+        return str(ipaddress.ip_network("%s/64" % a, strict=False)) if a.version == 6 else str(a)
+    except ValueError:
+        return "unknown"
+
+def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str, port: int = 8765, host: str = "127.0.0.1",
+                now=time.time) -> ThreadingHTTPServer:
     vault, public = Path(vault), public_url.rstrip("/")
-    guard = {"fails": 0, "until": 0.0}
+    guard = {}  # client key -> [failures, locked_until]; in memory on purpose: a restart clears locks, not security
 
     def tool_call(name: str, args: dict):
         return remember(vault, args) if name == "remember" else None
@@ -119,13 +128,18 @@ def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str
             if f is None: return
             try: self.validate(f)
             except OAuthError as e: return self.send(400, "Invalid request: %s" % html.escape(str(e)), "text/plain")
-            now = time.time()
-            if guard["until"] > now: return self.send(429, "Too many attempts. Try again later.", "text/plain")
+            t = now()
+            # Cloudflare sets CF-Connecting-IP; the server listens on localhost only, so only the tunnel can reach it
+            key = client_key(self.headers.get("CF-Connecting-IP") or self.client_address[0])
+            for k in [k for k, (_, until) in guard.items() if until and until <= t]: del guard[k]  # expired locks
+            if len(guard) >= MAX_TRACKED: guard.clear()  # bounded memory under a flood of spoofed-looking sources
+            fails, until = guard.get(key, [0, 0.0])
+            if until > t: return self.send(429, "Too many attempts. Try again later.", "text/plain")
             if not hmac.compare_digest(f.get("passphrase", "").encode(), passphrase.encode()):
-                guard["fails"] += 1
-                if guard["fails"] >= MAX_FAILS: guard["until"], guard["fails"] = now + LOCK_SECONDS, 0
+                fails += 1
+                guard[key] = [0, t + LOCK_SECONDS] if fails >= MAX_FAILS else [fails, 0.0]
                 return self.send(403, "Wrong passphrase.", "text/plain")
-            guard["fails"] = 0
+            guard.pop(key, None)
             code = store.issue_code(f["client_id"], f["redirect_uri"], f["code_challenge"])
             q = {"code": code}
             if f.get("state"): q["state"] = f["state"]
