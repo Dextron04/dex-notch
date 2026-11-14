@@ -228,12 +228,28 @@ final class ConversationLifetimeTests: XCTestCase {
 }
 
 final class WorkFolderTests: XCTestCase {
+    private let list = ["/Users/me/Desktop", "/Users/me/Projects"]
     func testFolderCycleStartsAtSandboxAndWraps() {
-        XCTAssertEqual(AgentStream.nextFolder(nil), "Desktop")
-        XCTAssertEqual(AgentStream.nextFolder("Desktop"), "Downloads")
-        XCTAssertEqual(AgentStream.nextFolder("Documents"), "Projects")
-        XCTAssertNil(AgentStream.nextFolder("Projects"))          // back to the scratch sandbox
-        XCTAssertEqual(AgentStream.nextFolder("Bogus"), "Desktop") // unknown value recovers
+        XCTAssertEqual(AgentStream.nextFolder(nil, in: list), "/Users/me/Desktop")
+        XCTAssertEqual(AgentStream.nextFolder("/Users/me/Desktop", in: list), "/Users/me/Projects")
+        XCTAssertNil(AgentStream.nextFolder("/Users/me/Projects", in: list))               // back to the scratch sandbox
+        XCTAssertEqual(AgentStream.nextFolder("/Users/me/Gone", in: list), "/Users/me/Desktop") // a folder no longer in the list recovers
+    }
+    func testEmptyListStaysOnTheSandbox() { XCTAssertNil(AgentStream.nextFolder(nil, in: [])) }
+    func testBuiltInListIsTheFourStandardFolders() {
+        let home = URL(fileURLWithPath: "/Users/me")
+        XCTAssertEqual(AgentStream.folderChoices(configured: nil, defaultFolder: nil, home: home),
+                       ["/Users/me/Desktop", "/Users/me/Downloads", "/Users/me/Documents", "/Users/me/Projects"])
+    }
+    func testConfiguredListReplacesTheBuiltInOne() {
+        XCTAssertEqual(AgentStream.folderChoices(configured: ["/Users/me/code"], defaultFolder: nil, home: URL(fileURLWithPath: "/Users/me")), ["/Users/me/code"])
+    }
+    func testTheDefaultWorkspaceIsAlwaysSelectableEvenIfNotListed() {
+        XCTAssertEqual(AgentStream.folderChoices(configured: ["/Users/me/code"], defaultFolder: "/Users/me/work", home: URL(fileURLWithPath: "/Users/me")),
+                       ["/Users/me/code", "/Users/me/work"])
+    }
+    func testFolderLabelIsTheLastPathComponent() {
+        XCTAssertEqual(AgentStream.folderLabel("/Users/me/Projects/app"), "app"); XCTAssertEqual(AgentStream.folderLabel(nil), "sandbox")
     }
     private func settings(_ a: [String]) throws -> [String: Any] {
         try XCTUnwrap(JSONSerialization.jsonObject(with: Data(a[a.firstIndex(of: "--settings")! + 1].utf8)) as? [String: Any])
@@ -261,5 +277,73 @@ final class WorkFolderTests: XCTestCase {
         XCTAssertEqual(a[a.firstIndex(of: "--add-dir")! + 1], "/Users/me/Desktop")
         XCTAssertLessThan(a.firstIndex(of: "--add-dir")!, a.firstIndex(of: "resume")!)
         XCTAssertEqual(a.last, "x")
+    }
+}
+
+final class FirstRunTests: XCTestCase {
+    func testDefaultPrefersTheSettingWhenThatModelExists() {
+        XCTAssertEqual(AgentStream.defaultBackend(choices: [.gemma, .claude, .codex], preferred: .codex), .codex)
+    }
+    func testDefaultFallsBackToClaudeThenCodexThenGemma() {
+        XCTAssertEqual(AgentStream.defaultBackend(choices: [.gemma, .claude, .codex], preferred: nil), .claude)
+        XCTAssertEqual(AgentStream.defaultBackend(choices: [.gemma, .codex], preferred: nil), .codex)
+        XCTAssertEqual(AgentStream.defaultBackend(choices: [.gemma], preferred: nil), .gemma)
+    }
+    func testPreferredButMissingModelIsIgnored() {
+        XCTAssertEqual(AgentStream.defaultBackend(choices: [.codex], preferred: .claude), .codex)
+    }
+    func testNothingAvailableMeansNoDefault() { XCTAssertNil(AgentStream.defaultBackend(choices: [], preferred: .claude)) }
+
+    func testCycleOnlyVisitsModelsThatExist() {
+        XCTAssertEqual(AgentStream.cycle(.claude, by: 1, among: [.claude, .codex]), .codex)
+        XCTAssertEqual(AgentStream.cycle(.codex, by: 1, among: [.claude, .codex]), .claude)     // wraps, skipping the absent gemma
+        XCTAssertEqual(AgentStream.cycle(.claude, by: -1, among: [.claude, .codex]), .codex)
+        XCTAssertEqual(AgentStream.cycle(.claude, by: 1, among: [.claude]), .claude)            // one choice: nowhere to go
+    }
+    func testCycleFromAModelNoLongerAvailableLandsOnTheFirst() {
+        XCTAssertEqual(AgentStream.cycle(.gemma, by: 1, among: [.claude, .codex]), .claude)
+    }
+
+    func testLocateFindsTheFirstExecutableOnPATH() {
+        let have: Set<String> = ["/opt/homebrew/bin/claude", "/usr/local/bin/claude", "/usr/local/bin/codex"]
+        XCTAssertEqual(AgentStream.locate("claude", inPATH: "/usr/bin:/opt/homebrew/bin:/usr/local/bin") { have.contains($0) }, "/opt/homebrew/bin/claude")
+        XCTAssertEqual(AgentStream.locate("codex", inPATH: "/usr/bin:/opt/homebrew/bin:/usr/local/bin") { have.contains($0) }, "/usr/local/bin/codex")
+        XCTAssertNil(AgentStream.locate("gemini", inPATH: "/usr/bin") { have.contains($0) })
+    }
+    func testLocateIgnoresEmptyPATHEntries() {
+        XCTAssertNil(AgentStream.locate("claude", inPATH: "::/usr/bin:") { $0 == "/claude" })   // an empty entry must not mean "/claude"
+    }
+}
+
+final class ModelIdentityTests: XCTestCase {
+    func testDisplayNamesAreForPeopleAndAccessibility() {
+        XCTAssertEqual(Backend.claude.displayName, "Claude"); XCTAssertEqual(Backend.codex.displayName, "Codex")
+        XCTAssertEqual(Backend.gemma.displayName, "Local model")     // the custom Ollama connector is not necessarily Gemma
+    }
+    func testCLIOverrideForDemosAndTests() {
+        XCTAssertEqual(AgentStream.parseCLIOverride("none"), [])
+        XCTAssertEqual(AgentStream.parseCLIOverride("claude"), [.claude])
+        XCTAssertEqual(AgentStream.parseCLIOverride(" Claude , codex "), [.claude, .codex])
+        XCTAssertEqual(AgentStream.parseCLIOverride("claude,gemma,nonsense"), [.claude])      // only real CLIs count
+        XCTAssertNil(AgentStream.parseCLIOverride(nil)); XCTAssertNil(AgentStream.parseCLIOverride(""))
+    }
+}
+
+final class BackendAfterDetectionTests: XCTestCase {
+    private let all: [Backend] = [.gemma, .claude, .codex]
+    func testFirstDetectionWithNoConversationAppliesTheDefault() {
+        XCTAssertEqual(AgentStream.backendAfterDetection(current: .claude, firstDetection: true, hasConversation: false, choices: all, preferred: .codex), .codex)
+    }
+    func testLaterChecksNeverOverrideAChoiceTheUserMade() {     // the bug: reopening the notch reset Codex back to Claude
+        XCTAssertEqual(AgentStream.backendAfterDetection(current: .codex, firstDetection: false, hasConversation: false, choices: all, preferred: .claude), .codex)
+    }
+    func testARestoredConversationKeepsItsModelOnFirstDetection() {
+        XCTAssertEqual(AgentStream.backendAfterDetection(current: .codex, firstDetection: true, hasConversation: true, choices: all, preferred: .claude), .codex)
+    }
+    func testAModelThatDisappearedIsReplacedEvenMidConversation() {
+        XCTAssertEqual(AgentStream.backendAfterDetection(current: .codex, firstDetection: false, hasConversation: true, choices: [.claude], preferred: nil), .claude)
+    }
+    func testNothingAvailableLeavesTheSelectionAlone() {
+        XCTAssertEqual(AgentStream.backendAfterDetection(current: .claude, firstDetection: true, hasConversation: false, choices: [], preferred: .codex), .claude)
     }
 }

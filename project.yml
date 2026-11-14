@@ -30,11 +30,15 @@ targets:
   NotchApp:
     type: application
     platform: macOS
-    sources: [NotchApp]
+    sources:
+      - path: NotchApp
+        excludes: ["**/.claude-flow/**", "**/.swarm/**", "**/.superpowers/**", "**/.DS_Store"]   # tooling folders must never be bundled into the app
     info:
       path: NotchApp/Info.plist
       properties:
         LSUIElement: true # menu-bar/agent app, no dock icon
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDisplayName: NotchApp
     settings:
       base:

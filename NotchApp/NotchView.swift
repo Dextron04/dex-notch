@@ -25,7 +25,8 @@ struct NotchView: View {
     private let openW: CGFloat = 560
     private let inputH: CGFloat = 52
     private var hasAnswer: Bool { !a.turns.isEmpty }
-    private var bodyH: CGFloat { hasAnswer ? min((contentH / 8).rounded(.up) * 8, NotchWindow.maxBody) : 0 }
+    private static let setupH: CGFloat = 168
+    private var bodyH: CGFloat { a.needsSetup ? Self.setupH : hasAnswer ? min((contentH / 8).rounded(.up) * 8, NotchWindow.maxBody) : 0 }
     private var recallH: CGFloat { notch.height + 6 + RecallView.bodyHeight(a) + 12 }
     private var pillH: CGFloat {
         guard a.isOpen else { return notch.height }
@@ -63,8 +64,9 @@ struct NotchView: View {
             if a.mode == .recall {
                 RecallView(a: a).padding(.top, 6)
             } else {
-                if hasAnswer { transcript.frame(height: bodyH).padding(.top, 6) }
-                inputRow.padding(.top, hasAnswer ? 0 : 6)
+                if a.needsSetup { setupCard.frame(height: bodyH).padding(.top, 6) }
+                else if hasAnswer { transcript.frame(height: bodyH).padding(.top, 6) }
+                inputRow.padding(.top, hasAnswer || a.needsSetup ? 0 : 6)
             }
         }
         .frame(width: openW)
@@ -89,7 +91,7 @@ struct NotchView: View {
 
             HStack(spacing: 14) {
                 if a.mode == .prompt && hasAnswer && !a.busy && a.error == nil { hint("⇧⌘C", "copy") }
-                else if a.mode == .prompt && !hasAnswer && !a.busy { hint("⇥", "model") }
+                else if a.mode == .prompt && !hasAnswer && !a.busy && a.choices.count > 1 { hint("⇥", "model") }
                 hint("esc", "close")
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -99,13 +101,14 @@ struct NotchView: View {
 
     private var statusText: String {
         if a.mode == .recall { return a.snapshot.recorderOK ? "recorder · running" : "recorder · not running" }
+        if a.needsSetup { return "setup needed" }
         if a.backend != .gemma {
             return a.busy ? (a.toolNote.map { "\(a.backend.rawValue) · using \($0)" } ?? "\(a.backend.rawValue) · thinking")
-                          : (a.work ? "\(a.backend.rawValue)+ · \(a.folder ?? "sandbox")" : "\(a.backend.rawValue) · subscription")
+                          : (a.work ? "\(a.backend.rawValue)+ · \(AgentStream.folderLabel(a.folder))" : "\(a.backend.rawValue) · subscription")
         }
-        if a.setupProblem != nil { return "gemma · not set up" }
+        if a.gemma == nil { return a.configProblem != nil ? "local model · fix settings.json" : "local model · not set up" }
         return switch a.link {
-        case .ready: a.waiting ? "thinking" : "gemma · mac-mini"
+        case .ready: a.waiting ? "thinking" : "local · \(a.gemma?.host ?? "")"
         case .connecting: "connecting to \(a.gemma?.host ?? "gemma")…"
         case .offline: "offline"
         }
@@ -158,7 +161,7 @@ struct NotchView: View {
     private var inputRow: some View {
         HStack(spacing: 10) {
             TextField("", text: $a.draft,
-                      prompt: Text(a.backend == .gemma ? (hasAnswer ? "Follow up…" : "Ask anything") : (a.work && !hasAnswer ? "Ask \(a.backend.rawValue) · ⌘F folder" : "Ask \(a.backend.rawValue)…")).foregroundStyle(Ink.dim))
+                      prompt: Text(a.needsSetup ? "Install claude or codex to begin" : a.backend == .gemma ? (hasAnswer ? "Follow up…" : "Ask anything") : (a.work && !hasAnswer ? "Ask \(a.backend.rawValue) · ⌘F folder" : "Ask \(a.backend.rawValue)…")).foregroundStyle(Ink.dim))
                 .textFieldStyle(.plain)
                 .font(.system(size: 19, design: .serif)).italic(!hasAnswer && a.draft.isEmpty)
                 .foregroundStyle(Ink.text)
@@ -190,15 +193,15 @@ struct NotchView: View {
     /// Three positions, one ember underline that slides to the active model. "+" = may edit files.
     private var dial: some View {
         HStack(spacing: 14) {
-            ForEach(AgentStream.order, id: \.self) { b in
+            ForEach(a.choices, id: \.self) { b in
                 let on = b == a.backend
                 Button { a.setBackend(b) } label: {
                     VStack(spacing: 3) {
-                        HStack(spacing: 0) {
-                            Text(b.rawValue)
-                            if on && a.work { Text("+").foregroundStyle(Ink.emberDeep) }
+                        HStack(spacing: 2) {
+                            ModelMark(backend: b, size: 17)
+                            if on && a.work { Text("+").font(.system(size: 13, weight: .semibold, design: .serif)).foregroundStyle(Ink.emberDeep) }
                         }
-                        .font(.system(size: 12.5, weight: on ? .semibold : .regular, design: .serif))
+                        .frame(minWidth: 40, minHeight: 20)
                         .foregroundStyle(on ? Ink.ember : Ink.dim)
                         ZStack {
                             Color.clear.frame(height: 1)
@@ -208,13 +211,39 @@ struct NotchView: View {
                     .padding(.vertical, 4).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(b.rawValue)
+                .accessibilityLabel(b.displayName)
+                .help("\(b.displayName)  ⌘\((a.choices.firstIndex(of: b) ?? 0) + 1)")
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.82), value: a.backend)
         .animation(.easeOut(duration: 0.15), value: a.work)
         .opacity(a.busy ? 0.4 : 1).allowsHitTesting(!a.busy)
+    }
+
+    /// First run with neither CLI installed: say exactly what to do. Gemma is deliberately an afterthought.
+    private var setupCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("One model to start.").font(.system(size: 21, weight: .semibold, design: .serif)).foregroundStyle(Ink.text)
+            VStack(alignment: .leading, spacing: 8) {
+                setupRow("Claude", "npm install -g @anthropic-ai/claude-code", "then run  claude  once to log in")
+                setupRow("Codex", "npm install -g @openai/codex", "then run  codex  once to log in")
+            }
+            Text("Then press ⌥ Space again. A model on your own server is optional: menu bar → Settings…")
+                .font(.system(size: 13, design: .serif)).italic().foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 30).padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func setupRow(_ name: String, _ cmd: String, _ then: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 10) {
+                Text(name).font(.system(size: 14, weight: .semibold, design: .serif)).foregroundStyle(Ink.ember).frame(width: 52, alignment: .leading)
+                Text(cmd).font(.system(size: 12.5, design: .monospaced)).foregroundStyle(Ink.text).textSelection(.enabled)
+            }
+            Text(then).font(.system(size: 12, design: .serif)).foregroundStyle(Ink.dim).padding(.leading, 62)
+        }
     }
 
     private func copy() {

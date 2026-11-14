@@ -25,7 +25,13 @@ enum AgentRunner {
     }()
 
     private static func find(_ name: String) -> String? {
-        loginPATH.split(separator: ":").map { "\($0)/\(name)" }.first { FileManager.default.isExecutableFile(atPath: $0) }
+        AgentStream.locate(name, inPATH: loginPATH) { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    /// Which CLIs are installed. Logged-in is only discovered when one is run (the error then says so).
+    static func available() -> Set<Backend> {
+        if let o = AgentStream.parseCLIOverride(ProcessInfo.processInfo.environment["NOTCH_CLIS"]) { return o }
+        return Set([Backend.claude, .codex].filter { find($0.rawValue) != nil })
     }
 
     static func run(_ route: Route, session: String?) -> AsyncThrowingStream<AgentEvent, Error> {

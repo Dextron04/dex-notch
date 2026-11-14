@@ -9,6 +9,7 @@ struct NotchApp: App {
         MenuBarExtra("NotchApp", systemImage: "capsule.fill") {
             Button("Ask…  ⌥Space") { delegate.assistant.toggle() }
             Button("Recall…  ⌥⇧Space") { delegate.assistant.toggleRecall() }
+            Button("Settings…") { SetupWindow.shared.show(assistant: delegate.assistant) }.keyboardShortcut(",")
             Button("Check connection") { delegate.assistant.connect() }
             Divider()
             Button("Quit") { NSApp.terminate(nil) }.keyboardShortcut("q")
@@ -30,6 +31,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Hotkey(id: 2, keyCode: kVK_Space, modifiers: optionKey | shiftKey) { [assistant] in assistant.toggleRecall() },
         ]
         assistant.connect()
+        if !FileManager.default.fileExists(atPath: Settings.defaultURL.path) {      // first launch: ask, don't make people hunt for a config file
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [assistant] in SetupWindow.shared.show(assistant: assistant) }
+        }
         // rebuild on display changes (plug/unplug, resolution)
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main

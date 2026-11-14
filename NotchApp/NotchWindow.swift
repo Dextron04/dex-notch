@@ -66,9 +66,9 @@ final class NotchWindow {
                     let cmd = flags.contains(.command) && flags.intersection([.option, .control]).isEmpty
                     switch code {
                     case 48 where flags.intersection([.command, .option, .control]).isEmpty: assistant.cycleBackend(flags.contains(.shift) ? -1 : 1)
-                    case 18 where cmd: assistant.setBackend(.gemma)
-                    case 19 where cmd: assistant.setBackend(.claude)
-                    case 20 where cmd: assistant.setBackend(.codex)
+                    case 18 where cmd: assistant.setBackendAt(0)
+                    case 19 where cmd: assistant.setBackendAt(1)
+                    case 20 where cmd: assistant.setBackendAt(2)
                     case 14 where cmd: assistant.toggleWork()
                     case 3 where cmd: assistant.cycleFolder()     // ⌘F
                     default: return false

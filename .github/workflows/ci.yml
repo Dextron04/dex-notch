@@ -1,0 +1,19 @@
+name: CI
+on:
+  push: { branches: [master] }
+  pull_request:
+permissions: { contents: read }
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Swift tests
+        run: |
+          xcodegen generate
+          xcodebuild test -scheme NotchApp -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO | tail -n 15
+      - name: Python tests (recorder, MCP server, connector)
+        working-directory: memory
+        run: python3 -m unittest discover -s tests

@@ -15,44 +15,40 @@
 		33A991DD0C8D532FDD7C271B /* VaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1699F9A9CD5771ED2F953B05 /* VaultReader.swift */; };
 		3DAB1EE2139C1FD0BE520C84 /* JournalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 930E261BCB82A59819B0A2A3 /* JournalTests.swift */; };
 		4589E5F5759E858CC57E6466 /* Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582019F4D21E660A42477FFC /* Journal.swift */; };
-		4B4BEDC4359643E23125F654 /* ledger-anchors.json in Resources */ = {isa = PBXBuildFile; fileRef = 0CEAFB8F5AACEFD796A183F6 /* ledger-anchors.json */; };
 		5CD049CB380D1303583E2661 /* Assistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218A6628EE36C2AEDB045329 /* Assistant.swift */; };
 		5D77FCCB6F6B59832FB84838 /* AgentStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CADAB3DBF5CC60D578B0C3 /* AgentStream.swift */; };
 		5F04FF700FAE3FFA7F233D2E /* VaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1699F9A9CD5771ED2F953B05 /* VaultReader.swift */; };
 		654D8443649142B3C79DDA2D /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5DE5AEC6077BF0580C62802 /* Settings.swift */; };
 		69D5965BE316E7D1A8F923DF /* NotchWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A42C48BB475251A9D6BB6BD /* NotchWindow.swift */; };
 		6FDCA5158E4E1733118CB32C /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F216985AFA23BC8E9805806 /* ConversationStore.swift */; };
-		7119180D24965AFA75A9EAD1 /* agentdb-memory.db.ruvector in Resources */ = {isa = PBXBuildFile; fileRef = 06D4BB78BCFD0B6E036A3B08 /* agentdb-memory.db.ruvector */; };
 		797AB89EE2D18992578450C4 /* ConversationStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B7D87E48BF594612257808A /* ConversationStoreTests.swift */; };
 		8180508E708118CF50F0B557 /* Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582019F4D21E660A42477FFC /* Journal.swift */; };
 		84C5DC1B9737D7A5558EE39A /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5DE5AEC6077BF0580C62802 /* Settings.swift */; };
 		898D7FB93A9186B951B4088F /* NotchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CBB2E551130DD2CE010BFF /* NotchView.swift */; };
 		9D7DA6C3F8755AD1BA023406 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F216985AFA23BC8E9805806 /* ConversationStore.swift */; };
-		AA3B45C800EDF4041601F806 /* stats.json in Resources */ = {isa = PBXBuildFile; fileRef = 3002838608828CC3F7C6F835 /* stats.json */; };
-		AF71A330F98F8516DA848D07 /* agentdb-memory.db in Resources */ = {isa = PBXBuildFile; fileRef = F4ECC6102B7EA92A8EDD6A7A /* agentdb-memory.db */; };
-		B3086222B3E3EEF693B94F4F /* patterns.json in Resources */ = {isa = PBXBuildFile; fileRef = 579576320D15B49D17A6D342 /* patterns.json */; };
+		A48F6F5CAD79AB60BD5BB30C /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04FED0FDAE6B5FC7FE0D0983 /* SetupView.swift */; };
+		BFF5DE6C28BCA61791F88A08 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */; };
 		C7D2A3408E46CB0BBFCAD224 /* AnswerBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE562AE9C74255701B08F531 /* AnswerBody.swift */; };
 		CB95895D7A39CCCEEF6EAD02 /* Hotkey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01C444F1096C79018A64B462 /* Hotkey.swift */; };
-		D6BADDC614B2BC53DD76DA16 /* state.json in Resources */ = {isa = PBXBuildFile; fileRef = DA7B7D67F5CF1063FF7518BD /* state.json */; };
 		E07EEF3C06EADD40BE52F384 /* NotchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */; };
 		E3ADAE4DD1240F04D154E5CD /* VaultReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */; };
+		ED50E03DCA4D07EBAC51DB90 /* ModelMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794A0159731A8951203F5BD8 /* ModelMark.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		01C444F1096C79018A64B462 /* Hotkey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hotkey.swift; sourceTree = "<group>"; };
-		06D4BB78BCFD0B6E036A3B08 /* agentdb-memory.db.ruvector */ = {isa = PBXFileReference; path = "agentdb-memory.db.ruvector"; sourceTree = "<group>"; };
+		04FED0FDAE6B5FC7FE0D0983 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
+		0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		0A42C48BB475251A9D6BB6BD /* NotchWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchWindow.swift; sourceTree = "<group>"; };
-		0CEAFB8F5AACEFD796A183F6 /* ledger-anchors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "ledger-anchors.json"; sourceTree = "<group>"; };
 		11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultReaderTests.swift; sourceTree = "<group>"; };
 		1699F9A9CD5771ED2F953B05 /* VaultReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultReader.swift; sourceTree = "<group>"; };
 		218A6628EE36C2AEDB045329 /* Assistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Assistant.swift; sourceTree = "<group>"; };
 		2F1487592A6A941D9CB95947 /* AgentRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRunner.swift; sourceTree = "<group>"; };
-		3002838608828CC3F7C6F835 /* stats.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = stats.json; sourceTree = "<group>"; };
 		34B56D0B5E24A59E4A23F196 /* RecallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecallView.swift; sourceTree = "<group>"; };
 		3B7D87E48BF594612257808A /* ConversationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStoreTests.swift; sourceTree = "<group>"; };
-		579576320D15B49D17A6D342 /* patterns.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = patterns.json; sourceTree = "<group>"; };
 		582019F4D21E660A42477FFC /* Journal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Journal.swift; sourceTree = "<group>"; };
 		5B960B471D39685753DB2451 /* NotchAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NotchAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		794A0159731A8951203F5BD8 /* ModelMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelMark.swift; sourceTree = "<group>"; };
 		7E9B5AA03F38C0E8CEEF866E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		930E261BCB82A59819B0A2A3 /* JournalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalTests.swift; sourceTree = "<group>"; };
 		93222A27B250E3C8A8AE083F /* AgentStreamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStreamTests.swift; sourceTree = "<group>"; };
@@ -63,30 +59,10 @@
 		BA22C6E41EAD33D9E8DD129E /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
 		CE562AE9C74255701B08F531 /* AnswerBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerBody.swift; sourceTree = "<group>"; };
 		CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchApp.swift; sourceTree = "<group>"; };
-		DA7B7D67F5CF1063FF7518BD /* state.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = state.json; sourceTree = "<group>"; };
-		F4ECC6102B7EA92A8EDD6A7A /* agentdb-memory.db */ = {isa = PBXFileReference; path = "agentdb-memory.db"; sourceTree = "<group>"; };
 		F5DE5AEC6077BF0580C62802 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
-		0214E1282B197CD037018B55 /* neural */ = {
-			isa = PBXGroup;
-			children = (
-				579576320D15B49D17A6D342 /* patterns.json */,
-				3002838608828CC3F7C6F835 /* stats.json */,
-			);
-			path = neural;
-			sourceTree = "<group>";
-		};
-		6B84CD6C1EE71D3FFF2DBF34 /* policy */ = {
-			isa = PBXGroup;
-			children = (
-				0CEAFB8F5AACEFD796A183F6 /* ledger-anchors.json */,
-				DA7B7D67F5CF1063FF7518BD /* state.json */,
-			);
-			path = policy;
-			sourceTree = "<group>";
-		};
 		8A705B224D3B85E25802D892 = {
 			isa = PBXGroup;
 			children = (
@@ -107,25 +83,17 @@
 				01C444F1096C79018A64B462 /* Hotkey.swift */,
 				7E9B5AA03F38C0E8CEEF866E /* Info.plist */,
 				582019F4D21E660A42477FFC /* Journal.swift */,
+				0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */,
+				794A0159731A8951203F5BD8 /* ModelMark.swift */,
 				CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */,
 				A4CBB2E551130DD2CE010BFF /* NotchView.swift */,
 				0A42C48BB475251A9D6BB6BD /* NotchWindow.swift */,
 				34B56D0B5E24A59E4A23F196 /* RecallView.swift */,
 				F5DE5AEC6077BF0580C62802 /* Settings.swift */,
+				04FED0FDAE6B5FC7FE0D0983 /* SetupView.swift */,
 				1699F9A9CD5771ED2F953B05 /* VaultReader.swift */,
-				E6D581A31AA1475997DB5E9F /* .claude-flow */,
-				FB47157F43434DD8F2908884 /* .swarm */,
 			);
 			path = NotchApp;
-			sourceTree = "<group>";
-		};
-		E6D581A31AA1475997DB5E9F /* .claude-flow */ = {
-			isa = PBXGroup;
-			children = (
-				0214E1282B197CD037018B55 /* neural */,
-				6B84CD6C1EE71D3FFF2DBF34 /* policy */,
-			);
-			path = ".claude-flow";
 			sourceTree = "<group>";
 		};
 		E8DB5246F60E7ADEE92DAE88 /* NotchAppTests */ = {
@@ -147,15 +115,6 @@
 				5B960B471D39685753DB2451 /* NotchAppTests.xctest */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		FB47157F43434DD8F2908884 /* .swarm */ = {
-			isa = PBXGroup;
-			children = (
-				F4ECC6102B7EA92A8EDD6A7A /* agentdb-memory.db */,
-				06D4BB78BCFD0B6E036A3B08 /* agentdb-memory.db.ruvector */,
-			);
-			path = .swarm;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -183,7 +142,6 @@
 			buildConfigurationList = 2056D40C71F64145F9D1535D /* Build configuration list for PBXNativeTarget "NotchApp" */;
 			buildPhases = (
 				7AD512718444DB917FE95810 /* Sources */,
-				A249338EB4A300EC4440BCA9 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -233,22 +191,6 @@
 		};
 /* End PBXProject section */
 
-/* Begin PBXResourcesBuildPhase section */
-		A249338EB4A300EC4440BCA9 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				AF71A330F98F8516DA848D07 /* agentdb-memory.db in Resources */,
-				7119180D24965AFA75A9EAD1 /* agentdb-memory.db.ruvector in Resources */,
-				4B4BEDC4359643E23125F654 /* ledger-anchors.json in Resources */,
-				B3086222B3E3EEF693B94F4F /* patterns.json in Resources */,
-				D6BADDC614B2BC53DD76DA16 /* state.json in Resources */,
-				AA3B45C800EDF4041601F806 /* stats.json in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXResourcesBuildPhase section */
-
 /* Begin PBXSourcesBuildPhase section */
 		6DAD31D031BEF19B5B6A6D7A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -278,11 +220,14 @@
 				9D7DA6C3F8755AD1BA023406 /* ConversationStore.swift in Sources */,
 				CB95895D7A39CCCEEF6EAD02 /* Hotkey.swift in Sources */,
 				8180508E708118CF50F0B557 /* Journal.swift in Sources */,
+				BFF5DE6C28BCA61791F88A08 /* KeychainStore.swift in Sources */,
+				ED50E03DCA4D07EBAC51DB90 /* ModelMark.swift in Sources */,
 				E07EEF3C06EADD40BE52F384 /* NotchApp.swift in Sources */,
 				898D7FB93A9186B951B4088F /* NotchView.swift in Sources */,
 				69D5965BE316E7D1A8F923DF /* NotchWindow.swift in Sources */,
 				1C26891F3606A3AEA83E86B1 /* RecallView.swift in Sources */,
 				84C5DC1B9737D7A5558EE39A /* Settings.swift in Sources */,
+				A48F6F5CAD79AB60BD5BB30C /* SetupView.swift in Sources */,
 				33A991DD0C8D532FDD7C271B /* VaultReader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

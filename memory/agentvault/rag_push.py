@@ -1,4 +1,4 @@
-"""Feeds the vault into the mac-mini's RAG through its own authenticated push endpoint (POST /rag/ingest) as machine "vault".
+"""Feeds the vault into your RAG server through its own authenticated push endpoint (POST /rag/ingest) as machine "vault".
 The tunnel in front drops requests slower than ~100s, so notes go in small batches and long notes are split into parts."""
 import hashlib, json, re, subprocess, urllib.error, urllib.request
 from pathlib import Path

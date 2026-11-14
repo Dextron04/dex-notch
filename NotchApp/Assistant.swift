@@ -1,14 +1,31 @@
 import SwiftUI
 import Observation
 
-/// State + networking for the notch assistant. Talks to Ollama on the mac-mini over HTTPS via the cloudflare gateway.
+/// State + networking for the notch assistant. Talks to an Ollama server you configure (settings.json) over HTTPS, and runs the claude / codex CLIs.
 @MainActor @Observable
 final class Assistant {
     enum Link { case connecting, ready, offline }
 
-    /// Where Gemma lives, from settings.json. nil until that file exists and is valid (`setupProblem` says why).
+    /// Gemma is optional: it exists only once settings.json names a host and model.
     private(set) var gemma: GemmaSettings?
-    private(set) var setupProblem: String?
+    private(set) var gemmaProblem: String?       // a half-filled gemma section
+    private(set) var settingsProblem: String?    // settings.json isn't valid JSON
+    private var preferred: Backend?              // "default" from settings.json
+    private(set) var workspaceDefault: String?   // workspace.default: the folder edit runs start with (nil = scratch sandbox)
+    private var configuredFolders: [String]?     // workspace.folders (nil = the built-in four)
+    private(set) var workspaceProblems: [String] = []
+    private(set) var cliFound: Set<Backend> = [] // which of `claude` / `codex` are installed
+    private(set) var detected = false            // false until the first look for them has finished
+
+    /// The models on the dial: installed CLIs, plus Gemma when configured.
+    var choices: [Backend] { AgentStream.order.filter { $0 == .gemma ? gemma != nil : cliFound.contains($0) } }
+    var needsSetup: Bool { detected && choices.isEmpty }
+    var configProblem: String? { settingsProblem ?? gemmaProblem ?? workspaceProblems.first }
+    /// What ⌘F cycles through: configured folders that exist.
+    var folderList: [String] {
+        AgentStream.folderChoices(configured: configuredFolders, defaultFolder: workspaceDefault, home: FileManager.default.homeDirectoryForCurrentUser)
+            .compactMap { Settings.normalizeFolder($0, home: FileManager.default.homeDirectoryForCurrentUser) { var d: ObjCBool = false; return FileManager.default.fileExists(atPath: $0, isDirectory: &d) && d.boolValue } }
+    }
     private static let system = "You answer inside a tiny overlay beside the Mac's notch. Be brief and direct: plain sentences, no headings, no preamble. Use short lists only when asked. Put any code in fenced blocks with a language tag."
 
     struct Turn { var role: String; var text: String }
@@ -31,9 +48,9 @@ final class Assistant {
     var waiting = false     // sent, no token yet
     var streaming = false   // tokens arriving
     var error: String?
-    var backend: Backend = .gemma   // who answers unprefixed questions in this conversation
+    var backend: Backend = .claude  // who answers unprefixed questions in this conversation
     var work = false                // claude/codex may edit files and run commands — the "+" on the dial
-    var folder: String?             // name of an extra folder those runs may write to (nil = the scratch sandbox only)
+    var folder: String?             // absolute path of the extra folder those runs may write to (nil = the scratch sandbox only)
     var recalled: [String] = []     // titles of the vault notes Gemma was handed for the last answer
     var toolNote: String?           // what claude/codex is doing right now ("Read", "shell", …)
     private var sessions: [Backend: String] = [:] // CLI session ids so follow-ups resume the same conversation
@@ -60,20 +77,53 @@ final class Assistant {
     private let settingsURL: URL
     private var convID = UUID().uuidString
     private var journaled = 0                         // turns already written to the vault journal
-    private var exchange: (backend: Backend, askedAt: Date) = (.gemma, Date())
+    private var exchange: (backend: Backend, askedAt: Date) = (.claude, Date())
 
     init(storeURL: URL = ConversationStore.defaultURL, settingsURL: URL = Settings.defaultURL) {
         self.storeURL = storeURL; self.settingsURL = settingsURL
-        loadSettings(); restore()
+        loadSettings(); restore(); refreshAvailability()
     }
 
     /// Re-read on every connection check, so editing settings.json and pressing ⌥Space (or "Check connection") is enough.
     func loadSettings() {
         switch Settings.load(from: settingsURL) {
-        case .ok(let g): if g != gemma { token = nil }; gemma = g; setupProblem = nil
-        case .missing: gemma = nil; setupProblem = "Gemma isn't set up. Create \(settingsURL.path) (see docs/settings.example.json)."
-        case .invalid(let why): gemma = nil; setupProblem = why + " Fix settings.json, then press Check connection."
+        case .ok(let a):
+            if a.gemma != gemma { token = nil }
+            gemma = a.gemma; gemmaProblem = a.gemmaProblem; settingsProblem = nil; preferred = a.defaultBackend
+            workspaceDefault = a.workspaceDefault; configuredFolders = a.folders; workspaceProblems = a.workspaceProblems
+        case .missing:
+            gemma = nil; gemmaProblem = nil; settingsProblem = nil; preferred = nil
+            workspaceDefault = nil; configuredFolders = nil; workspaceProblems = []
+        case .invalid(let why):
+            gemma = nil; gemmaProblem = nil; settingsProblem = why; preferred = nil
+            workspaceDefault = nil; configuredFolders = nil; workspaceProblems = []
         }
+        if let f = folder, !folderList.contains(f) { folder = workspaceDefault }   // the folder was removed from settings
+        if folder == nil, turns.isEmpty { folder = workspaceDefault }
+        settleBackend()
+    }
+
+    /// Looks for the `claude` and `codex` CLIs (off the main thread: asking a login shell for PATH takes a moment).
+    func refreshAvailability() {
+        Task {
+            let found = await Task.detached { AgentRunner.available() }.value
+            let first = !detected
+            cliFound = found; detected = true
+            let next = AgentStream.backendAfterDetection(current: backend, firstDetection: first, hasConversation: !turns.isEmpty, choices: choices, preferred: preferred)
+            if next != backend { backend = next; if next == .gemma { work = false } }
+        }
+    }
+
+    /// If the selected model isn't available (uninstalled, or Gemma was removed from settings), move to one that is.
+    private func settleBackend() {
+        guard !choices.isEmpty, !choices.contains(backend), let d = AgentStream.defaultBackend(choices: choices, preferred: preferred) else { return }
+        backend = d; if d == .gemma { work = false }
+    }
+
+    /// Menu: "Set up Gemma…" — opens settings.json in the default text editor (creating a blank one first).
+    func openSettings() {
+        _ = try? Settings.ensureTemplate(at: settingsURL)
+        let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/open"); p.arguments = ["-t", settingsURL.path]; try? p.run()
     }
 
     // MARK: persistence — the open conversation survives quitting the app
@@ -88,7 +138,8 @@ final class Assistant {
     private func restore() {
         guard let c = ConversationStore.load(from: storeURL) else { return }
         turns = c.turns.map { Turn(role: $0.role, text: $0.text) }
-        backend = c.backend; work = c.work; folder = c.folder; recalled = c.recalled
+        backend = c.backend; work = c.work; recalled = c.recalled
+        folder = c.folder.map { $0.hasPrefix("/") ? $0 : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent($0).path }  // older saves stored just "Desktop"
         sessions = Dictionary(uniqueKeysWithValues: c.sessions.compactMap { k, v in Backend(rawValue: k).map { ($0, v) } })
         closedAt = c.closedAt
         convID = c.id ?? convID; journaled = turns.count // restored turns were journaled when they happened
@@ -107,10 +158,12 @@ final class Assistant {
 
     // MARK: model dial
 
-    func setBackend(_ b: Backend) { guard !busy else { return }; backend = b; if b == .gemma { work = false } }
-    func cycleBackend(_ d: Int) { setBackend(AgentStream.cycle(backend, by: d)) }
+    func setBackend(_ b: Backend) { guard !busy, choices.contains(b) else { return }; backend = b; if b == .gemma { work = false } }
+    func cycleBackend(_ d: Int) { setBackend(AgentStream.cycle(backend, by: d, among: choices)) }
+    /// ⌘1 ⌘2 ⌘3 pick the 1st, 2nd, 3rd model that is actually on the dial.
+    func setBackendAt(_ i: Int) { if choices.indices.contains(i) { setBackend(choices[i]) } }
     /// ⌘F: sandbox → Desktop → Downloads → Documents → Projects → sandbox. Picking a folder implies edit rights.
-    func cycleFolder() { guard !busy, backend != .gemma else { return }; folder = AgentStream.nextFolder(folder); if folder != nil { work = true } }
+    func cycleFolder() { guard !busy, backend != .gemma else { return }; folder = AgentStream.nextFolder(folder, in: folderList); if folder != nil { work = true } }
     func toggleWork() { guard !busy, backend != .gemma else { return }; work.toggle() }
 
     func toggle() { if isOpen && mode == .prompt { close() } else { open(.prompt) } }
@@ -140,7 +193,7 @@ final class Assistant {
     /// ⌘N / the new-chat button: drop the conversation (and stop a running answer) on purpose.
     func newConversation() { task?.cancel(); reset() }
 
-    private func reset() { turns = []; draft = ""; error = nil; backend = .gemma; work = false; folder = nil; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; journaled = 0; persist() }
+    private func reset() { turns = []; draft = ""; error = nil; backend = AgentStream.defaultBackend(choices: choices, preferred: preferred) ?? .claude; work = false; folder = workspaceDefault; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; journaled = 0; persist() }
 
     // MARK: ask
 
@@ -151,10 +204,9 @@ final class Assistant {
         if r.prompt == q { r.backend = backend; r.work = work && backend != .gemma } // no prefix: use the dial
         else { backend = r.backend; work = r.work }                                  // pasted "@claude …" switches the dial
         guard !r.prompt.isEmpty else { draft = ""; return } // bare "@claude": just switch
-        if r.work, let f = folder {                         // `+` run with a chosen folder: grant write access to exactly that one
-            let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(f)
-            var isDir: ObjCBool = false
-            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue { r.folder = url.path }
+        if r.work, let f = folder {                         // `+` run with a chosen folder: grant write access to exactly that one, re-checked now
+            let home = FileManager.default.homeDirectoryForCurrentUser
+            r.folder = Settings.normalizeFolder(f, home: home) { var d: ObjCBool = false; return FileManager.default.fileExists(atPath: $0, isDirectory: &d) && d.boolValue }
         }
         let b = r.backend
         exchange = (b, Date())
@@ -196,7 +248,7 @@ final class Assistant {
 
     /// POSTs a chat to the gateway and calls `onToken` for every streamed piece of the reply.
     private func streamChat(_ messages: [[String: String]], onToken: (String) -> Void) async throws {
-        guard let g = gemma else { throw Failure(setupProblem ?? "Gemma isn't set up.") }
+        guard let g = gemma else { throw Failure(gemmaProblem ?? settingsProblem ?? "Gemma isn't set up. Choose “Set up Gemma…” in the menu bar.") }
         let tok = try loadToken()
         var req = URLRequest(url: URL(string: g.base + "/api/chat")!)
         req.httpMethod = "POST"
@@ -339,7 +391,8 @@ final class Assistant {
     /// Reads the bearer token from the login keychain via `security` (the tool that stored it, so no prompt).
     private func loadToken() throws -> String {
         if let token { return token }
-        guard let g = gemma else { link = .offline; throw Failure(setupProblem ?? "Gemma isn't set up.") }
+        if let g = gemma, let t = KeychainStore.get(service: g.keychainService, account: g.keychainAccount) { token = t; return t }
+        guard let g = gemma else { link = .offline; throw Failure(gemmaProblem ?? settingsProblem ?? "Gemma isn't set up. Choose “Set up Gemma…” in the menu bar.") }
         let p = Process(), out = Pipe()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
         p.arguments = ["find-generic-password", "-s", g.keychainService, "-a", g.keychainAccount, "-w"]
@@ -357,9 +410,9 @@ final class Assistant {
 
     /// Checks gateway reachability + token validity; drives the status dot.
     func connect() {
+        loadSettings(); refreshAvailability()
         Task {
             link = .connecting
-            loadSettings()
             guard let g = gemma else { link = .offline; return }
             guard let tok = try? loadToken() else { return } // loadToken set .offline
             var r = URLRequest(url: URL(string: g.base + "/api/tags")!)

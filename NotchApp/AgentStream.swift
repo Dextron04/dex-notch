@@ -1,6 +1,10 @@
 import Foundation
 
-enum Backend: String, Codable { case gemma, claude, codex }
+enum Backend: String, Codable {
+    case gemma, claude, codex
+    /// What people (and VoiceOver) call it. `gemma` is the self-hosted Ollama connector, whatever model it serves.
+    var displayName: String { switch self { case .gemma: "Local model"; case .claude: "Claude"; case .codex: "Codex" } }
+}
 struct Route: Equatable { var backend: Backend; var work: Bool; var prompt: String; var folder: String? = nil } // folder: absolute path `+` runs may also write to
 struct Snippet: Equatable { var title: String; var source: String; var snippet: String }
 enum AgentEvent: Equatable { case text(String), tool(String), session(String), final(String), error(String) }
@@ -25,11 +29,52 @@ enum AgentStream {
         closedAt.map { now.timeIntervalSince($0) > after } ?? false
     }
 
-    /// Folders `⌘F` offers besides the scratch sandbox (names under the home directory).
-    static let folders = ["Desktop", "Downloads", "Documents", "Projects"]
-    static func nextFolder(_ current: String?) -> String? {
-        guard let c = current, let i = folders.firstIndex(of: c) else { return folders[0] } // nil or unknown → first folder
-        return i + 1 < folders.count ? folders[i + 1] : nil
+    /// ⌘F: scratch sandbox → each configured folder → back to the sandbox.
+    static func nextFolder(_ current: String?, in list: [String]) -> String? {
+        guard !list.isEmpty else { return nil }
+        guard let c = current, let i = list.firstIndex(of: c) else { return list[0] }   // nil, or a folder no longer listed: start over
+        return i + 1 < list.count ? list[i + 1] : nil
+    }
+
+    /// The folders an edit run can be granted: the configured list (or the four standard ones), plus the default workspace.
+    static func folderChoices(configured: [String]?, defaultFolder: String?, home: URL) -> [String] {
+        var list = configured ?? ["Desktop", "Downloads", "Documents", "Projects"].map { home.path + "/" + $0 }
+        if let d = defaultFolder, !list.contains(d) { list.append(d) }
+        return list
+    }
+
+    static func folderLabel(_ path: String?) -> String { path.map { ($0 as NSString).lastPathComponent } ?? "sandbox" }
+
+    /// Which model starts selected: the one named in settings if it exists, else claude, codex, gemma in that order. nil = nothing usable yet.
+    static func defaultBackend(choices: [Backend], preferred: Backend?) -> Backend? {
+        if let p = preferred, choices.contains(p) { return p }
+        return [Backend.claude, .codex, .gemma].first { choices.contains($0) }
+    }
+
+    /// What the dial should show after looking for the CLIs. The default applies once, on the very first look and only when no
+    /// conversation is being restored; after that the user's own choice stands unless that model is gone.
+    static func backendAfterDetection(current: Backend, firstDetection: Bool, hasConversation: Bool, choices: [Backend], preferred: Backend?) -> Backend {
+        guard !choices.isEmpty else { return current }
+        if firstDetection && !hasConversation { return defaultBackend(choices: choices, preferred: preferred) ?? current }
+        return choices.contains(current) ? current : (defaultBackend(choices: choices, preferred: preferred) ?? current)
+    }
+
+    /// ⇥ over only the models that exist (the dial hides the rest).
+    static func cycle(_ b: Backend, by d: Int, among list: [Backend]) -> Backend {
+        guard !list.isEmpty else { return b }
+        guard let i = list.firstIndex(of: b) else { return list[0] }
+        return list[((i + d) % list.count + list.count) % list.count]
+    }
+
+    /// First executable called `name` in a PATH-style string. Empty entries are skipped (an empty PATH entry would otherwise mean "/name").
+    static func locate(_ name: String, inPATH path: String, isExecutable: (String) -> Bool) -> String? {
+        path.split(separator: ":", omittingEmptySubsequences: true).map { "\($0)/\(name)" }.first(where: isExecutable)
+    }
+
+    /// NOTCH_CLIS="none" | "claude,codex": pretend only these CLIs are installed (demos, screenshots, first-run testing). nil = no override.
+    static func parseCLIOverride(_ raw: String?) -> Set<Backend>? {
+        guard let raw, !raw.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return Set(raw.split(separator: ",").compactMap { Backend(rawValue: $0.trimmingCharacters(in: .whitespaces).lowercased()) }.filter { $0 != .gemma })
     }
 
     static let order: [Backend] = [.gemma, .claude, .codex]

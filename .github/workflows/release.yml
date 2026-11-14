@@ -1,0 +1,26 @@
+name: Release
+# Tag a version (git tag v0.1.0 && git push --tags) to publish a DMG.
+# Run it by hand from the Actions tab to just build one and download it as an artifact, with no release created.
+on:
+  push: { tags: ['v*'] }
+  workflow_dispatch:
+permissions: { contents: write }
+jobs:
+  dmg:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build the DMG
+        run: scripts/make-dmg.sh "${GITHUB_REF_NAME}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dex-notch-${{ github.ref_name }}
+          path: build/dist/*
+          if-no-files-found: error
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release create "$GITHUB_REF_NAME" build/dist/* --title "dex-notch $GITHUB_REF_NAME" --generate-notes

@@ -9,12 +9,12 @@
   .dot { animation: pulse 2.6s ease-in-out infinite; transform-origin: 506px 27px; }
   @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.45 } }
   .ul { animation: slide 9s cubic-bezier(.3,.7,.2,1) infinite; }
-  @keyframes slide { 0%,28% { transform: translateX(0) } 36%,61% { transform: translateX(96px) } 69%,94% { transform: translateX(188px) } 100% { transform: translateX(0) } }
-  .l1 { animation: a1 9s infinite } .l2 { animation: a2 9s infinite } .l3 { animation: a3 9s infinite }
-  @keyframes a1 { 0%,30% { fill:#ffb059 } 36%,94% { fill:#8d867b } 100% { fill:#ffb059 } }
-  @keyframes a2 { 0%,30% { fill:#8d867b } 36%,61% { fill:#ffb059 } 69%,100% { fill:#8d867b } }
-  @keyframes a3 { 0%,64% { fill:#8d867b } 69%,94% { fill:#ffb059 } 100% { fill:#8d867b } }
-  @media (prefers-reduced-motion: reduce) { .dot,.ul,.l1,.l2,.l3 { animation: none } .l1 { fill:#ffb059 } }
+  @keyframes slide { 0%,28% { transform: translateX(96px) } 36%,61% { transform: translateX(188px) } 69%,94% { transform: translateX(0) } 100% { transform: translateX(96px) } }
+  .m1 { animation: s1 9s infinite } .m2 { animation: s2 9s infinite } .m3 { animation: s3 9s infinite }
+  @keyframes s2 { 0%,30% { stroke:#ffb059 } 36%,94% { stroke:#8d867b } 100% { stroke:#ffb059 } }
+  @keyframes s3 { 0%,30% { stroke:#8d867b } 36%,61% { stroke:#ffb059 } 69%,100% { stroke:#8d867b } }
+  @keyframes s1 { 0%,64% { stroke:#8d867b } 69%,94% { stroke:#ffb059 } 100% { stroke:#8d867b } }
+  @media (prefers-reduced-motion: reduce) { .dot,.ul,.m1,.m2,.m3 { animation: none } .ul { transform: translateX(96px) } .m2 { stroke:#ffb059 } }
 </style>
 <rect width="1600" height="600" fill="#050404"/>
 <rect width="1600" height="600" fill="url(#glow)"/>
@@ -23,13 +23,11 @@
 <!-- the notch, open -->
 <path d="M452 0 H1148 V118 a36 36 0 0 1 -36 36 H488 a36 36 0 0 1 -36 -36 Z" fill="#000" stroke="#ffb059" stroke-opacity=".10"/>
 <circle class="dot" cx="506" cy="27" r="4.5" fill="#ffb059"/>
-<text x="522" y="32" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="15" fill="#8d867b" letter-spacing=".3">gemma · mac-mini</text>
+<text x="522" y="32" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="15" fill="#8d867b" letter-spacing=".3">claude · subscription</text>
 <text x="1094" y="32" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="15" fill="#8d867b" text-anchor="end" letter-spacing=".3">⇥ model    esc close</text>
 <text x="506" y="108" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="34" font-style="italic" fill="#8d867b">Ask anything</text>
-<g font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="21" text-anchor="middle">
-  <text class="l1" x="852" y="104">gemma</text><text class="l2" x="948" y="104">claude</text><text class="l3" x="1040" y="104">codex</text>
-</g>
-<rect class="ul" x="822" y="116" width="60" height="2" rx="1" fill="#ffb059"/>
+<g class="m1" stroke="#8d867b"><path d="M845.40 83.40H858.60Q864.60 83.40 864.60 89.40V102.60Q864.60 108.60 858.60 108.60H845.40Q839.40 108.60 839.40 102.60V89.40Q839.40 83.40 845.40 83.40ZM848.10 88.50L855.90 88.50" fill="none" stroke-width="3.30" stroke-linecap="round" stroke-linejoin="round"/><circle cx="852.00" cy="99.90" r="1.05" fill="none" stroke-width="2.10"/></g><g class="m2" stroke="#8d867b"><path d="M948.00 93.00L948.00 81.60M949.50 93.40L953.10 87.17M950.60 94.50L960.47 88.80M951.00 96.00L958.20 96.00M950.60 97.50L960.47 103.20M949.50 98.60L953.10 104.83M948.00 99.00L948.00 110.40M946.50 98.60L942.90 104.83M945.40 97.50L935.53 103.20M945.00 96.00L937.80 96.00M945.40 94.50L935.53 88.80M946.50 93.40L942.90 87.17" fill="none" stroke-width="3.90" stroke-linecap="round"/></g><g class="m3" stroke="#8d867b"><path d="M1040.00 82.20L1051.95 89.10L1051.95 102.90L1040.00 109.80L1028.05 102.90L1028.05 89.10ZM1040.00 96.00L1040.00 82.20M1040.00 96.00L1051.95 102.90M1040.00 96.00L1028.05 102.90" fill="none" stroke-width="3.30" stroke-linecap="round" stroke-linejoin="round"/></g>
+<rect class="ul" x="822" y="120" width="60" height="2" rx="1" fill="#ffb059"/>
 <text x="1128" y="108" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="26" fill="#8d867b" text-anchor="end" opacity=".6">↩</text>
 
 <text x="800" y="318" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="132" font-weight="600" fill="#f3ebdd" text-anchor="middle" letter-spacing="-3">dex-notch</text>

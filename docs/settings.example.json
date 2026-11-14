@@ -1,8 +1,11 @@
 {
+  "default": "claude",
+  "workspace": {
+    "default": "~/Projects",
+    "folders": ["~/Desktop", "~/Downloads", "~/Projects"]
+  },
   "gemma": {
     "host": "ai.example.com",
-    "model": "gemma3:12b",
-    "keychain_service": "ai.example.com",
-    "keychain_account": "notchapp"
+    "model": "gemma3:12b"
   }
 }
