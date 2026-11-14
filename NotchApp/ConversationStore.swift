@@ -4,6 +4,7 @@ struct SavedTurn: Codable, Equatable { var role: String; var text: String }
 
 struct SavedConversation: Codable, Equatable {
     var version = 1
+    var id: String?                        // conversation id: ties the saved chat to its vault note across restarts
     var turns: [SavedTurn] = []
     var backend: Backend = .gemma
     var work = false

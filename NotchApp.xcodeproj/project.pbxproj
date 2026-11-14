@@ -12,6 +12,8 @@
 		1C26891F3606A3AEA83E86B1 /* RecallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B56D0B5E24A59E4A23F196 /* RecallView.swift */; };
 		23B64ECBB548D9A23A57FD34 /* AgentRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1487592A6A941D9CB95947 /* AgentRunner.swift */; };
 		33A991DD0C8D532FDD7C271B /* VaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1699F9A9CD5771ED2F953B05 /* VaultReader.swift */; };
+		3DAB1EE2139C1FD0BE520C84 /* JournalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 930E261BCB82A59819B0A2A3 /* JournalTests.swift */; };
+		4589E5F5759E858CC57E6466 /* Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582019F4D21E660A42477FFC /* Journal.swift */; };
 		4B4BEDC4359643E23125F654 /* ledger-anchors.json in Resources */ = {isa = PBXBuildFile; fileRef = 0CEAFB8F5AACEFD796A183F6 /* ledger-anchors.json */; };
 		5CD049CB380D1303583E2661 /* Assistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218A6628EE36C2AEDB045329 /* Assistant.swift */; };
 		5D77FCCB6F6B59832FB84838 /* AgentStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CADAB3DBF5CC60D578B0C3 /* AgentStream.swift */; };
@@ -20,6 +22,7 @@
 		6FDCA5158E4E1733118CB32C /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F216985AFA23BC8E9805806 /* ConversationStore.swift */; };
 		7119180D24965AFA75A9EAD1 /* agentdb-memory.db.ruvector in Resources */ = {isa = PBXBuildFile; fileRef = 06D4BB78BCFD0B6E036A3B08 /* agentdb-memory.db.ruvector */; };
 		797AB89EE2D18992578450C4 /* ConversationStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B7D87E48BF594612257808A /* ConversationStoreTests.swift */; };
+		8180508E708118CF50F0B557 /* Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582019F4D21E660A42477FFC /* Journal.swift */; };
 		898D7FB93A9186B951B4088F /* NotchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CBB2E551130DD2CE010BFF /* NotchView.swift */; };
 		9D7DA6C3F8755AD1BA023406 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F216985AFA23BC8E9805806 /* ConversationStore.swift */; };
 		AA3B45C800EDF4041601F806 /* stats.json in Resources */ = {isa = PBXBuildFile; fileRef = 3002838608828CC3F7C6F835 /* stats.json */; };
@@ -45,8 +48,10 @@
 		34B56D0B5E24A59E4A23F196 /* RecallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecallView.swift; sourceTree = "<group>"; };
 		3B7D87E48BF594612257808A /* ConversationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStoreTests.swift; sourceTree = "<group>"; };
 		579576320D15B49D17A6D342 /* patterns.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = patterns.json; sourceTree = "<group>"; };
+		582019F4D21E660A42477FFC /* Journal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Journal.swift; sourceTree = "<group>"; };
 		5B960B471D39685753DB2451 /* NotchAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NotchAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7E9B5AA03F38C0E8CEEF866E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		930E261BCB82A59819B0A2A3 /* JournalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalTests.swift; sourceTree = "<group>"; };
 		93222A27B250E3C8A8AE083F /* AgentStreamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStreamTests.swift; sourceTree = "<group>"; };
 		9F216985AFA23BC8E9805806 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
 		A4CBB2E551130DD2CE010BFF /* NotchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchView.swift; sourceTree = "<group>"; };
@@ -96,6 +101,7 @@
 				9F216985AFA23BC8E9805806 /* ConversationStore.swift */,
 				01C444F1096C79018A64B462 /* Hotkey.swift */,
 				7E9B5AA03F38C0E8CEEF866E /* Info.plist */,
+				582019F4D21E660A42477FFC /* Journal.swift */,
 				CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */,
 				A4CBB2E551130DD2CE010BFF /* NotchView.swift */,
 				0A42C48BB475251A9D6BB6BD /* NotchWindow.swift */,
@@ -121,6 +127,7 @@
 			children = (
 				93222A27B250E3C8A8AE083F /* AgentStreamTests.swift */,
 				3B7D87E48BF594612257808A /* ConversationStoreTests.swift */,
+				930E261BCB82A59819B0A2A3 /* JournalTests.swift */,
 				11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */,
 			);
 			path = NotchAppTests;
@@ -244,6 +251,8 @@
 				0C7BDE62527D048383248291 /* AgentStreamTests.swift in Sources */,
 				6FDCA5158E4E1733118CB32C /* ConversationStore.swift in Sources */,
 				797AB89EE2D18992578450C4 /* ConversationStoreTests.swift in Sources */,
+				4589E5F5759E858CC57E6466 /* Journal.swift in Sources */,
+				3DAB1EE2139C1FD0BE520C84 /* JournalTests.swift in Sources */,
 				5F04FF700FAE3FFA7F233D2E /* VaultReader.swift in Sources */,
 				E3ADAE4DD1240F04D154E5CD /* VaultReaderTests.swift in Sources */,
 			);
@@ -259,6 +268,7 @@
 				5CD049CB380D1303583E2661 /* Assistant.swift in Sources */,
 				9D7DA6C3F8755AD1BA023406 /* ConversationStore.swift in Sources */,
 				CB95895D7A39CCCEEF6EAD02 /* Hotkey.swift in Sources */,
+				8180508E708118CF50F0B557 /* Journal.swift in Sources */,
 				E07EEF3C06EADD40BE52F384 /* NotchApp.swift in Sources */,
 				898D7FB93A9186B951B4088F /* NotchView.swift in Sources */,
 				69D5965BE316E7D1A8F923DF /* NotchWindow.swift in Sources */,

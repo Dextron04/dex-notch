@@ -57,13 +57,16 @@ final class Assistant {
 
     private var closedAt: Date?
     private let storeURL: URL
+    private var convID = UUID().uuidString
+    private var journaled = 0                         // turns already written to the vault journal
+    private var exchange: (backend: Backend, askedAt: Date) = (.gemma, Date())
 
     init(storeURL: URL = ConversationStore.defaultURL) { self.storeURL = storeURL; restore() }
 
     // MARK: persistence — the open conversation survives quitting the app
 
     func persist() {
-        let c = SavedConversation(turns: turns.map { SavedTurn(role: $0.role, text: $0.text) }, backend: backend, work: work,
+        let c = SavedConversation(id: convID, turns: turns.map { SavedTurn(role: $0.role, text: $0.text) }, backend: backend, work: work,
                                   sessions: Dictionary(uniqueKeysWithValues: sessions.map { ($0.key.rawValue, $0.value) }),
                                   draft: draft, recalled: recalled, closedAt: closedAt ?? Date())
         try? ConversationStore.save(c, to: storeURL) // best effort: a full disk must never break the notch
@@ -75,6 +78,7 @@ final class Assistant {
         backend = c.backend; work = c.work; recalled = c.recalled
         sessions = Dictionary(uniqueKeysWithValues: c.sessions.compactMap { k, v in Backend(rawValue: k).map { ($0, v) } })
         closedAt = c.closedAt
+        convID = c.id ?? convID; journaled = turns.count // restored turns were journaled when they happened
         draft = c.draft
     }
 
@@ -121,7 +125,7 @@ final class Assistant {
     /// ⌘N / the new-chat button: drop the conversation (and stop a running answer) on purpose.
     func newConversation() { task?.cancel(); reset() }
 
-    private func reset() { turns = []; draft = ""; error = nil; backend = .gemma; work = false; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; persist() }
+    private func reset() { turns = []; draft = ""; error = nil; backend = .gemma; work = false; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; journaled = 0; persist() }
 
     // MARK: ask
 
@@ -133,6 +137,7 @@ final class Assistant {
         else { backend = r.backend; work = r.work }                                  // pasted "@claude …" switches the dial
         guard !r.prompt.isEmpty else { draft = ""; return } // bare "@claude": just switch
         let b = r.backend
+        exchange = (b, Date())
         draft = ""; error = nil; toolNote = nil; recalled = []
         turns.append(Turn(role: "user", text: r.prompt))
         turns.append(Turn(role: "assistant", text: ""))
@@ -231,6 +236,18 @@ final class Assistant {
         defer { persist() }
         waiting = false; streaming = false; toolNote = nil
         if turns.last?.role == "assistant", turns.last?.text.isEmpty == true, error != nil { turns.removeLast() }
+        journalGemmaExchange()
+    }
+
+    /// Gemma has no session log of its own, so each finished exchange goes to the vault journal (claude/codex runs are already
+    /// recorded from their own logs). Skipped on errors and cancels: only a complete question + answer is worth remembering.
+    private func journalGemmaExchange() {
+        defer { journaled = turns.count }
+        guard exchange.backend == .gemma, error == nil, turns.count > journaled, turns.count >= 2,
+              turns[turns.count - 1].role == "assistant", !turns[turns.count - 1].text.isEmpty, turns[turns.count - 2].role == "user" else { return }
+        try? Journal.append([JournalEntry(role: "user", text: turns[turns.count - 2].text, ts: exchange.askedAt),
+                             JournalEntry(role: "assistant", text: turns[turns.count - 1].text, ts: Date())],
+                            conv: convID, model: "gemma", to: Journal.defaultDir) // best effort: never block the notch on disk trouble
     }
 
     struct Failure: Error { let msg: String; init(_ m: String) { msg = m } }
