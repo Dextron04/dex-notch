@@ -156,3 +156,37 @@ final class MemoryRecallTests: XCTestCase {
         XCTAssertLessThanOrEqual(AgentStream.memoryPrompt(big, limit: 3000).count, 3300)  // limit + fixed header/footer
     }
 }
+
+final class ModelDialTests: XCTestCase {
+    func testCycleForwardWraps() {
+        XCTAssertEqual(AgentStream.cycle(.gemma, by: 1), .claude)
+        XCTAssertEqual(AgentStream.cycle(.claude, by: 1), .codex)
+        XCTAssertEqual(AgentStream.cycle(.codex, by: 1), .gemma)
+    }
+    func testCycleBackwardWraps() {
+        XCTAssertEqual(AgentStream.cycle(.gemma, by: -1), .codex)
+        XCTAssertEqual(AgentStream.cycle(.codex, by: -1), .claude)
+    }
+    func testTypedPrefixConvertsOnceTheSpaceArrives() {
+        let c = AgentStream.consumePrefix("@claude ")
+        XCTAssertEqual(c?.backend, .claude); XCTAssertEqual(c?.work, false); XCTAssertEqual(c?.rest, "")
+    }
+    func testPlusMeansEditsAndRestIsKept() {
+        let c = AgentStream.consumePrefix("@codex+ refactor it")
+        XCTAssertEqual(c?.backend, .codex); XCTAssertEqual(c?.work, true); XCTAssertEqual(c?.rest, "refactor it")
+    }
+    func testStillTypingTheNameDoesNothing() {
+        XCTAssertNil(AgentStream.consumePrefix("@claud")); XCTAssertNil(AgentStream.consumePrefix("@claude"))
+    }
+    func testPrefixOnlyCountsAtTheStart() {
+        XCTAssertNil(AgentStream.consumePrefix("hello @claude "))
+    }
+    func testUnknownNamesAndGluedWordsAreLeftAlone() {
+        XCTAssertNil(AgentStream.consumePrefix("@bob hi")); XCTAssertNil(AgentStream.consumePrefix("@claudeX hi"))
+    }
+    func testCaseInsensitiveAndGemmaNeverGetsEdits() {
+        XCTAssertEqual(AgentStream.consumePrefix("@Gemma+ x")?.backend, .gemma)
+        XCTAssertEqual(AgentStream.consumePrefix("@Gemma+ x")?.work, false)
+        XCTAssertEqual(AgentStream.consumePrefix("@CLAUDE hi")?.backend, .claude)
+    }
+}

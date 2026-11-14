@@ -19,6 +19,7 @@ struct NotchView: View {
     let panel: CGSize // root fills panel exactly so content never resizes it
 
     @FocusState private var focused: Bool
+    @Namespace private var dialNS
     @State private var contentH: CGFloat = 0
 
     private let openW: CGFloat = 560
@@ -40,6 +41,7 @@ struct NotchView: View {
         }
         .frame(width: panel.width, height: panel.height, alignment: .top)
         .onKeyPress(.escape) { a.close(); return .handled }
+        .onChange(of: a.backend) { focused = true } // a click on the dial must not strand the caret
         .onChange(of: a.busy) { if !a.busy && a.isOpen { focused = true } } // field is disabled while answering
         .task(id: [a.isOpen ? 1 : 0, a.mode == .prompt ? 1 : 0]) { if a.isOpen && a.mode == .prompt { try? await Task.sleep(for: .milliseconds(120)); focused = true } } // also when switching recall → prompt while open
     }
@@ -87,6 +89,7 @@ struct NotchView: View {
 
             HStack(spacing: 14) {
                 if a.mode == .prompt && hasAnswer && !a.busy && a.error == nil { hint("⇧⌘C", "copy") }
+                else if a.mode == .prompt && !hasAnswer && !a.busy { hint("⇥", "model") }
                 hint("esc", "close")
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -97,7 +100,8 @@ struct NotchView: View {
     private var statusText: String {
         if a.mode == .recall { return a.snapshot.recorderOK ? "recorder · running" : "recorder · not running" }
         if a.backend != .gemma {
-            return a.busy ? (a.toolNote.map { "\(a.backend.rawValue) · using \($0)" } ?? "\(a.backend.rawValue) · thinking") : "\(a.backend.rawValue) · subscription"
+            return a.busy ? (a.toolNote.map { "\(a.backend.rawValue) · using \($0)" } ?? "\(a.backend.rawValue) · thinking")
+                          : "\(a.backend.rawValue) · " + (a.work ? "can edit files" : "subscription")
         }
         return switch a.link {
         case .ready: a.waiting ? "thinking" : "gemma · mac-mini"
@@ -153,7 +157,7 @@ struct NotchView: View {
     private var inputRow: some View {
         HStack(spacing: 10) {
             TextField("", text: $a.draft,
-                      prompt: Text(hasAnswer ? "Follow up…" : "Ask anything — or @claude, @codex").foregroundStyle(Ink.dim))
+                      prompt: Text(a.backend == .gemma ? (hasAnswer ? "Follow up…" : "Ask anything") : "Ask \(a.backend.rawValue)…").foregroundStyle(Ink.dim))
                 .textFieldStyle(.plain)
                 .font(.system(size: 19, design: .serif)).italic(!hasAnswer && a.draft.isEmpty)
                 .foregroundStyle(Ink.text)
@@ -161,6 +165,7 @@ struct NotchView: View {
                 .focused($focused)
                 .disabled(a.busy)
                 .onSubmit { a.send() }
+            dial
             Image(systemName: "return")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(a.draft.isEmpty ? Ink.dim.opacity(0.5) : Ink.ember)
@@ -173,6 +178,36 @@ struct NotchView: View {
             Rectangle().fill(Ink.text.opacity(hasAnswer ? 0.08 : 0)).frame(height: 1).padding(.horizontal, 26),
             alignment: .top)
         .background(Button("") { copy() }.keyboardShortcut("c", modifiers: [.command, .shift]).opacity(0).allowsHitTesting(false))
+    }
+
+    /// Three positions, one ember underline that slides to the active model. "+" = may edit files.
+    private var dial: some View {
+        HStack(spacing: 14) {
+            ForEach(AgentStream.order, id: \.self) { b in
+                let on = b == a.backend
+                Button { a.setBackend(b) } label: {
+                    VStack(spacing: 3) {
+                        HStack(spacing: 0) {
+                            Text(b.rawValue)
+                            if on && a.work { Text("+").foregroundStyle(Ink.emberDeep) }
+                        }
+                        .font(.system(size: 12.5, weight: on ? .semibold : .regular, design: .serif))
+                        .foregroundStyle(on ? Ink.ember : Ink.dim)
+                        ZStack {
+                            Color.clear.frame(height: 1)
+                            if on { Rectangle().fill(Ink.ember).frame(height: 1).matchedGeometryEffect(id: "underline", in: dialNS) }
+                        }
+                    }
+                    .padding(.vertical, 4).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(b.rawValue)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .animation(.spring(response: 0.28, dampingFraction: 0.82), value: a.backend)
+        .animation(.easeOut(duration: 0.15), value: a.work)
+        .opacity(a.busy ? 0.4 : 1).allowsHitTesting(!a.busy)
     }
 
     private func copy() {

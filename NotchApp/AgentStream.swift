@@ -20,6 +20,20 @@ enum AgentStream {
         return Route(backend: b, work: work && b != .gemma, prompt: t.dropFirst(word.count).trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
+    static let order: [Backend] = [.gemma, .claude, .codex]
+    static func cycle(_ b: Backend, by d: Int) -> Backend {
+        let n = order.count
+        return order[((order.firstIndex(of: b) ?? 0) + d % n + n) % n]
+    }
+    /// "@claude " / "@codex+ text" typed at the start of the field: returns the choice and the remaining text so the UI can turn it into the dial.
+    static func consumePrefix(_ draft: String) -> (backend: Backend, work: Bool, rest: String)? {
+        guard draft.hasPrefix("@"), let sp = draft.firstIndex(where: \.isWhitespace) else { return nil } // no space yet = still typing the name
+        let name = draft[draft.index(after: draft.startIndex)..<sp].lowercased()
+        let edits = name.hasSuffix("+")
+        guard let b = Backend(rawValue: edits ? String(name.dropLast()) : name) else { return nil }
+        return (b, edits && b != .gemma, String(draft[sp...].drop { $0.isWhitespace }))
+    }
+
     private static let brief = "You answer inside a tiny overlay beside the Mac's notch. Be brief and direct: plain sentences, no headings, no preamble."
 
     // MARK: argv

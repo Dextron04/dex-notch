@@ -57,7 +57,21 @@ final class NotchWindow {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [assistant] e in
             let code = e.keyCode, flags = e.modifierFlags // NSEvent isn't Sendable: copy what we need
             let handled = MainActor.assumeIsolated { () -> Bool in
-                guard assistant.isOpen, assistant.mode == .recall else { return false }
+                guard assistant.isOpen else { return false }
+                if assistant.mode == .prompt {   // model dial: ⇥ / ⇧⇥ cycle, ⌘1 ⌘2 ⌘3 jump, ⌘E toggles edit rights
+                    guard !assistant.busy else { return false }
+                    let cmd = flags.contains(.command) && flags.intersection([.option, .control]).isEmpty
+                    switch code {
+                    case 48 where flags.intersection([.command, .option, .control]).isEmpty: assistant.cycleBackend(flags.contains(.shift) ? -1 : 1)
+                    case 18 where cmd: assistant.setBackend(.gemma)
+                    case 19 where cmd: assistant.setBackend(.claude)
+                    case 20 where cmd: assistant.setBackend(.codex)
+                    case 14 where cmd: assistant.toggleWork()
+                    default: return false
+                    }
+                    return true
+                }
+                guard assistant.mode == .recall else { return false }
                 switch code {
                 case 48: assistant.stepPage(flags.contains(.shift) ? -1 : 1)                         // ⇥ / ⇧⇥ switch page
                 case 123: if assistant.page == .activity { assistant.moveCursor(-1) } else { assistant.stepPage(-1) }   // ←

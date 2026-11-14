@@ -23,12 +23,17 @@ final class Assistant {
     var isOpen = false
     var mode: Mode = .prompt
     var link: Link = .connecting
-    var draft = ""
+    var draft = "" {
+        didSet { // "@claude " typed at the start becomes a dial choice instead of staying in the text
+            if let c = AgentStream.consumePrefix(draft), !busy { backend = c.backend; work = c.work; draft = c.rest }
+        }
+    }
     var turns: [Turn] = []
     var waiting = false     // sent, no token yet
     var streaming = false   // tokens arriving
     var error: String?
     var backend: Backend = .gemma   // who answers unprefixed questions in this conversation
+    var work = false                // claude/codex may edit files (scratch folder) — the "+" on the dial
     var recalled: [String] = []     // titles of the vault notes Gemma was handed for the last answer
     var toolNote: String?           // what claude/codex is doing right now ("Read", "shell", …)
     private var sessions: [Backend: String] = [:] // CLI session ids so follow-ups resume the same conversation
@@ -60,6 +65,12 @@ final class Assistant {
 
     // MARK: open / close
 
+    // MARK: model dial
+
+    func setBackend(_ b: Backend) { guard !busy else { return }; backend = b; if b == .gemma { work = false } }
+    func cycleBackend(_ d: Int) { setBackend(AgentStream.cycle(backend, by: d)) }
+    func toggleWork() { guard !busy, backend != .gemma else { return }; work.toggle() }
+
     func toggle() { if isOpen && mode == .prompt { close() } else { open(.prompt) } }
     func toggleRecall() { if isOpen && mode == .recall { close() } else { open(.recall) } }
 
@@ -82,7 +93,7 @@ final class Assistant {
         Task { try? await Task.sleep(for: .milliseconds(450)); if !isOpen { reset() } }
     }
 
-    private func reset() { turns = []; draft = ""; error = nil; backend = .gemma; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false }
+    private func reset() { turns = []; draft = ""; error = nil; backend = .gemma; work = false; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false }
 
     // MARK: ask
 
@@ -90,8 +101,8 @@ final class Assistant {
         let q = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !busy else { return }
         var r = AgentStream.route(q)
-        if r.prompt == q { r.backend = backend }       // no prefix: stay on the model this conversation started with
-        else { backend = r.backend }                   // "@claude" switches (sticky until the notch closes)
+        if r.prompt == q { r.backend = backend; r.work = work && backend != .gemma } // no prefix: use the dial
+        else { backend = r.backend; work = r.work }                                  // pasted "@claude …" switches the dial
         guard !r.prompt.isEmpty else { draft = ""; return } // bare "@claude": just switch
         let b = r.backend
         draft = ""; error = nil; toolNote = nil; recalled = []
