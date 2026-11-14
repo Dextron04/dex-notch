@@ -2,7 +2,7 @@
 import argparse, json, sys
 from dataclasses import asdict
 from pathlib import Path
-from . import search as S
+from . import rag_push, search as S
 
 TOOLS = [
     {"name": "vault_search", "description": "Search past conversations across all agents (Claude Code, Codex, Gemini) recorded in the shared Obsidian vault.",
@@ -15,7 +15,7 @@ TOOLS = [
 ]
 
 def call(vault: Path, name: str, a: dict) -> str:
-    if name == "vault_search": return json.dumps([asdict(h) for h in S.search(vault, a["query"], a.get("agent"), a.get("since"))], indent=1)
+    if name == "vault_search": return json.dumps([asdict(h) for h in S.search(vault, a["query"], a.get("agent"), a.get("since"), semantic=rag_push.semantic_paths)], indent=1)
     if name == "vault_recent": return json.dumps([asdict(h) for h in S.recent(vault, a.get("agent"), int(a.get("n", 5)))], indent=1)
     if name == "vault_read": return S.read(vault, a["path"], int(a.get("offset", 0)), int(a.get("limit", S.READ_LIMIT)))
     raise KeyError(name)

@@ -49,6 +49,28 @@ class SearchTests(unittest.TestCase):
         for bad in ("../../etc/passwd", "../" + self.v.name + "/../x.md", "/etc/passwd", str(outside), "link.md", "Index.txt", ".recorder/status.json"):
             with self.assertRaises(ValueError, msg=bad): search.read(self.v, bad)
 
+class SemanticTests(unittest.TestCase):
+    def setUp(self):
+        self._t = tempfile.TemporaryDirectory(); self.v = Path(self._t.name)
+    def tearDown(self): self._t.cleanup()
+
+    def test_semantic_hits_follow_local_ones_without_duplicates(self):
+        a = add(self.v, "aaaaaaaaaa1", "keychain prompt", title="local match")
+        b = add(self.v, "bbbbbbbbbb2", "ACL on the item", title="meaning match")
+        rel = lambda p: p.relative_to(self.v).as_posix()
+        hits = search.search(self.v, "keychain", semantic=lambda q: [rel(b), rel(a), "Sessions/gone/x.md"])
+        self.assertEqual([h.title for h in hits], ["local match", "meaning match"])
+
+    def test_semantic_failure_falls_back_to_local_results(self):
+        add(self.v, "aaaaaaaaaa1", "keychain prompt", title="local match")
+        def down(q): raise OSError("mini unreachable")
+        self.assertEqual([h.title for h in search.search(self.v, "keychain", semantic=down)], ["local match"])
+
+    def test_semantic_respects_agent_filter(self):
+        b = add(self.v, "bbbbbbbbbb2", "x", title="other agent", agent="gemini")
+        hits = search.search(self.v, "zzzz", agent="codex", semantic=lambda q: [b.relative_to(self.v).as_posix()])
+        self.assertEqual(hits, [])
+
 class ReadCapTests(unittest.TestCase):
     def test_vault_read_is_capped_and_pageable(self):
         with tempfile.TemporaryDirectory() as d:

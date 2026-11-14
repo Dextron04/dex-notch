@@ -2,7 +2,7 @@
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 from .index import session_files
 from .notes import read_frontmatter
 
@@ -26,7 +26,8 @@ def _rows(vault: Path, agent: Optional[str], since: Optional[str]):
         if since and fm.get("updated", "") < since: continue
         yield p, fm
 
-def search(vault: Path, query: str, agent: Optional[str] = None, since: Optional[str] = None, limit: int = 10) -> List[Hit]:
+def search(vault: Path, query: str, agent: Optional[str] = None, since: Optional[str] = None, limit: int = 10,
+           semantic: Optional[Callable[[str], List[str]]] = None) -> List[Hit]:
     vault = Path(vault)
     terms = [re.escape(t) for t in query.split() if t]
     if not terms: return []
@@ -41,7 +42,18 @@ def search(vault: Path, query: str, agent: Optional[str] = None, since: Optional
         snippet = " ".join(re.sub(r"<!-- t:[0-9a-f]{10} -->", "", body[a:found[0].end() + 120]).split())
         scored.append((len(found), fm.get("updated", ""), _hit(vault, p, fm, snippet)))
     scored.sort(key=lambda r: (r[0], r[1]), reverse=True)
-    return [r[2] for r in scored[:limit]]
+    hits = [r[2] for r in scored[:limit]]
+    if semantic and len(hits) < limit:  # meaning-based matches from the mini's RAG, after the exact ones; any failure is ignored
+        try: rels = semantic(query)
+        except Exception: rels = []
+        seen = {h.path for h in hits}
+        for rel in rels:
+            p = vault / rel
+            if rel in seen or ".sync-conflict-" in rel or not p.is_file() or len(hits) >= limit: continue
+            fm = read_frontmatter(p)
+            if (agent and fm.get("agent") != agent) or (since and fm.get("updated", "") < since): continue
+            seen.add(rel); hits.append(_hit(vault, p, fm, "(semantic match)"))
+    return hits
 
 def recent(vault: Path, agent: Optional[str] = None, n: int = 5) -> List[Hit]:
     vault = Path(vault)
