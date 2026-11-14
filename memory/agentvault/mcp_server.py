@@ -20,8 +20,8 @@ def call(vault: Path, name: str, a: dict) -> str:
     if name == "vault_read": return S.read(vault, a["path"], int(a.get("offset", 0)), int(a.get("limit", S.READ_LIMIT)))
     raise KeyError(name)
 
-def handle(req: dict, vault: Path):
-    """Returns a response dict, or None for notifications."""
+def handle(req: dict, vault: Path, extra=None):
+    """Returns a response dict, or None for notifications. `extra` = (tool schemas, fn(name, args) -> str | None) adds tools (remote connector)."""
     rid, method, params = req.get("id"), req.get("method", ""), req.get("params") or {}
     if rid is None: return None  # notification
     ok = lambda r: {"jsonrpc": "2.0", "id": rid, "result": r}
@@ -29,9 +29,12 @@ def handle(req: dict, vault: Path):
         return ok({"protocolVersion": params.get("protocolVersion", "2024-11-05"), "capabilities": {"tools": {}},
                    "serverInfo": {"name": "agentvault", "version": "0.1.0"}})
     if method == "ping": return ok({})
-    if method == "tools/list": return ok({"tools": TOOLS})
+    if method == "tools/list": return ok({"tools": TOOLS + (extra[0] if extra else [])})
     if method == "tools/call":
-        try: return ok({"content": [{"type": "text", "text": call(vault, params.get("name", ""), params.get("arguments") or {})}]})
+        try:
+            name, args = params.get("name", ""), params.get("arguments") or {}
+            text = extra[1](name, args) if extra else None
+            return ok({"content": [{"type": "text", "text": text if text is not None else call(vault, name, args)}]})
         except Exception as e: return ok({"content": [{"type": "text", "text": "error: %s" % e}], "isError": True})
     return {"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": "method not found: %s" % method}}
 
