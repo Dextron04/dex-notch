@@ -43,13 +43,17 @@ enum AgentStream {
 
     // MARK: argv
 
+    /// Claude's own OS sandbox (seatbelt) for its shell: writes only inside the working folder, no network, and no way back to an unsandboxed shell.
+    private static let claudeSandbox = #"{"sandbox":{"enabled":true,"autoAllowBashIfSandboxed":true,"allowUnsandboxedCommands":false}}"#
+
     static func claudeArgs(prompt: String, session: String?, work: Bool) -> [String] {
-        var a = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--append-system-prompt", brief]
+        var a = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--append-system-prompt",
+                 work ? brief + " You may edit files and run shell commands; commands run in a sandbox: they can only write inside the current folder and have no network." : brief]
         if let session { a += ["--resume", session] }
-        // Ask: look things up only. Work: may also edit files (in the scratch dir the runner uses). Never Bash.
-        a += ["--allowedTools", "Read", "Grep", "Glob", "WebSearch", "WebFetch", "mcp__agentvault"]
-        a += ["--disallowedTools", "Bash"] + (work ? [] : ["Edit", "Write", "NotebookEdit"])
-        if work { a += ["--allowedTools", "Edit", "Write", "--permission-mode", "acceptEdits"] }
+        // Ask: look things up only. Work (`+`): may also edit files and run commands, but only inside the sandbox above.
+        a += ["--allowedTools", "Read", "Grep", "Glob", "WebSearch", "WebFetch", "mcp__agentvault"] + (work ? ["Edit", "Write", "Bash"] : [])
+        if work { a += ["--permission-mode", "acceptEdits", "--settings", claudeSandbox] }
+        else { a += ["--disallowedTools", "Bash", "Edit", "Write", "NotebookEdit"] }
         return a + ["--", prompt] // `--`: variadic flags above must not swallow the prompt, and a leading "-" must not parse as an option
     }
 

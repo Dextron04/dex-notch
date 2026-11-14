@@ -101,7 +101,7 @@ struct NotchView: View {
         if a.mode == .recall { return a.snapshot.recorderOK ? "recorder · running" : "recorder · not running" }
         if a.backend != .gemma {
             return a.busy ? (a.toolNote.map { "\(a.backend.rawValue) · using \($0)" } ?? "\(a.backend.rawValue) · thinking")
-                          : "\(a.backend.rawValue) · " + (a.work ? "can edit files" : "subscription")
+                          : "\(a.backend.rawValue) · " + (a.work ? "can edit & run code" : "subscription")
         }
         return switch a.link {
         case .ready: a.waiting ? "thinking" : "gemma · mac-mini"

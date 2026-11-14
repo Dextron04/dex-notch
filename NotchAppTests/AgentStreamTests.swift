@@ -36,12 +36,29 @@ final class AgentStreamTests: XCTestCase {
         XCTAssertTrue(Set(["Bash", "Edit", "Write", "NotebookEdit"]).isSubset(of: denied))
         XCTAssertFalse(a.contains("acceptEdits"))
     }
-    func testClaudeWorkModeAllowsEditsButNeverBash() {
+    func testClaudeWorkModeAllowsEditsAndCommands() {
         let a = AgentStream.claudeArgs(prompt: "x", session: nil, work: true)
         XCTAssertTrue(a.contains("acceptEdits"))
-        let denied = a[(a.firstIndex(of: "--disallowedTools")! + 1)...].prefix { !$0.hasPrefix("--") }
-        XCTAssertTrue(denied.contains("Bash"))
-        XCTAssertFalse(denied.contains("Edit"))
+        let allowed = a[(a.firstIndex(of: "--allowedTools")! + 1)...].prefix { !$0.hasPrefix("--") }
+        XCTAssertTrue(Set(["Edit", "Write", "Bash", "Read"]).isSubset(of: allowed))
+        XCTAssertFalse(a.contains("--disallowedTools") && a[(a.firstIndex(of: "--disallowedTools")! + 1)...].prefix { !$0.hasPrefix("--") }.contains("Bash"))
+    }
+    func testClaudeWorkModeRunsCommandsOnlyInsideTheOSSandbox() throws {
+        let a = AgentStream.claudeArgs(prompt: "x", session: nil, work: true)
+        let json = a[a.firstIndex(of: "--settings")! + 1]
+        let sb = try XCTUnwrap((JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])?["sandbox"] as? [String: Any])
+        XCTAssertEqual(sb["enabled"] as? Bool, true)
+        XCTAssertEqual(sb["allowUnsandboxedCommands"] as? Bool, false)    // no escape hatch back to an unsandboxed shell
+    }
+    func testClaudeAskModeNeverGetsBashOrSandboxOverrides() {
+        let a = AgentStream.claudeArgs(prompt: "x", session: nil, work: false)
+        XCTAssertFalse(a.contains("--settings"))
+        XCTAssertFalse(a[(a.firstIndex(of: "--allowedTools")! + 1)...].prefix { !$0.hasPrefix("--") }.contains("Bash"))
+        XCTAssertTrue(a[(a.firstIndex(of: "--disallowedTools")! + 1)...].prefix { !$0.hasPrefix("--") }.contains("Bash"))
+    }
+    func testClaudeWorkModeTellsTheModelWhereItsLimitsAre() {
+        let a = AgentStream.claudeArgs(prompt: "x", session: nil, work: true)
+        XCTAssertTrue(a[a.firstIndex(of: "--append-system-prompt")! + 1].lowercased().contains("no network"))
     }
     func testClaudeResumeCarriesSession() {
         let a = AgentStream.claudeArgs(prompt: "x", session: "abc", work: false)
