@@ -25,7 +25,14 @@ struct NotchView: View {
     private let inputH: CGFloat = 52
     private var hasAnswer: Bool { !a.turns.isEmpty }
     private var bodyH: CGFloat { hasAnswer ? min((contentH / 8).rounded(.up) * 8, NotchWindow.maxBody) : 0 }
-    private var pillH: CGFloat { a.isOpen ? notch.height + 6 + bodyH + inputH + 12 : notch.height }
+    private var recallRowCount: Int { max(min(a.recallRows.count, RecallView.maxRows), 1) }
+    private var recallH: CGFloat {
+        notch.height + 6 + 44 + CGFloat(recallRowCount) * RecallView.rowH + (a.summarizing || !a.summary.isEmpty ? 76 : 0) + 36 + 12
+    }
+    private var pillH: CGFloat {
+        guard a.isOpen else { return notch.height }
+        return a.mode == .recall ? recallH : notch.height + 6 + bodyH + inputH + 12
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -45,17 +52,21 @@ struct NotchView: View {
             .fill(.black)
             .frame(width: a.isOpen ? openW : notch.width, height: pillH)
             .overlay(alignment: .top) { content }
-            .overlay(alignment: .bottom) { if a.isOpen && a.busy && a.waiting { EmberSweep().transition(.opacity) } }
+            .overlay(alignment: .bottom) { if a.isOpen && a.mode == .prompt && a.busy && a.waiting { EmberSweep().transition(.opacity) } }
             .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: a.isOpen ? 26 : 10, bottomTrailingRadius: a.isOpen ? 26 : 10))
             .animation(.spring(duration: 0.5, bounce: 0.22), value: a.isOpen)
-            .animation(.smooth(duration: 0.28), value: bodyH)
+            .animation(.smooth(duration: 0.28), value: pillH)
     }
 
     private var content: some View {
         VStack(spacing: 0) {
             wings.frame(height: notch.height)
-            if hasAnswer { transcript.frame(height: bodyH).padding(.top, 6) }
-            inputRow.padding(.top, hasAnswer ? 0 : 6)
+            if a.mode == .recall {
+                RecallView(a: a).padding(.top, 6)
+            } else {
+                if hasAnswer { transcript.frame(height: bodyH).padding(.top, 6) }
+                inputRow.padding(.top, hasAnswer ? 0 : 6)
+            }
         }
         .frame(width: openW)
         // content arrives after the shell has opened, leaves before it closes
@@ -69,7 +80,7 @@ struct NotchView: View {
     private var wings: some View {
         HStack(spacing: 0) {
             HStack(spacing: 8) {
-                StatusDot(link: a.link, busy: a.busy)
+                StatusDot(link: a.mode == .recall ? (a.snapshot.recorderOK ? .ready : .offline) : a.link, busy: a.busy || a.summarizing)
                 Text(statusText).font(.system(size: 11, weight: .medium)).tracking(0.3).foregroundStyle(Ink.dim)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -78,7 +89,7 @@ struct NotchView: View {
             Color.clear.frame(width: notch.width)
 
             HStack(spacing: 14) {
-                if hasAnswer && !a.busy && a.error == nil { hint("⇧⌘C", "copy") }
+                if a.mode == .prompt && hasAnswer && !a.busy && a.error == nil { hint("⇧⌘C", "copy") }
                 hint("esc", "close")
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -87,7 +98,8 @@ struct NotchView: View {
     }
 
     private var statusText: String {
-        switch a.link {
+        if a.mode == .recall { return a.snapshot.recorderOK ? "recorder · running" : "recorder · not running" }
+        return switch a.link {
         case .ready: a.waiting ? "thinking" : "gemma · mac-mini"
         case .connecting: "connecting to \(Assistant.host)…"
         case .offline: "offline"

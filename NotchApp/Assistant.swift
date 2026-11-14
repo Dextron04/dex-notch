@@ -14,7 +14,10 @@ final class Assistant {
 
     struct Turn { var role: String; var text: String }
 
+    enum Mode { case prompt, recall }
+
     var isOpen = false
+    var mode: Mode = .prompt
     var link: Link = .connecting
     var draft = ""
     var turns: [Turn] = []
@@ -25,7 +28,17 @@ final class Assistant {
     /// Called whenever isOpen flips so the window can take/release key focus.
     var onOpenChange: ((Bool) -> Void)?
 
+    // recall view state
+    var snapshot = VaultSnapshot(totalSessions: 0, todayCount: 0, recorderOK: false, agents: [])
+    var recallRows: [AgentSummary] = []
+    var recallIndex = 0
+    var searching = false
+    var recallQuery = "" { didSet { refreshRecall() } }
+    var summary = ""
+    var summarizing = false
+
     private var task: Task<Void, Never>?
+    private var summaryTask: Task<Void, Never>?
     private var token: String?
 
     var question: String? { turns.last(where: { $0.role == "user" })?.text }
@@ -34,10 +47,14 @@ final class Assistant {
 
     // MARK: open / close
 
-    func toggle() { isOpen ? close() : open() }
+    func toggle() { if isOpen && mode == .prompt { close() } else { open(.prompt) } }
+    func toggleRecall() { if isOpen && mode == .recall { close() } else { open(.recall) } }
 
-    func open() {
-        guard !isOpen else { return }
+    func open(_ m: Mode = .prompt) {
+        if isOpen && mode == m { return }
+        mode = m
+        if m == .recall { searching = false; recallQuery = ""; refreshRecall(); recallIndex = 0; summary = "" }
+        guard !isOpen else { return } // already open in the other mode: just switch content
         isOpen = true
         onOpenChange?(true)
         if link != .ready { connect() }
@@ -45,14 +62,14 @@ final class Assistant {
 
     func close() {
         guard isOpen else { return }
-        task?.cancel()
+        task?.cancel(); summaryTask?.cancel()
         isOpen = false
         onOpenChange?(false)
         // clear after the collapse animation so the content doesn't snap away mid-close
         Task { try? await Task.sleep(for: .milliseconds(450)); if !isOpen { reset() } }
     }
 
-    private func reset() { turns = []; draft = ""; error = nil; waiting = false; streaming = false }
+    private func reset() { turns = []; draft = ""; error = nil; waiting = false; streaming = false; summary = ""; summarizing = false }
 
     // MARK: ask
 
@@ -69,27 +86,9 @@ final class Assistant {
 
         task = Task {
             do {
-                let tok = try loadToken()
-                var req = URLRequest(url: URL(string: Self.base + "/api/chat")!)
-                req.httpMethod = "POST"
-                req.timeoutInterval = 300 // first call may load the model into memory
-                req.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
-                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                req.httpBody = try JSONSerialization.data(withJSONObject:
-                    ["model": Self.model, "messages": messages, "stream": true, "think": false] as [String: Any])
-                let (bytes, resp) = try await URLSession.shared.bytes(for: req)
-                if let code = (resp as? HTTPURLResponse)?.statusCode, code != 200 {
-                    throw Failure(code == 401 ? "Gateway rejected the token. Re-store it in Keychain." : "Model returned HTTP \(code)")
-                }
-                for try await line in bytes.lines {
-                    guard let d = line.data(using: .utf8),
-                          let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { continue }
-                    if let e = j["error"] as? String { throw Failure(e) }
-                    if let t = (j["message"] as? [String: Any])?["content"] as? String, !t.isEmpty {
-                        waiting = false; streaming = true
-                        turns[turns.count - 1].text += t
-                    }
-                    if j["done"] as? Bool == true { break }
+                try await streamChat(messages) { t in
+                    waiting = false; streaming = true
+                    turns[turns.count - 1].text += t
                 }
                 finish()
             } catch is CancellationError {
@@ -99,6 +98,29 @@ final class Assistant {
                 self.error = (error as? Failure)?.msg ?? friendly(error)
                 finish()
             }
+        }
+    }
+
+    /// POSTs a chat to the gateway and calls `onToken` for every streamed piece of the reply.
+    private func streamChat(_ messages: [[String: String]], onToken: (String) -> Void) async throws {
+        let tok = try loadToken()
+        var req = URLRequest(url: URL(string: Self.base + "/api/chat")!)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 300 // first call may load the model into memory
+        req.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject:
+            ["model": Self.model, "messages": messages, "stream": true, "think": false] as [String: Any])
+        let (bytes, resp) = try await URLSession.shared.bytes(for: req)
+        if let code = (resp as? HTTPURLResponse)?.statusCode, code != 200 {
+            throw Failure(code == 401 ? "Gateway rejected the token. Re-store it in Keychain." : "Model returned HTTP \(code)")
+        }
+        for try await line in bytes.lines {
+            guard let d = line.data(using: .utf8),
+                  let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { continue }
+            if let e = j["error"] as? String { throw Failure(e) }
+            if let t = (j["message"] as? [String: Any])?["content"] as? String, !t.isEmpty { onToken(t) }
+            if j["done"] as? Bool == true { break }
         }
     }
 
@@ -114,6 +136,46 @@ final class Assistant {
             return "Can't reach \(Self.host)."
         }
         return e.localizedDescription
+    }
+
+    // MARK: recall (vault browser)
+
+    func refreshRecall() {
+        snapshot = VaultReader.snapshot(vault: VaultReader.defaultVault)
+        recallRows = searching && !recallQuery.isEmpty ? VaultReader.search(vault: VaultReader.defaultVault, query: recallQuery) : snapshot.agents
+        recallIndex = min(recallIndex, max(recallRows.count - 1, 0))
+    }
+
+    func moveSelection(_ d: Int) {
+        guard !recallRows.isEmpty else { return }
+        recallIndex = (recallIndex + d + recallRows.count) % recallRows.count
+        summaryTask?.cancel(); summary = ""; summarizing = false
+    }
+
+    func openSelectedNote() {
+        guard recallRows.indices.contains(recallIndex) else { return }
+        let note = recallRows[recallIndex].notePath
+        var c = URLComponents(string: "obsidian://open")!
+        c.queryItems = [URLQueryItem(name: "path", value: note.path)]
+        // Obsidian only resolves notes inside a vault it knows (open ~/Vault in Obsidian once); otherwise fall back to the default .md app
+        if let u = c.url, NSWorkspace.shared.urlForApplication(toOpen: u) != nil { NSWorkspace.shared.open(u) } else { NSWorkspace.shared.open(note) }
+    }
+
+    /// ⌘↩: three-line summary of the selected note from the model.
+    func summarizeSelected() {
+        guard recallRows.indices.contains(recallIndex), !summarizing,
+              var text = try? String(contentsOf: recallRows[recallIndex].notePath, encoding: .utf8) else { return }
+        if text.count > 4000 { text = String(text.prefix(2000)) + "\n…\n" + String(text.suffix(2000)) } // long notes are slow to read on the mini
+        summary = ""; summarizing = true
+        let messages = [["role": "system", "content": "Summarize this recorded agent conversation in at most three short lines: what was asked, what was done or decided, what is left. Plain text, no preamble."],
+                        ["role": "user", "content": text]]
+        summaryTask?.cancel()
+        summaryTask = Task {
+            do { try await streamChat(messages) { summary += $0 } }
+            catch is CancellationError {}
+            catch { if !Task.isCancelled { summary = (error as? Failure)?.msg ?? friendly(error) } }
+            summarizing = false
+        }
     }
 
     // MARK: connection

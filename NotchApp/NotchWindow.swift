@@ -15,6 +15,7 @@ final class NotchWindow {
     private let assistant: Assistant
     private var panel: KeyPanel?
     private var resignObserver: NSObjectProtocol?
+    private var keyMonitor: Any?
 
     init(assistant: Assistant) { self.assistant = assistant }
 
@@ -33,7 +34,7 @@ final class NotchWindow {
         else { return }
 
         let notch = Self.notchSize(for: screen)
-        let size = CGSize(width: Self.panelWidth, height: notch.height + Self.maxBody + 130)
+        let size = CGSize(width: Self.panelWidth, height: notch.height + Self.maxBody + 210)
         let origin = CGPoint(x: screen.frame.midX - size.width / 2, y: screen.frame.maxY - size.height)
 
         let p = KeyPanel(contentRect: NSRect(origin: origin, size: size),
@@ -51,6 +52,27 @@ final class NotchWindow {
         p.orderFrontRegardless()
         panel = p
 
+        if let k = keyMonitor { NSEvent.removeMonitor(k) }
+        // Recall view has no text field to hold focus, so its keys are handled here (SwiftUI focus is unreliable in a non-activating panel)
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [assistant] e in
+            let code = e.keyCode, flags = e.modifierFlags // NSEvent isn't Sendable: copy what we need
+            let handled = MainActor.assumeIsolated { () -> Bool in
+                guard assistant.isOpen, assistant.mode == .recall else { return false }
+                switch code {
+                case 126: assistant.moveSelection(-1)                                                // ↑
+                case 125: assistant.moveSelection(1)                                                 // ↓
+                case 36, 76:                                                                         // ↩ / keypad enter
+                    if flags.contains(.command) { assistant.summarizeSelected() } else { assistant.openSelectedNote() }
+                case 53:                                                                             // esc: leave search first, then close
+                    if assistant.searching { assistant.searching = false; assistant.recallQuery = "" } else { assistant.close() }
+                case 44 where !assistant.searching && flags.intersection([.command, .option, .control]).isEmpty:
+                    assistant.searching = true                                                       // "/"
+                default: return false
+                }
+                return true
+            }
+            return handled ? nil : e
+        }
         assistant.onOpenChange = { [weak p] open in
             guard let p else { return }
             p.ignoresMouseEvents = !open

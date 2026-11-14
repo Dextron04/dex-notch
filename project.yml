@@ -8,7 +8,25 @@ settings:
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
+schemes:
+  NotchApp:
+    build:
+      targets:
+        NotchApp: all
+    run:
+      config: Debug
+    test:
+      targets: [NotchAppTests]
 targets:
+  NotchAppTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [NotchAppTests, NotchApp/VaultReader.swift] # VaultReader has no UI deps, so tests compile it directly (no app host needed)
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.tushin.NotchAppTests
+        CODE_SIGN_STYLE: Automatic
   NotchApp:
     type: application
     platform: macOS

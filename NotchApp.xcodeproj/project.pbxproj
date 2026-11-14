@@ -7,8 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1C26891F3606A3AEA83E86B1 /* RecallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B56D0B5E24A59E4A23F196 /* RecallView.swift */; };
+		33A991DD0C8D532FDD7C271B /* VaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1699F9A9CD5771ED2F953B05 /* VaultReader.swift */; };
 		4B4BEDC4359643E23125F654 /* ledger-anchors.json in Resources */ = {isa = PBXBuildFile; fileRef = 0CEAFB8F5AACEFD796A183F6 /* ledger-anchors.json */; };
 		5CD049CB380D1303583E2661 /* Assistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218A6628EE36C2AEDB045329 /* Assistant.swift */; };
+		5F04FF700FAE3FFA7F233D2E /* VaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1699F9A9CD5771ED2F953B05 /* VaultReader.swift */; };
 		69D5965BE316E7D1A8F923DF /* NotchWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A42C48BB475251A9D6BB6BD /* NotchWindow.swift */; };
 		7119180D24965AFA75A9EAD1 /* agentdb-memory.db.ruvector in Resources */ = {isa = PBXBuildFile; fileRef = 06D4BB78BCFD0B6E036A3B08 /* agentdb-memory.db.ruvector */; };
 		898D7FB93A9186B951B4088F /* NotchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CBB2E551130DD2CE010BFF /* NotchView.swift */; };
@@ -19,6 +22,7 @@
 		CB95895D7A39CCCEEF6EAD02 /* Hotkey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01C444F1096C79018A64B462 /* Hotkey.swift */; };
 		D6BADDC614B2BC53DD76DA16 /* state.json in Resources */ = {isa = PBXBuildFile; fileRef = DA7B7D67F5CF1063FF7518BD /* state.json */; };
 		E07EEF3C06EADD40BE52F384 /* NotchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */; };
+		E3ADAE4DD1240F04D154E5CD /* VaultReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,9 +30,13 @@
 		06D4BB78BCFD0B6E036A3B08 /* agentdb-memory.db.ruvector */ = {isa = PBXFileReference; path = "agentdb-memory.db.ruvector"; sourceTree = "<group>"; };
 		0A42C48BB475251A9D6BB6BD /* NotchWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchWindow.swift; sourceTree = "<group>"; };
 		0CEAFB8F5AACEFD796A183F6 /* ledger-anchors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "ledger-anchors.json"; sourceTree = "<group>"; };
+		11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultReaderTests.swift; sourceTree = "<group>"; };
+		1699F9A9CD5771ED2F953B05 /* VaultReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultReader.swift; sourceTree = "<group>"; };
 		218A6628EE36C2AEDB045329 /* Assistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Assistant.swift; sourceTree = "<group>"; };
 		3002838608828CC3F7C6F835 /* stats.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = stats.json; sourceTree = "<group>"; };
+		34B56D0B5E24A59E4A23F196 /* RecallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecallView.swift; sourceTree = "<group>"; };
 		579576320D15B49D17A6D342 /* patterns.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = patterns.json; sourceTree = "<group>"; };
+		5B960B471D39685753DB2451 /* NotchAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NotchAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7E9B5AA03F38C0E8CEEF866E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A4CBB2E551130DD2CE010BFF /* NotchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchView.swift; sourceTree = "<group>"; };
 		B4CBD5204758A52DD991B3D4 /* NotchApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NotchApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -61,6 +69,7 @@
 			isa = PBXGroup;
 			children = (
 				9DAA1C7250CA94F20218941D /* NotchApp */,
+				E8DB5246F60E7ADEE92DAE88 /* NotchAppTests */,
 				EF1E16669C484F071DA1FD60 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -75,6 +84,8 @@
 				CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */,
 				A4CBB2E551130DD2CE010BFF /* NotchView.swift */,
 				0A42C48BB475251A9D6BB6BD /* NotchWindow.swift */,
+				34B56D0B5E24A59E4A23F196 /* RecallView.swift */,
+				1699F9A9CD5771ED2F953B05 /* VaultReader.swift */,
 				E6D581A31AA1475997DB5E9F /* .claude-flow */,
 				FB47157F43434DD8F2908884 /* .swarm */,
 			);
@@ -90,10 +101,19 @@
 			path = ".claude-flow";
 			sourceTree = "<group>";
 		};
+		E8DB5246F60E7ADEE92DAE88 /* NotchAppTests */ = {
+			isa = PBXGroup;
+			children = (
+				11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */,
+			);
+			path = NotchAppTests;
+			sourceTree = "<group>";
+		};
 		EF1E16669C484F071DA1FD60 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				B4CBD5204758A52DD991B3D4 /* NotchApp.app */,
+				5B960B471D39685753DB2451 /* NotchAppTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -110,6 +130,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		9618F2EE0F3E6218B72F3990 /* NotchAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C6BAA8FBE2D15F0DD8925D40 /* Build configuration list for PBXNativeTarget "NotchAppTests" */;
+			buildPhases = (
+				6DAD31D031BEF19B5B6A6D7A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NotchAppTests;
+			packageProductDependencies = (
+			);
+			productName = NotchAppTests;
+			productReference = 5B960B471D39685753DB2451 /* NotchAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		BC9D7F567DDDA00EA48E7C7A /* NotchApp */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2056D40C71F64145F9D1535D /* Build configuration list for PBXNativeTarget "NotchApp" */;
@@ -137,6 +174,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					9618F2EE0F3E6218B72F3990 = {
+						ProvisioningStyle = Automatic;
+					};
 					BC9D7F567DDDA00EA48E7C7A = {
 						ProvisioningStyle = Automatic;
 					};
@@ -156,6 +196,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				9618F2EE0F3E6218B72F3990 /* NotchAppTests */,
 				BC9D7F567DDDA00EA48E7C7A /* NotchApp */,
 			);
 		};
@@ -178,6 +219,15 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		6DAD31D031BEF19B5B6A6D7A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5F04FF700FAE3FFA7F233D2E /* VaultReader.swift in Sources */,
+				E3ADAE4DD1240F04D154E5CD /* VaultReaderTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		7AD512718444DB917FE95810 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -188,12 +238,31 @@
 				E07EEF3C06EADD40BE52F384 /* NotchApp.swift in Sources */,
 				898D7FB93A9186B951B4088F /* NotchView.swift in Sources */,
 				69D5965BE316E7D1A8F923DF /* NotchWindow.swift in Sources */,
+				1C26891F3606A3AEA83E86B1 /* RecallView.swift in Sources */,
+				33A991DD0C8D532FDD7C271B /* VaultReader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		293744316B43757CDA8CB136 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.tushin.NotchAppTests;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
 		753393B96E6EDC03090E69E9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -351,6 +420,23 @@
 			};
 			name = Release;
 		};
+		DD7A465A33D7287EB771267D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.tushin.NotchAppTests;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -359,6 +445,15 @@
 			buildConfigurations = (
 				753393B96E6EDC03090E69E9 /* Debug */,
 				D6EC440239941F97F140DAC6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C6BAA8FBE2D15F0DD8925D40 /* Build configuration list for PBXNativeTarget "NotchAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DD7A465A33D7287EB771267D /* Debug */,
+				293744316B43757CDA8CB136 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
