@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterator, List, Optional, Tuple
 from ..model import Turn, SessionMeta
+from ..redact import redact
 
 class Adapter:
     name = ""
@@ -33,7 +34,8 @@ def iter_json_lines(path: Path, offset: int) -> Iterator[Tuple[Optional[dict], i
             yield (obj if isinstance(obj, dict) else None), pos
 
 def flat(s: Any, n: int = 100) -> str:
-    return " ".join(str(s).split())[:n]
+    """Redact FIRST, then flatten and cut: a secret cut below a pattern's minimum length would otherwise slip through."""
+    return " ".join(redact(str(s)).split())[:n]
 
 _ARG_KEYS = ("command", "cmd", "file_path", "path", "pattern", "url", "query", "description")
 
@@ -43,6 +45,6 @@ def tool_line(name: str, args: Any = None) -> str:
         for k in _ARG_KEYS:
             if isinstance(args.get(k), str) and args[k].strip(): arg = args[k]; break
         else:
-            arg = next((v for v in args.values() if isinstance(v, str)), "")
+            arg = json.dumps(args, ensure_ascii=False)  # keep the argument NAMES so `"password": "..."` is caught by redaction
     elif isinstance(args, str): arg = args
     return ("ran: %s %s" % (name, flat(arg))).strip()

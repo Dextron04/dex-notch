@@ -44,7 +44,7 @@ struct NotchView: View {
         .frame(width: panel.width, height: panel.height, alignment: .top)
         .onKeyPress(.escape) { a.close(); return .handled }
         .onChange(of: a.busy) { if !a.busy && a.isOpen { focused = true } } // field is disabled while answering
-        .task(id: a.isOpen) { if a.isOpen { try? await Task.sleep(for: .milliseconds(120)); focused = true } }
+        .task(id: [a.isOpen ? 1 : 0, a.mode == .prompt ? 1 : 0]) { if a.isOpen && a.mode == .prompt { try? await Task.sleep(for: .milliseconds(120)); focused = true } } // also when switching recall → prompt while open
     }
 
     private var pill: some View {

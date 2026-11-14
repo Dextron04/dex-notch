@@ -13,7 +13,7 @@ def main(argv=None) -> int:
     if a.cmd == "backfill":
         s = recorder.backfill(vault, default_adapters()); print(s); return 1 if s["errors"] else 0
     if a.cmd == "once":
-        print(recorder.tick(vault, default_adapters())); return 0
+        print(recorder.tick(vault, default_adapters(), wait=True)); return 0
     while True:  # run: never die on a bad tick
         try: recorder.tick(vault, default_adapters())
         except Exception as e: print("tick failed:", e, file=sys.stderr, flush=True)

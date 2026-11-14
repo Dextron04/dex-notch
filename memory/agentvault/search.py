@@ -38,7 +38,7 @@ def search(vault: Path, query: str, agent: Optional[str] = None, since: Optional
         found = list(rx.finditer(body))
         if not found: continue
         a = max(0, found[0].start() - 80)
-        snippet = " ".join(body[a:found[0].end() + 120].split())
+        snippet = " ".join(re.sub(r"<!-- t:[0-9a-f]{10} -->", "", body[a:found[0].end() + 120]).split())
         scored.append((len(found), fm.get("updated", ""), _hit(vault, p, fm, snippet)))
     scored.sort(key=lambda r: (r[0], r[1]), reverse=True)
     return [r[2] for r in scored[:limit]]
@@ -48,12 +48,18 @@ def recent(vault: Path, agent: Optional[str] = None, n: int = 5) -> List[Hit]:
     rows = sorted(_rows(vault, agent, None), key=lambda r: r[1].get("updated", ""), reverse=True)
     return [_hit(vault, p, fm) for p, fm in rows[:n]]
 
-def read(vault: Path, rel_path: str) -> str:
-    """Only .md files strictly inside the vault (symlinks resolved), never dot-directories."""
+READ_LIMIT = 20000  # chars per call: the biggest notes are ~800 KB, far past what fits in an agent's context
+
+def read(vault: Path, rel_path: str, offset: int = 0, limit: int = READ_LIMIT) -> str:
+    """Only .md files strictly inside the vault (symlinks resolved), never dot-directories. Paged: see the trailer."""
     if not rel_path or Path(rel_path).is_absolute(): raise ValueError("path must be relative to the vault")
     root = Path(vault).resolve()
     p = (root / rel_path).resolve()
     if not p.is_relative_to(root): raise ValueError("path escapes the vault")
     rp = p.relative_to(root)
     if p.suffix != ".md" or rp.parts[0].startswith(".") or not p.is_file(): raise ValueError("not a vault note")
-    return p.read_text(encoding="utf-8", errors="replace")
+    text = p.read_text(encoding="utf-8", errors="replace")
+    offset, limit = max(0, int(offset)), max(1, min(int(limit), READ_LIMIT))
+    chunk = text[offset:offset + limit]
+    more = len(text) - (offset + len(chunk))
+    return chunk + ("\n\n[truncated: %d more characters; call again with offset=%d]" % (more, offset + len(chunk)) if more > 0 else "")

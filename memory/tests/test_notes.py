@@ -58,6 +58,13 @@ class NotesTests(unittest.TestCase):
         p = notes.append_turns(self.vault, meta(), [Turn("user", "x", "2026-11-14T10:00:01Z")])
         self.assertEqual([f.name for f in p.parent.iterdir()], [p.name])
 
+    def test_appending_same_turns_again_adds_nothing(self):
+        m = meta(); t = [Turn("user", "q1", "2026-11-14T10:00:01Z"), Turn("tool", "ran: Bash ls", "2026-11-14T10:00:02Z")]
+        p, n1 = notes.add_turns(self.vault, m, t)
+        p, n2 = notes.add_turns(self.vault, m, t + [Turn("assistant", "a1", "2026-11-14T10:00:03Z")])
+        self.assertEqual((n1, n2), (2, 1)); self.assertEqual(notes.read_frontmatter(p)["turns"], 3)
+        self.assertEqual(p.read_text().count("q1"), 1)  # the repeated turn was not written twice
+
     def test_reset_note_deletes(self):
         m = meta(); p = notes.append_turns(self.vault, m, [Turn("user", "x", "2026-11-14T10:00:01Z")])
         notes.reset_note(self.vault, m); self.assertFalse(p.exists())

@@ -143,12 +143,12 @@ final class Assistant {
     func refreshRecall() {
         snapshot = VaultReader.snapshot(vault: VaultReader.defaultVault)
         recallRows = searching && !recallQuery.isEmpty ? VaultReader.search(vault: VaultReader.defaultVault, query: recallQuery) : snapshot.agents
-        recallIndex = min(recallIndex, max(recallRows.count - 1, 0))
+        recallIndex = min(recallIndex, max(min(recallRows.count, RecallView.maxRows) - 1, 0))
     }
 
     func moveSelection(_ d: Int) {
         guard !recallRows.isEmpty else { return }
-        recallIndex = (recallIndex + d + recallRows.count) % recallRows.count
+        recallIndex = VaultReader.moveIndex(recallIndex, by: d, rows: recallRows.count, visible: RecallView.maxRows)
         summaryTask?.cancel(); summary = ""; summarizing = false
     }
 
@@ -171,10 +171,10 @@ final class Assistant {
                         ["role": "user", "content": text]]
         summaryTask?.cancel()
         summaryTask = Task {
-            do { try await streamChat(messages) { summary += $0 } }
-            catch is CancellationError {}
+            do { try await streamChat(messages) { if !Task.isCancelled { summary += $0 } } }
+            catch is CancellationError { return }
             catch { if !Task.isCancelled { summary = (error as? Failure)?.msg ?? friendly(error) } }
-            summarizing = false
+            if !Task.isCancelled { summarizing = false } // a cancelled task must not clear the flag of the one that replaced it
         }
     }
 

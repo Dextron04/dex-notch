@@ -19,7 +19,8 @@ final class Hotkey {
                 return noErr
             }, 1, &spec, nil, nil)
         }
-        RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), EventHotKeyID(signature: 0x4E544348, id: id),
-                            GetApplicationEventTarget(), 0, &ref)
+        let status = RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), EventHotKeyID(signature: 0x4E544348, id: id),
+                                         GetApplicationEventTarget(), 0, &ref)
+        if status != noErr { NSLog("NotchApp: hotkey id %u failed to register (OSStatus %d) — another app may own that combination", id, status) }
     }
 }

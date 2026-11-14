@@ -45,6 +45,26 @@ class RedactTests(unittest.TestCase):
         self.assertNotIn("ghp_Ab", out)
         self.assertIn("```", out)
 
+    def test_env_style_names(self):
+        cases = {"DB_PASSWORD=hunter2xyz99": "hunter2xyz99", "GITHUB_TOKEN=abcdef1234567890": "abcdef1234567890",
+                 'client_secret: "abcdef1234567890"': "abcdef1234567890", '"access_token": "abcdef1234567890"': "abcdef1234567890",
+                 "MY_API_KEY=abcdef1234567890": "abcdef1234567890", "AWS_SECRET_ACCESS_KEY=abcdef1234567890xyz": "abcdef1234567890xyz",
+                 "N8N_API_KEY=abcdef1234567890": "abcdef1234567890"}
+        for text, value in cases.items():
+            out = redact(text)
+            self.assertIn("[redacted:assignment]", out, text); self.assertNotIn(value, out, text)
+
+    def test_url_and_cli_credentials(self):
+        cases = [("postgres://user:pass@host/db", "user:pass"), ("curl -u bob:s3cretPw https://x.io", "bob:s3cretPw"),
+                 ("Authorization: Basic dXNlcjpwYXNzd29yZA==", "dXNlcjpwYXNzd29yZA=="),
+                 ("security add-generic-password -s x -w abcdef1234567890", "abcdef1234567890")]
+        for text, secret in cases: self.assertNotIn(secret, redact(text), text)
+
+    def test_more_provider_keys(self):
+        for k in ("xoxb-1234567890-abcdefghij", "sk_live_abcdefghijklmnop1234", "hf_" + "aB3dE" * 7,
+                  "glpat-abcdefghij1234567890", "npm_" + "aB3dE" * 8):
+            self.assertNotIn(k, redact("token for it: %s done" % k), k)
+
     def test_idempotent(self):
         text = "password=hunter2xyz " + SAMPLES["github"] + " " + SAMPLES["jwt"]
         once = redact(text)

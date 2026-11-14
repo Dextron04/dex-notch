@@ -56,6 +56,13 @@ enum VaultReader {
                                 lastUpdated: $0.updated, notePath: $0.url, state: "ok") }
     }
 
+    /// ↑/↓ over the rows that are actually DRAWN (search can return more than fit); wraps around.
+    static func moveIndex(_ i: Int, by d: Int, rows: Int, visible: Int) -> Int {
+        let n = min(rows, visible)
+        guard n > 0 else { return 0 }
+        return ((i + d) % n + n) % n
+    }
+
     // MARK: internals
 
     private static func notes(in vault: URL) -> [Note] {

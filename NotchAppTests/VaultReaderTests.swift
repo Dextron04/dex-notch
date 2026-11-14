@@ -69,4 +69,12 @@ final class VaultReaderTests: XCTestCase {
         XCTAssertEqual(VaultReader.search(vault: vault, query: "SCIENCE").map(\.lastTitle), ["Sky colour"])
         XCTAssertEqual(VaultReader.search(vault: vault, query: "").count, 2) // empty query lists everything, newest first
     }
+
+    func testSelectionNeverLandsOnARowThatIsNotDrawn() {
+        // 30 search hits, only 6 drawn
+        XCTAssertEqual(VaultReader.moveIndex(5, by: 1, rows: 30, visible: 6), 0)
+        XCTAssertEqual(VaultReader.moveIndex(0, by: -1, rows: 30, visible: 6), 5)
+        XCTAssertEqual(VaultReader.moveIndex(2, by: 1, rows: 3, visible: 6), 0)
+        XCTAssertEqual(VaultReader.moveIndex(0, by: 1, rows: 0, visible: 6), 0)
+    }
 }

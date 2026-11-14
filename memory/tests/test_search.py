@@ -49,5 +49,18 @@ class SearchTests(unittest.TestCase):
         for bad in ("../../etc/passwd", "../" + self.v.name + "/../x.md", "/etc/passwd", str(outside), "link.md", "Index.txt", ".recorder/status.json"):
             with self.assertRaises(ValueError, msg=bad): search.read(self.v, bad)
 
+class ReadCapTests(unittest.TestCase):
+    def test_vault_read_is_capped_and_pageable(self):
+        with tempfile.TemporaryDirectory() as d:
+            v = Path(d)
+            p = add(v, "aaaaaaaaaa1", "word " * 20000)           # ~100 KB note
+            rel = p.relative_to(v).as_posix()
+            first = search.read(v, rel)
+            self.assertLessEqual(len(first), 20000 + 200); self.assertIn("offset=20000", first)
+            second = search.read(v, rel, offset=20000, limit=500)
+            self.assertLessEqual(len(second), 500 + 200); self.assertIn("offset=20500", second)
+            small = add(v, "bbbbbbbbbb2", "tiny")
+            self.assertNotIn("truncated", search.read(v, small.relative_to(v).as_posix()))
+
 if __name__ == "__main__":
     unittest.main()

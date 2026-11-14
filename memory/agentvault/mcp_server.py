@@ -11,13 +11,13 @@ TOOLS = [
     {"name": "vault_recent", "description": "List the most recent recorded conversations, optionally for one agent.",
      "inputSchema": {"type": "object", "properties": {"agent": {"type": "string"}, "n": {"type": "integer"}}}},
     {"name": "vault_read", "description": "Read one recorded conversation note by the relative path returned from vault_search/vault_recent.",
-     "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}},
+     "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "offset": {"type": "integer", "description": "start character; notes are returned in pages of 20000 chars"}, "limit": {"type": "integer"}}, "required": ["path"]}},
 ]
 
 def call(vault: Path, name: str, a: dict) -> str:
     if name == "vault_search": return json.dumps([asdict(h) for h in S.search(vault, a["query"], a.get("agent"), a.get("since"))], indent=1)
     if name == "vault_recent": return json.dumps([asdict(h) for h in S.recent(vault, a.get("agent"), int(a.get("n", 5)))], indent=1)
-    if name == "vault_read": return S.read(vault, a["path"])
+    if name == "vault_read": return S.read(vault, a["path"], int(a.get("offset", 0)), int(a.get("limit", S.READ_LIMIT)))
     raise KeyError(name)
 
 def handle(req: dict, vault: Path):

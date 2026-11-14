@@ -1,4 +1,4 @@
-import json, sys, tempfile, tracemalloc, unittest
+import fcntl, json, sys, tempfile, tracemalloc, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from agentvault import recorder, notes
@@ -100,6 +100,70 @@ class RecorderTests(unittest.TestCase):
         self.assertEqual(notes.read_frontmatter(files[0])["turns"], 4)
         st = json.loads((self.vault / ".recorder" / "status.json").read_text())
         self.assertEqual(st["agents"]["claude-code"]["sessions"], 1)
+
+    def test_failed_note_write_does_not_lose_turns(self):
+        self.f.write_text(jl(u("q1"), a("a1")))
+        real = recorder.add_turns
+        def boom(*args, **kw): raise OSError("disk full")
+        recorder.add_turns = boom
+        try: s = recorder.tick(self.vault, self.cc())
+        finally: recorder.add_turns = real
+        self.assertEqual(len(s["errors"]), 1)
+        recorder.tick(self.vault, self.cc())
+        self.assertEqual(self.turns_in_notes(), 2)
+
+    def test_state_loss_does_not_duplicate_turns(self):
+        self.f.write_text(jl(u("q1"), a("a1")))
+        recorder.tick(self.vault, self.cc())
+        (self.vault / ".recorder" / "state.json").unlink()
+        recorder.tick(self.vault, self.cc())
+        self.assertEqual(self.turns_in_notes(), 2)
+
+    def test_kill_between_note_write_and_state_save_does_not_duplicate(self):
+        self.f.write_text(jl(u("q1"), a("a1")))
+        real = recorder.write_atomic
+        def die(path, text):
+            if Path(path).name == "state.json": raise KeyboardInterrupt()
+            return real(path, text)
+        recorder.write_atomic = die
+        try:
+            with self.assertRaises(KeyboardInterrupt): recorder.tick(self.vault, self.cc())
+        finally: recorder.write_atomic = real
+        recorder.tick(self.vault, self.cc())
+        self.assertEqual(self.turns_in_notes(), 2)
+
+    def test_second_recorder_is_refused_while_one_is_running(self):
+        (self.vault / ".recorder").mkdir(parents=True)
+        self.f.write_text(jl(u("q1")))
+        with open(self.vault / ".recorder" / "lock", "w") as fh:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            s = recorder.tick(self.vault, self.cc())
+        self.assertTrue(s.get("skipped")); self.assertEqual(self.turns_in_notes(), 0)
+
+    def test_corrupt_state_refuses_to_run(self):
+        self.f.write_text(jl(u("q1")))
+        recorder.tick(self.vault, self.cc())
+        (self.vault / ".recorder" / "state.json").write_text("{not json")
+        with self.assertRaises(recorder.StateError): recorder.tick(self.vault, self.cc())
+
+    def test_truncating_one_copy_of_a_shared_session_keeps_the_union(self):
+        (self.src / "-Users-x-other").mkdir()
+        copy = self.src / "-Users-x-other" / "S1.jsonl"
+        self.f.write_text(jl(u("q1"), a("a1")))
+        copy.write_text(jl(u("q1"), a("a1"), u("q2", 3), a("a2", 4)))
+        recorder.tick(self.vault, self.cc()); self.assertEqual(self.turns_in_notes(), 4)
+        self.f.write_text(jl(u("q1")))   # the short copy is cut down
+        recorder.tick(self.vault, self.cc()); recorder.tick(self.vault, self.cc())
+        self.assertEqual(self.turns_in_notes(), 4)
+
+    def test_header_only_first_poll_does_not_pin_session_identity(self):
+        header = {"type": "mode", "mode": "auto"}   # real files start with records that carry no cwd or timestamp
+        self.f.write_text(jl(header, {"type": "permission-mode", "permissionMode": "auto"}))
+        recorder.tick(self.vault, self.cc())
+        with open(self.f, "a") as fh: fh.write(jl(u("q1"), a("a1")))
+        recorder.tick(self.vault, self.cc())
+        (note,) = list(self.vault.glob("Sessions/*/*/*.md"))
+        self.assertEqual(note.parent.name, "2026-11"); self.assertIn("notch", note.name)
 
     def test_large_file_streamed(self):
         blob = "x" * 50_000

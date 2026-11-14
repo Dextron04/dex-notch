@@ -57,6 +57,17 @@ CASES = [
     ("gemini", GeminiAdapter, GM_FILE, lambda r: r / "BRAIN1" / ".system_generated" / "logs" / "transcript.jsonl", "BRAIN1", "hr-app"),
 ]
 
+class TruncationTests(unittest.TestCase):
+    def test_secret_at_truncation_boundary_is_redacted(self):
+        from agentvault.adapters.base import tool_line, flat
+        key = "sk-proj-" + "A" * 40
+        self.assertNotIn("sk-proj-AAA", tool_line("Bash", {"command": "x" * 80 + " --key " + key}))
+        self.assertNotIn("sk-proj-AAA", flat("a title with a key " + key + " inside", 40))
+
+    def test_tool_line_keeps_argument_names_so_assignments_are_caught(self):
+        from agentvault.adapters.base import tool_line
+        self.assertNotIn("hunter2xyz99", tool_line("login", {"password": "hunter2xyz99", "user": "bob"}))
+
 class AdapterTests(unittest.TestCase):
     def setUp(self):
         self._t = tempfile.TemporaryDirectory(); self.root = Path(self._t.name)
