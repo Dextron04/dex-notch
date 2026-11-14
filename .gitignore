@@ -1,0 +1,10 @@
+.DS_Store
+build/
+DerivedData/
+*.xcodeproj/xcuserdata/
+NotchApp/Info.plist
+.claude-flow/
+.swarm/
+.superpowers/
+__pycache__/
+*.pyc

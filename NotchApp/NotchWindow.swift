@@ -1,0 +1,64 @@
+import SwiftUI
+
+/// Borderless panel that can take keyboard focus without stealing the active app's menu bar.
+final class KeyPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
+/// Fixed-size panel pinned top-center of the notched screen, above the menu bar.
+/// It never resizes (content-driven resizing shifts it off-center); the SwiftUI pill animates inside it.
+@MainActor
+final class NotchWindow {
+    static let panelWidth: CGFloat = 640
+    static let maxBody: CGFloat = 280 // tallest the answer area grows before it scrolls
+
+    private let assistant: Assistant
+    private var panel: KeyPanel?
+    private var resignObserver: NSObjectProtocol?
+
+    init(assistant: Assistant) { self.assistant = assistant }
+
+    /// Notch rect size on the built-in display. Falls back to a fake notch on non-notch Macs.
+    static func notchSize(for screen: NSScreen) -> CGSize {
+        let h = screen.safeAreaInsets.top
+        guard h > 0, let l = screen.auxiliaryTopLeftArea, let r = screen.auxiliaryTopRightArea
+        else { return CGSize(width: 200, height: 32) } // ponytail: fake notch for external displays
+        return CGSize(width: screen.frame.width - l.width - r.width, height: h)
+    }
+
+    func show() {
+        panel?.close()
+        if let o = resignObserver { NotificationCenter.default.removeObserver(o) }
+        guard let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main
+        else { return }
+
+        let notch = Self.notchSize(for: screen)
+        let size = CGSize(width: Self.panelWidth, height: notch.height + Self.maxBody + 130)
+        let origin = CGPoint(x: screen.frame.midX - size.width / 2, y: screen.frame.maxY - size.height)
+
+        let p = KeyPanel(contentRect: NSRect(origin: origin, size: size),
+                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        p.level = .statusBar
+        p.isOpaque = false
+        p.backgroundColor = .clear
+        p.hasShadow = false
+        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        p.ignoresMouseEvents = !assistant.isOpen // transparent panel must not eat clicks while collapsed
+        let host = NSHostingView(rootView: NotchView(a: assistant, notch: notch, panel: size))
+        host.sizingOptions = []
+        p.contentView = host
+        p.setFrame(NSRect(origin: origin, size: size), display: false)
+        p.orderFrontRegardless()
+        panel = p
+
+        assistant.onOpenChange = { [weak p] open in
+            guard let p else { return }
+            p.ignoresMouseEvents = !open
+            if open { NSApp.activate(ignoringOtherApps: true); p.makeKeyAndOrderFront(nil) }
+        }
+        // click anywhere else → panel loses key → collapse
+        resignObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification, object: p, queue: .main
+        ) { [assistant] _ in MainActor.assumeIsolated { assistant.close() } }
+    }
+}

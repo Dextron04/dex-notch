@@ -1,0 +1,25 @@
+name: NotchApp
+options:
+  bundleIdPrefix: com.tushin
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  NotchApp:
+    type: application
+    platform: macOS
+    sources: [NotchApp]
+    info:
+      path: NotchApp/Info.plist
+      properties:
+        LSUIElement: true # menu-bar/agent app, no dock icon
+        CFBundleDisplayName: NotchApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tushin.NotchApp
+        ENABLE_APP_SANDBOX: false # ponytail: unsandboxed for easy dev; sandbox before shipping
+        CODE_SIGN_STYLE: Automatic
