@@ -196,4 +196,17 @@ class RemoteTests(unittest.TestCase):
         except (ConnectionError, urllib.error.URLError): st = 413  # server may close early; acceptable
         self.assertEqual(st, 413)
 
+    def test_tools_declare_read_or_write_so_chatgpt_can_classify_them(self):
+        _, tok = self.token()
+        tools = {t["name"]: t for t in json.loads(self.rpc(tok["access_token"], "tools/list")[2])["result"]["tools"]}
+        for name in ("vault_search", "vault_recent", "vault_read"):
+            a = tools[name]["annotations"]
+            self.assertTrue(a["readOnlyHint"], name); self.assertFalse(a["openWorldHint"], name)
+        w = tools["remember"]["annotations"]
+        self.assertFalse(w["readOnlyHint"])          # it writes, and says so plainly
+        self.assertFalse(w["destructiveHint"])       # it only adds notes, never edits or deletes
+        self.assertTrue(w["idempotentHint"])         # the same save twice is the same note
+        self.assertFalse(w["openWorldHint"])         # it touches only the user's own vault
+        for t in tools.values(): self.assertTrue(t["title"])
+
 if __name__ == "__main__": unittest.main()

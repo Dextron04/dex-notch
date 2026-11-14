@@ -8,7 +8,9 @@ from ..notes import add_turns
 MAX_CHARS = 200_000
 SOURCES = {"chatgpt": "chatgpt", "claude": "claude-web", "other": "other-ai"}
 
-REMEMBER = {"name": "remember",
+REMEMBER = {"name": "remember", "title": "Save this conversation to memory",
+    # adds a note, never edits or deletes one; saving the same thing twice gives the same note; touches only the user's own vault
+    "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     "description": "Save context from the CURRENT conversation into the user's shared long-term memory (Obsidian vault), so their other AI agents "
                    "can find it later. Use when the user asks to save/push/remember this chat. Put the substance in `content`: decisions, facts, "
                    "code, open questions, in as much detail as is useful (full text if short). Never include passwords or API keys.",

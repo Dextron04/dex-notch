@@ -5,12 +5,12 @@ from pathlib import Path
 from . import rag_push, search as S
 
 TOOLS = [
-    {"name": "vault_search", "description": "Search past conversations across all agents (Claude Code, Codex, Gemini) recorded in the shared Obsidian vault.",
+    {"name": "vault_search", "title": "Search past conversations", "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}, "description": "Search past conversations across all agents (Claude Code, Codex, Gemini) recorded in the shared Obsidian vault.",
      "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}, "agent": {"type": "string", "description": "claude-code | codex | gemini"},
                      "since": {"type": "string", "description": "ISO date, e.g. 2026-11-01"}}, "required": ["query"]}},
-    {"name": "vault_recent", "description": "List the most recent recorded conversations, optionally for one agent.",
+    {"name": "vault_recent", "title": "List recent conversations", "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}, "description": "List the most recent recorded conversations, optionally for one agent.",
      "inputSchema": {"type": "object", "properties": {"agent": {"type": "string"}, "n": {"type": "integer"}}}},
-    {"name": "vault_read", "description": "Read one recorded conversation note by the relative path returned from vault_search/vault_recent.",
+    {"name": "vault_read", "title": "Read a conversation note", "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}, "description": "Read one recorded conversation note by the relative path returned from vault_search/vault_recent.",
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "offset": {"type": "integer", "description": "start character; notes are returned in pages of 20000 chars"}, "limit": {"type": "integer"}}, "required": ["path"]}},
 ]
 
