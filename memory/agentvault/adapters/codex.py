@@ -8,7 +8,7 @@ from .base import Adapter, iter_json_lines, flat, tool_line
 from ..model import Turn, SessionMeta
 
 _INJECTED = ("# AGENTS.md", "<environment_context", "<user_instructions", "<permissions", "<collaboration_mode", "<INSTRUCTIONS",
-             "<heartbeat", ">>> ", "The active permission", "Assess the exact", "Planned action JSON", "The following is the Codex agent history")
+             "<heartbeat", "<external_codex_apps", "Host notice", ">>> ", "The active permission", "Assess the exact", "Planned action JSON", "The following is the Codex agent history")
 
 def _texts(content, kind):
     return [b.get("text", "") for b in content or [] if isinstance(b, dict) and b.get("type") == kind]

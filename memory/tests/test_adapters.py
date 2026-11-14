@@ -31,6 +31,8 @@ CX_FILE = [
         {"type": "input_text", "text": "# AGENTS.md instructions\n\n<INSTRUCTIONS>x</INSTRUCTIONS>"},
         {"type": "input_text", "text": "<environment_context>\n<cwd>/x</cwd>\n</environment_context>"},
         {"type": "input_text", "text": "<heartbeat>\n<automation_id>x</automation_id>\n</heartbeat>"},
+        {"type": "input_text", "text": "<external_codex_apps_open_page>{\"page_id\":null}</external_codex_apps_open_page>"},
+        {"type": "input_text", "text": "Host notice: some original assistant context is unavailable."},
         {"type": "input_text", "text": ">>> APPROVAL REQUEST START\nAssess the exact planned action below."},
         {"type": "input_text", "text": "{\n  \"command\": [\"/bin/zsh\"]\n}"},
         {"type": "input_text", "text": "fix the keychain prompt"}]}},
@@ -90,7 +92,7 @@ class AdapterTests(unittest.TestCase):
         for name, ad, p, *_ in self.each():
             _, turns, _ = ad.parse(p, 0)
             blob = " ".join(t.text for t in turns)
-            for bad in ("TOOL OUTPUT BODY", "SECRET REASONING", "DEV RULES", "AGENTS.md", "narration", "injected skill text", "<environment_context>", "<heartbeat>", ">>> APPROVAL", "/bin/zsh"):
+            for bad in ("TOOL OUTPUT BODY", "SECRET REASONING", "DEV RULES", "AGENTS.md", "narration", "injected skill text", "<environment_context>", "<heartbeat>", ">>> APPROVAL", "external_codex_apps", "Host notice", "/bin/zsh"):
                 self.assertNotIn(bad, blob, name + ":" + bad)
 
     def test_meta_has_project_cwd_title(self):
