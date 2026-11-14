@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>in.dextron04.agentvault</string>
+  <key>ProgramArguments</key><array>
+    <string>__PYTHON__</string><string>-m</string><string>agentvault</string><string>run</string>
+    <string>--vault</string><string>__VAULT__</string>
+  </array>
+  <key>WorkingDirectory</key><string>__MEMORY_DIR__</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ProcessType</key><string>Background</string>
+  <key>Nice</key><integer>10</integer>
+  <key>StandardErrorPath</key><string>__VAULT__/.recorder/recorder.log</string>
+  <key>StandardOutPath</key><string>__VAULT__/.recorder/recorder.log</string>
+</dict></plist>

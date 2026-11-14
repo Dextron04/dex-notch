@@ -102,6 +102,12 @@ class AdapterTests(unittest.TestCase):
         _, ad, p, *_ = next(iter(self.each()))  # claude-code ai-title wins
         self.assertEqual(ad.parse(p, 0)[0].title, "Notch setup")
 
+    def test_cwd_is_first_seen_not_last(self):
+        p = self.root / "-Users-x-notch" / "S.jsonl"; p.parent.mkdir(parents=True)
+        p.write_text(jl(cc_user("a"), dict(cc_user("b", "2026-11-14T10:00:02.000Z"), cwd="/Users/x/notch/deeper")))
+        meta, _, _ = ClaudeCodeAdapter(self.root).parse(p, 0)
+        self.assertEqual((meta.cwd, meta.project), ("/Users/x/notch", "notch"))
+
     def test_partial_last_line_not_consumed(self):
         for name, ad, p, recs, *_ in self.each():
             full = p.read_text(); cut = full.rstrip("\n")[:-5]  # last line now half-written

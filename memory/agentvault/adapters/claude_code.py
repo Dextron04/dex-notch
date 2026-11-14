@@ -30,7 +30,7 @@ class ClaudeCodeAdapter(Adapter):
             seen = True
             ts = d.get("timestamp", "")
             started = started or ts
-            cwd = d.get("cwd") or cwd
+            cwd = cwd or d.get("cwd") or ""
             t = d.get("type")
             if t == "ai-title": title = d.get("aiTitle") or title; continue
             if d.get("isSidechain") or d.get("isMeta"): continue

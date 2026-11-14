@@ -14,7 +14,7 @@ def slug(s: str, n: int = 40) -> str:
 def note_path(vault: Path, meta: SessionMeta) -> Path:
     # filename is stable for a session: title is NOT in it (titles arrive late and change)
     date = meta.started[:10] if re.match(r"\d{4}-\d{2}-\d{2}", meta.started or "") else "0000-00-00"
-    name = "%s-%s-%s.md" % (date, slug(meta.project), slug(meta.session_id, 10))
+    name = "%s-%s-%s.md" % (date, slug(meta.project), slug(meta.session_id, 80)[-10:].strip("-") or "x")
     return Path(vault) / "Sessions" / slug(meta.agent) / date[:7] / name
 
 def write_atomic(path: Path, text: str) -> None:

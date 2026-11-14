@@ -48,6 +48,12 @@ class NotesTests(unittest.TestCase):
         self.assertNotEqual(a, b)
         self.assertEqual(a, notes.note_path(self.vault, meta(sid="aaaaaaaa-1111", title="renamed later")))
 
+    def test_long_ids_with_shared_prefix_get_unique_files(self):
+        # codex session ids are filenames: rollout-<timestamp>-<uuid>
+        a = notes.note_path(self.vault, meta(sid="rollout-2026-11-04T05-28-00-01a14055-e6d2-76b3-8950-74be3e38940b"))
+        b = notes.note_path(self.vault, meta(sid="rollout-2026-11-04T05-28-00-01a1a1da-19f3-70e2-a36b-37ea78ac5d19"))
+        self.assertNotEqual(a, b)
+
     def test_atomic_write_leaves_no_temp_files(self):
         p = notes.append_turns(self.vault, meta(), [Turn("user", "x", "2026-11-14T10:00:01Z")])
         self.assertEqual([f.name for f in p.parent.iterdir()], [p.name])
