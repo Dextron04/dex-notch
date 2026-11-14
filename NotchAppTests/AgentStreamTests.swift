@@ -226,3 +226,40 @@ final class ConversationLifetimeTests: XCTestCase {
         XCTAssertFalse(AgentStream.isStale(closedAt: now.addingTimeInterval(500), now: now))
     }
 }
+
+final class WorkFolderTests: XCTestCase {
+    func testFolderCycleStartsAtSandboxAndWraps() {
+        XCTAssertEqual(AgentStream.nextFolder(nil), "Desktop")
+        XCTAssertEqual(AgentStream.nextFolder("Desktop"), "Downloads")
+        XCTAssertEqual(AgentStream.nextFolder("Documents"), "Projects")
+        XCTAssertNil(AgentStream.nextFolder("Projects"))          // back to the scratch sandbox
+        XCTAssertEqual(AgentStream.nextFolder("Bogus"), "Desktop") // unknown value recovers
+    }
+    private func settings(_ a: [String]) throws -> [String: Any] {
+        try XCTUnwrap(JSONSerialization.jsonObject(with: Data(a[a.firstIndex(of: "--settings")! + 1].utf8)) as? [String: Any])
+    }
+    func testClaudeWorkWithFolderGrantsWriteToExactlyThatFolderKeepingTheSandbox() throws {
+        let sb = try XCTUnwrap(try settings(AgentStream.claudeArgs(prompt: "x", session: nil, work: true, folder: "/Users/me/Desktop"))["sandbox"] as? [String: Any])
+        XCTAssertEqual(sb["enabled"] as? Bool, true); XCTAssertEqual(sb["allowUnsandboxedCommands"] as? Bool, false)
+        XCTAssertEqual((sb["filesystem"] as? [String: Any])?["allowWrite"] as? [String], ["/Users/me/Desktop"])
+    }
+    func testClaudeWorkWithoutFolderHasNoExtraWriteAccess() throws {
+        let sb = try XCTUnwrap(try settings(AgentStream.claudeArgs(prompt: "x", session: nil, work: true))["sandbox"] as? [String: Any])
+        XCTAssertNil(sb["filesystem"])
+    }
+    func testFolderPathWithQuotesStillProducesValidJSON() throws {
+        let sb = try XCTUnwrap(try settings(AgentStream.claudeArgs(prompt: "x", session: nil, work: true, folder: "/Users/me/My \"odd\" dir"))["sandbox"] as? [String: Any])
+        XCTAssertEqual((sb["filesystem"] as? [String: Any])?["allowWrite"] as? [String], ["/Users/me/My \"odd\" dir"])
+    }
+    func testAskModeIgnoresTheFolder() {
+        let c = AgentStream.claudeArgs(prompt: "x", session: nil, work: false, folder: "/Users/me/Desktop")
+        XCTAssertFalse(c.contains("--settings")); XCTAssertFalse(c.joined().contains("/Users/me/Desktop"))
+        XCTAssertFalse(AgentStream.codexArgs(prompt: "x", session: nil, work: false, folder: "/Users/me/Desktop").contains("--add-dir"))
+    }
+    func testCodexWorkWithFolderAddsItBeforeResume() {
+        let a = AgentStream.codexArgs(prompt: "x", session: "sid", work: true, folder: "/Users/me/Desktop")
+        XCTAssertEqual(a[a.firstIndex(of: "--add-dir")! + 1], "/Users/me/Desktop")
+        XCTAssertLessThan(a.firstIndex(of: "--add-dir")!, a.firstIndex(of: "resume")!)
+        XCTAssertEqual(a.last, "x")
+    }
+}

@@ -70,6 +70,7 @@ final class NotchWindow {
                     case 19 where cmd: assistant.setBackend(.claude)
                     case 20 where cmd: assistant.setBackend(.codex)
                     case 14 where cmd: assistant.toggleWork()
+                    case 3 where cmd: assistant.cycleFolder()     // ⌘F
                     default: return false
                     }
                     return true

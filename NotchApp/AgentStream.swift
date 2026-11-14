@@ -1,7 +1,7 @@
 import Foundation
 
 enum Backend: String, Codable { case gemma, claude, codex }
-struct Route: Equatable { var backend: Backend; var work: Bool; var prompt: String }
+struct Route: Equatable { var backend: Backend; var work: Bool; var prompt: String; var folder: String? = nil } // folder: absolute path `+` runs may also write to
 struct Snippet: Equatable { var title: String; var source: String; var snippet: String }
 enum AgentEvent: Equatable { case text(String), tool(String), session(String), final(String), error(String) }
 
@@ -25,6 +25,13 @@ enum AgentStream {
         closedAt.map { now.timeIntervalSince($0) > after } ?? false
     }
 
+    /// Folders `⌘F` offers besides the scratch sandbox (names under the home directory).
+    static let folders = ["Desktop", "Downloads", "Documents", "Projects"]
+    static func nextFolder(_ current: String?) -> String? {
+        guard let c = current, let i = folders.firstIndex(of: c) else { return folders[0] } // nil or unknown → first folder
+        return i + 1 < folders.count ? folders[i + 1] : nil
+    }
+
     static let order: [Backend] = [.gemma, .claude, .codex]
     static func cycle(_ b: Backend, by d: Int) -> Backend {
         let n = order.count
@@ -43,23 +50,30 @@ enum AgentStream {
 
     // MARK: argv
 
-    /// Claude's own OS sandbox (seatbelt) for its shell: writes only inside the working folder, no network, and no way back to an unsandboxed shell.
-    private static let claudeSandbox = #"{"sandbox":{"enabled":true,"autoAllowBashIfSandboxed":true,"allowUnsandboxedCommands":false}}"#
+    /// Claude's own OS sandbox (seatbelt) for its shell: writes only inside the working folder (plus `folder`, if one was chosen),
+    /// no network, and no way back to an unsandboxed shell.
+    private static func claudeSandbox(folder: String?) -> String {
+        var sb: [String: Any] = ["enabled": true, "autoAllowBashIfSandboxed": true, "allowUnsandboxedCommands": false]
+        if let folder { sb["filesystem"] = ["allowWrite": [folder]] }
+        let d = try? JSONSerialization.data(withJSONObject: ["sandbox": sb], options: [.withoutEscapingSlashes])
+        return d.map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+    }
 
-    static func claudeArgs(prompt: String, session: String?, work: Bool) -> [String] {
+    static func claudeArgs(prompt: String, session: String?, work: Bool, folder: String? = nil) -> [String] {
         var a = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--append-system-prompt",
                  work ? brief + " You may edit files and run shell commands; commands run in a sandbox: they can only write inside the current folder and have no network." : brief]
         if let session { a += ["--resume", session] }
         // Ask: look things up only. Work (`+`): may also edit files and run commands, but only inside the sandbox above.
         a += ["--allowedTools", "Read", "Grep", "Glob", "WebSearch", "WebFetch", "mcp__agentvault"] + (work ? ["Edit", "Write", "Bash"] : [])
-        if work { a += ["--permission-mode", "acceptEdits", "--settings", claudeSandbox] }
+        if work { a += ["--permission-mode", "acceptEdits", "--settings", claudeSandbox(folder: folder)] }
         else { a += ["--disallowedTools", "Bash", "Edit", "Write", "NotebookEdit"] }
         return a + ["--", prompt] // `--`: variadic flags above must not swallow the prompt, and a leading "-" must not parse as an option
     }
 
-    static func codexArgs(prompt: String, session: String?, work: Bool) -> [String] {
+    static func codexArgs(prompt: String, session: String?, work: Bool, folder: String? = nil) -> [String] {
         // sandbox flags go before `resume`: the subcommand doesn't take them
         ["exec", "--json", "--skip-git-repo-check", "--sandbox", work ? "workspace-write" : "read-only"]
+            + (work ? folder.map { ["--add-dir", $0] } ?? [] : [])
             + (session.map { ["resume", $0] } ?? []) + [prompt]
     }
 

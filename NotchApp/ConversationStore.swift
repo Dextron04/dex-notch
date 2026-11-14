@@ -8,6 +8,7 @@ struct SavedConversation: Codable, Equatable {
     var turns: [SavedTurn] = []
     var backend: Backend = .gemma
     var work = false
+    var folder: String?                    // extra folder `+` runs may write to (nil = scratch sandbox only)
     var sessions: [String: String] = [:]   // Backend.rawValue → CLI session id, so follow-ups resume after a restart
     var draft = ""
     var recalled: [String] = []

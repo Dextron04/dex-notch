@@ -36,8 +36,8 @@ enum AgentRunner {
                 let p = Process(), out = Pipe()
                 p.executableURL = URL(fileURLWithPath: exe)
                 p.arguments = route.backend == .claude
-                    ? AgentStream.claudeArgs(prompt: route.prompt, session: session, work: route.work)
-                    : AgentStream.codexArgs(prompt: route.prompt, session: session, work: route.work)
+                    ? AgentStream.claudeArgs(prompt: route.prompt, session: session, work: route.work, folder: route.folder)
+                    : AgentStream.codexArgs(prompt: route.prompt, session: session, work: route.work, folder: route.folder)
                 p.currentDirectoryURL = scratch
                 var env = ProcessInfo.processInfo.environment
                 env["PATH"] = loginPATH

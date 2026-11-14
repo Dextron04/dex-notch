@@ -33,7 +33,8 @@ final class Assistant {
     var streaming = false   // tokens arriving
     var error: String?
     var backend: Backend = .gemma   // who answers unprefixed questions in this conversation
-    var work = false                // claude/codex may edit files (scratch folder) — the "+" on the dial
+    var work = false                // claude/codex may edit files and run commands — the "+" on the dial
+    var folder: String?             // name of an extra folder those runs may write to (nil = the scratch sandbox only)
     var recalled: [String] = []     // titles of the vault notes Gemma was handed for the last answer
     var toolNote: String?           // what claude/codex is doing right now ("Read", "shell", …)
     private var sessions: [Backend: String] = [:] // CLI session ids so follow-ups resume the same conversation
@@ -66,7 +67,7 @@ final class Assistant {
     // MARK: persistence — the open conversation survives quitting the app
 
     func persist() {
-        let c = SavedConversation(id: convID, turns: turns.map { SavedTurn(role: $0.role, text: $0.text) }, backend: backend, work: work,
+        let c = SavedConversation(id: convID, turns: turns.map { SavedTurn(role: $0.role, text: $0.text) }, backend: backend, work: work, folder: folder,
                                   sessions: Dictionary(uniqueKeysWithValues: sessions.map { ($0.key.rawValue, $0.value) }),
                                   draft: draft, recalled: recalled, closedAt: closedAt ?? Date())
         try? ConversationStore.save(c, to: storeURL) // best effort: a full disk must never break the notch
@@ -75,7 +76,7 @@ final class Assistant {
     private func restore() {
         guard let c = ConversationStore.load(from: storeURL) else { return }
         turns = c.turns.map { Turn(role: $0.role, text: $0.text) }
-        backend = c.backend; work = c.work; recalled = c.recalled
+        backend = c.backend; work = c.work; folder = c.folder; recalled = c.recalled
         sessions = Dictionary(uniqueKeysWithValues: c.sessions.compactMap { k, v in Backend(rawValue: k).map { ($0, v) } })
         closedAt = c.closedAt
         convID = c.id ?? convID; journaled = turns.count // restored turns were journaled when they happened
@@ -96,6 +97,8 @@ final class Assistant {
 
     func setBackend(_ b: Backend) { guard !busy else { return }; backend = b; if b == .gemma { work = false } }
     func cycleBackend(_ d: Int) { setBackend(AgentStream.cycle(backend, by: d)) }
+    /// ⌘F: sandbox → Desktop → Downloads → Documents → Projects → sandbox. Picking a folder implies edit rights.
+    func cycleFolder() { guard !busy, backend != .gemma else { return }; folder = AgentStream.nextFolder(folder); if folder != nil { work = true } }
     func toggleWork() { guard !busy, backend != .gemma else { return }; work.toggle() }
 
     func toggle() { if isOpen && mode == .prompt { close() } else { open(.prompt) } }
@@ -125,7 +128,7 @@ final class Assistant {
     /// ⌘N / the new-chat button: drop the conversation (and stop a running answer) on purpose.
     func newConversation() { task?.cancel(); reset() }
 
-    private func reset() { turns = []; draft = ""; error = nil; backend = .gemma; work = false; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; journaled = 0; persist() }
+    private func reset() { turns = []; draft = ""; error = nil; backend = .gemma; work = false; folder = nil; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; journaled = 0; persist() }
 
     // MARK: ask
 
@@ -136,6 +139,11 @@ final class Assistant {
         if r.prompt == q { r.backend = backend; r.work = work && backend != .gemma } // no prefix: use the dial
         else { backend = r.backend; work = r.work }                                  // pasted "@claude …" switches the dial
         guard !r.prompt.isEmpty else { draft = ""; return } // bare "@claude": just switch
+        if r.work, let f = folder {                         // `+` run with a chosen folder: grant write access to exactly that one
+            let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(f)
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue { r.folder = url.path }
+        }
         let b = r.backend
         exchange = (b, Date())
         draft = ""; error = nil; toolNote = nil; recalled = []
