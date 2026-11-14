@@ -2,6 +2,7 @@ import Foundation
 
 enum Backend: String { case gemma, claude, codex }
 struct Route: Equatable { var backend: Backend; var work: Bool; var prompt: String }
+struct Snippet: Equatable { var title: String; var source: String; var snippet: String }
 enum AgentEvent: Equatable { case text(String), tool(String), session(String), final(String), error(String) }
 
 /// Pure helpers for driving the `claude` / `codex` CLIs headless: prefix routing, argv, and stream-json parsing.
@@ -80,6 +81,37 @@ enum AgentStream {
             }
         default: return [] // incl. item.completed "error" items: those are config warnings, not failures
         }
+    }
+
+    // MARK: vault recall (what the mini's /rag/search returns → context for Gemma)
+
+    /// Vault chunks from a /rag/search response: vault notes only, at most 2 per note and 5 overall (one long note must not crowd out the rest).
+    static func parseSnippets(_ data: Data) -> [Snippet] {
+        guard let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let rows = j["sources"] as? [[String: Any]] else { return [] }
+        var perNote: [String: Int] = [:], out: [Snippet] = []
+        for r in rows {
+            guard let src = r["source"] as? String, src.hasPrefix("vault:"), let text = r["snippet"] as? String, !text.isEmpty else { continue }
+            let path = String(src.dropFirst(6))
+            guard perNote[path, default: 0] < 2 else { continue }
+            perNote[path, default: 0] += 1
+            out.append(Snippet(title: (r["title"] as? String) ?? path, source: path, snippet: text))
+            if out.count == 5 { break }
+        }
+        return out
+    }
+
+    /// Appended to Gemma's system prompt. Empty when nothing was found, so plain questions stay plain.
+    static func memoryPrompt(_ s: [Snippet], limit: Int = 3000) -> String {
+        guard !s.isEmpty else { return "" }
+        var body = "", n = 0
+        for x in s {
+            let month = x.source.split(separator: "/").first { $0.range(of: #"^\d{4}-\d{2}$"#, options: .regularExpression) != nil }.map(String.init) ?? ""
+            let entry = "[\(n + 1)] \(x.title)\(month.isEmpty ? "" : " (" + month + ")"): \(x.snippet)\n"
+            if body.count + entry.count > limit { body += String(entry.prefix(max(limit - body.count, 0))); break }
+            body += entry; n += 1
+        }
+        return "Notes from the user's long-term memory (past conversations with their AI agents). Use them when they bear on the question and say which note you used. "
+            + "If they don't answer it, say so; do not invent details beyond them.\n\n" + body
     }
 
     private static func object(_ line: String) -> [String: Any]? {

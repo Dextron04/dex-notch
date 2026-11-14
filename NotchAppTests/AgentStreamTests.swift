@@ -115,3 +115,44 @@ final class AgentStreamTests: XCTestCase {
         XCTAssertEqual(AgentStream.codexEvents(line: #"{"type":"turn.failed","error":{"message":"nope"}}"#), [.error("nope")])
     }
 }
+
+final class MemoryRecallTests: XCTestCase {
+    private func json(_ sources: [[String: String]]) -> Data {
+        try! JSONSerialization.data(withJSONObject: ["live": 5, "sources": sources])
+    }
+    private func src(_ source: String, _ title: String = "T", _ snippet: String = "s") -> [String: String] {
+        ["id": "1", "title": title, "source": source, "heading": "h", "snippet": snippet]
+    }
+
+    func testOnlyVaultSourcesAreKept() {
+        let r = AgentStream.parseSnippets(json([src("vault:Sessions/codex/a.md", "A"), src("docs/readme.md", "Other")]))
+        XCTAssertEqual(r.map(\.title), ["A"])
+    }
+    func testAtMostTwoSnippetsPerNoteAndFiveTotal() {
+        let many = (0..<4).map { src("vault:Sessions/x/a.md", "A", "s\($0)") } + (0..<6).map { src("vault:Sessions/x/b\($0).md", "B\($0)") }
+        let r = AgentStream.parseSnippets(json(many))
+        XCTAssertEqual(r.filter { $0.source == "Sessions/x/a.md" }.count, 2)
+        XCTAssertEqual(r.count, 5)
+    }
+    func testSourcePrefixIsStrippedToVaultRelativePath() {
+        XCTAssertEqual(AgentStream.parseSnippets(json([src("vault:Sessions/gemini/z.md")])).first?.source, "Sessions/gemini/z.md")
+    }
+    func testMalformedOrEmptyResponseGivesNoSnippets() {
+        XCTAssertEqual(AgentStream.parseSnippets(Data("nope".utf8)), [])
+        XCTAssertEqual(AgentStream.parseSnippets(json([])), [])
+        XCTAssertEqual(AgentStream.parseSnippets(Data(#"{"error":"x"}"#.utf8)), [])
+    }
+    func testMemoryPromptEmptyWhenNothingFound() {
+        XCTAssertEqual(AgentStream.memoryPrompt([]), "")
+    }
+    func testMemoryPromptCarriesTitlesSnippetsAndHonestyRule() {
+        let p = AgentStream.memoryPrompt([Snippet(title: "Notch picker", source: "Sessions/claude-code/2026-11/a.md", snippet: "we chose claude -p")])
+        XCTAssertTrue(p.contains("Notch picker")); XCTAssertTrue(p.contains("we chose claude -p"))
+        XCTAssertTrue(p.contains("2026-11"))                         // date hint from the path
+        XCTAssertTrue(p.lowercased().contains("do not invent"))      // must not fabricate beyond the notes
+    }
+    func testMemoryPromptIsCappedByLimit() {
+        let big = (0..<5).map { Snippet(title: "N\($0)", source: "Sessions/x/\($0).md", snippet: String(repeating: "z", count: 2000)) }
+        XCTAssertLessThanOrEqual(AgentStream.memoryPrompt(big, limit: 3000).count, 3300)  // limit + fixed header/footer
+    }
+}

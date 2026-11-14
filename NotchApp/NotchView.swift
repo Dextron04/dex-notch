@@ -127,6 +127,10 @@ struct NotchView: View {
                         Text(e).font(.system(size: 15, design: .serif)).foregroundStyle(Ink.emberDeep)
                     } else if !a.answer.isEmpty {
                         AnswerBody(text: a.answer)
+                        if !a.recalled.isEmpty && !a.busy {
+                            Text("from your vault · " + a.recalled.prefix(3).joined(separator: " · "))
+                                .font(.system(size: 11, design: .serif)).italic().foregroundStyle(Ink.dim).lineLimit(2)
+                        }
                     }
                     Color.clear.frame(height: 1).id("end")
                 }

@@ -29,6 +29,7 @@ final class Assistant {
     var streaming = false   // tokens arriving
     var error: String?
     var backend: Backend = .gemma   // who answers unprefixed questions in this conversation
+    var recalled: [String] = []     // titles of the vault notes Gemma was handed for the last answer
     var toolNote: String?           // what claude/codex is doing right now ("Read", "shell", …)
     private var sessions: [Backend: String] = [:] // CLI session ids so follow-ups resume the same conversation
 
@@ -81,7 +82,7 @@ final class Assistant {
         Task { try? await Task.sleep(for: .milliseconds(450)); if !isOpen { reset() } }
     }
 
-    private func reset() { turns = []; draft = ""; error = nil; backend = .gemma; sessions = [:]; toolNote = nil; waiting = false; streaming = false; summary = ""; summarizing = false }
+    private func reset() { turns = []; draft = ""; error = nil; backend = .gemma; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false }
 
     // MARK: ask
 
@@ -93,7 +94,7 @@ final class Assistant {
         else { backend = r.backend }                   // "@claude" switches (sticky until the notch closes)
         guard !r.prompt.isEmpty else { draft = ""; return } // bare "@claude": just switch
         let b = r.backend
-        draft = ""; error = nil; toolNote = nil
+        draft = ""; error = nil; toolNote = nil; recalled = []
         turns.append(Turn(role: "user", text: r.prompt))
         turns.append(Turn(role: "assistant", text: ""))
         waiting = true
@@ -104,6 +105,11 @@ final class Assistant {
         task = Task {
             do {
                 if b == .gemma {
+                    var messages = messages
+                    let hits = await vaultRecall(r.prompt)
+                    recalled = hits.reduce(into: [String]()) { if !$0.contains($1.title) { $0.append($1.title) } }
+                    let extra = AgentStream.memoryPrompt(hits)
+                    if !extra.isEmpty { messages[0]["content"] = Self.system + "\n\n" + extra }
                     try await streamChat(messages) { t in
                         waiting = false; streaming = true
                         turns[turns.count - 1].text += t
@@ -143,6 +149,18 @@ final class Assistant {
             if let t = (j["message"] as? [String: Any])?["content"] as? String, !t.isEmpty { onToken(t) }
             if j["done"] as? Bool == true { break }
         }
+    }
+
+    /// Asks the mini's RAG which vault notes bear on the question. Never blocks the answer: any failure just means no context.
+    private func vaultRecall(_ question: String) async -> [Snippet] {
+        guard let tok = try? loadToken() else { return [] }
+        var req = URLRequest(url: URL(string: Self.base + "/rag/search")!)
+        req.httpMethod = "POST"; req.timeoutInterval = 5
+        req.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["messages": [["role": "user", "content": question]]])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req), (resp as? HTTPURLResponse)?.statusCode == 200 else { return [] }
+        return AgentStream.parseSnippets(data)
     }
 
     /// Streams a `claude` / `codex` CLI run into the last assistant turn; `toolNote` shows what it is doing.
