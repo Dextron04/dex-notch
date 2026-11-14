@@ -21,7 +21,7 @@ targets:
   NotchAppTests:
     type: bundle.unit-test
     platform: macOS
-    sources: [NotchAppTests, NotchApp/VaultReader.swift] # VaultReader has no UI deps, so tests compile it directly (no app host needed)
+    sources: [NotchAppTests, NotchApp/VaultReader.swift, NotchApp/AgentStream.swift] # these have no UI deps, so tests compile it directly (no app host needed)
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

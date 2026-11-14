@@ -77,7 +77,7 @@ struct NotchView: View {
     private var wings: some View {
         HStack(spacing: 0) {
             HStack(spacing: 8) {
-                StatusDot(link: a.mode == .recall ? (a.snapshot.recorderOK ? .ready : .offline) : a.link, busy: a.busy || a.summarizing)
+                StatusDot(link: a.mode == .recall ? (a.snapshot.recorderOK ? .ready : .offline) : (a.backend == .gemma ? a.link : .ready), busy: a.busy || a.summarizing)
                 Text(statusText).font(.system(size: 11, weight: .medium)).tracking(0.3).foregroundStyle(Ink.dim)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -96,6 +96,9 @@ struct NotchView: View {
 
     private var statusText: String {
         if a.mode == .recall { return a.snapshot.recorderOK ? "recorder · running" : "recorder · not running" }
+        if a.backend != .gemma {
+            return a.busy ? (a.toolNote.map { "\(a.backend.rawValue) · using \($0)" } ?? "\(a.backend.rawValue) · thinking") : "\(a.backend.rawValue) · subscription"
+        }
         return switch a.link {
         case .ready: a.waiting ? "thinking" : "gemma · mac-mini"
         case .connecting: "connecting to \(Assistant.host)…"
@@ -146,7 +149,7 @@ struct NotchView: View {
     private var inputRow: some View {
         HStack(spacing: 10) {
             TextField("", text: $a.draft,
-                      prompt: Text(hasAnswer ? "Follow up…" : "Ask anything").foregroundStyle(Ink.dim))
+                      prompt: Text(hasAnswer ? "Follow up…" : "Ask anything — or @claude, @codex").foregroundStyle(Ink.dim))
                 .textFieldStyle(.plain)
                 .font(.system(size: 19, design: .serif)).italic(!hasAnswer && a.draft.isEmpty)
                 .foregroundStyle(Ink.text)

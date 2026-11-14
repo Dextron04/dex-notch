@@ -1,0 +1,89 @@
+import Foundation
+
+enum Backend: String { case gemma, claude, codex }
+struct Route: Equatable { var backend: Backend; var work: Bool; var prompt: String }
+enum AgentEvent: Equatable { case text(String), tool(String), session(String), final(String), error(String) }
+
+/// Pure helpers for driving the `claude` / `codex` CLIs headless: prefix routing, argv, and stream-json parsing.
+enum AgentStream {
+    /// "@claude q" / "@claude+ q" / "@codex q" / "@codex+ q" pick a CLI (`+` = may edit files). Anything else is Gemma.
+    static func route(_ input: String) -> Route {
+        let t = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.hasPrefix("@") else { return Route(backend: .gemma, work: false, prompt: t) }
+        let word = t.prefix { !$0.isWhitespace }
+        let name = word.dropFirst().lowercased()
+        let work = name.hasSuffix("+")
+        guard let b = Backend(rawValue: work ? String(name.dropLast()) : name), b != .gemma || !work else {
+            return Route(backend: .gemma, work: false, prompt: t)
+        }
+        return Route(backend: b, work: work && b != .gemma, prompt: t.dropFirst(word.count).trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private static let brief = "You answer inside a tiny overlay beside the Mac's notch. Be brief and direct: plain sentences, no headings, no preamble."
+
+    // MARK: argv
+
+    static func claudeArgs(prompt: String, session: String?, work: Bool) -> [String] {
+        var a = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--append-system-prompt", brief]
+        if let session { a += ["--resume", session] }
+        // Ask: look things up only. Work: may also edit files (in the scratch dir the runner uses). Never Bash.
+        a += ["--allowedTools", "Read", "Grep", "Glob", "WebSearch", "WebFetch", "mcp__agentvault"]
+        a += ["--disallowedTools", "Bash"] + (work ? [] : ["Edit", "Write", "NotebookEdit"])
+        if work { a += ["--allowedTools", "Edit", "Write", "--permission-mode", "acceptEdits"] }
+        return a + ["--", prompt] // `--`: variadic flags above must not swallow the prompt, and a leading "-" must not parse as an option
+    }
+
+    static func codexArgs(prompt: String, session: String?, work: Bool) -> [String] {
+        // sandbox flags go before `resume`: the subcommand doesn't take them
+        ["exec", "--json", "--skip-git-repo-check", "--sandbox", work ? "workspace-write" : "read-only"]
+            + (session.map { ["resume", $0] } ?? []) + [prompt]
+    }
+
+    // MARK: stream parsing (one JSON object per line)
+
+    static func claudeEvents(line: String) -> [AgentEvent] {
+        guard let j = object(line), let type = j["type"] as? String else { return [] }
+        switch type {
+        case "system":
+            return (j["subtype"] as? String) == "init" ? (j["session_id"] as? String).map { [.session($0)] } ?? [] : []
+        case "stream_event":
+            guard let e = j["event"] as? [String: Any] else { return [] }
+            if e["type"] as? String == "content_block_delta", let d = e["delta"] as? [String: Any],
+               d["type"] as? String == "text_delta", let t = d["text"] as? String { return [.text(t)] }
+            if e["type"] as? String == "content_block_start", let b = e["content_block"] as? [String: Any],
+               b["type"] as? String == "tool_use", let n = b["name"] as? String { return [.tool(n)] }
+            return []
+        case "result":
+            let text = (j["result"] as? String) ?? ""
+            let sid: [AgentEvent] = (j["session_id"] as? String).map { [.session($0)] } ?? []
+            return sid + [(j["is_error"] as? Bool) == true ? .error(text) : .final(text)]
+        default: return []
+        }
+    }
+
+    static func codexEvents(line: String) -> [AgentEvent] {
+        guard let j = object(line), let type = j["type"] as? String else { return [] }
+        let item = j["item"] as? [String: Any]
+        switch type {
+        case "thread.started": return (j["thread_id"] as? String).map { [.session($0)] } ?? []
+        case "turn.failed": return [.error(((j["error"] as? [String: Any])?["message"] as? String) ?? "Codex failed")]
+        case "error": return [.error((j["message"] as? String) ?? "Codex failed")]
+        case "item.completed" where item?["type"] as? String == "agent_message":
+            return (item?["text"] as? String).map { [.text($0)] } ?? []
+        case "item.started":
+            switch item?["type"] as? String {
+            case "command_execution": return [.tool("shell")]
+            case "web_search": return [.tool("web search")]
+            case "mcp_tool_call": return [.tool((item?["tool"] as? String) ?? "tool")]
+            case "file_change": return [.tool("editing")]
+            default: return []
+            }
+        default: return [] // incl. item.completed "error" items: those are config warnings, not failures
+        }
+    }
+
+    private static func object(_ line: String) -> [String: Any]? {
+        guard let d = line.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: d) as? [String: Any]
+    }
+}

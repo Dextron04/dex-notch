@@ -28,6 +28,9 @@ final class Assistant {
     var waiting = false     // sent, no token yet
     var streaming = false   // tokens arriving
     var error: String?
+    var backend: Backend = .gemma   // who answers unprefixed questions in this conversation
+    var toolNote: String?           // what claude/codex is doing right now ("Read", "shell", …)
+    private var sessions: [Backend: String] = [:] // CLI session ids so follow-ups resume the same conversation
 
     /// Called whenever isOpen flips so the window can take/release key focus.
     var onOpenChange: ((Bool) -> Void)?
@@ -78,15 +81,20 @@ final class Assistant {
         Task { try? await Task.sleep(for: .milliseconds(450)); if !isOpen { reset() } }
     }
 
-    private func reset() { turns = []; draft = ""; error = nil; waiting = false; streaming = false; summary = ""; summarizing = false }
+    private func reset() { turns = []; draft = ""; error = nil; backend = .gemma; sessions = [:]; toolNote = nil; waiting = false; streaming = false; summary = ""; summarizing = false }
 
     // MARK: ask
 
     func send() {
         let q = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !busy else { return }
-        draft = ""; error = nil
-        turns.append(Turn(role: "user", text: q))
+        var r = AgentStream.route(q)
+        if r.prompt == q { r.backend = backend }       // no prefix: stay on the model this conversation started with
+        else { backend = r.backend }                   // "@claude" switches (sticky until the notch closes)
+        guard !r.prompt.isEmpty else { draft = ""; return } // bare "@claude": just switch
+        let b = r.backend
+        draft = ""; error = nil; toolNote = nil
+        turns.append(Turn(role: "user", text: r.prompt))
         turns.append(Turn(role: "assistant", text: ""))
         waiting = true
 
@@ -95,9 +103,13 @@ final class Assistant {
 
         task = Task {
             do {
-                try await streamChat(messages) { t in
-                    waiting = false; streaming = true
-                    turns[turns.count - 1].text += t
+                if b == .gemma {
+                    try await streamChat(messages) { t in
+                        waiting = false; streaming = true
+                        turns[turns.count - 1].text += t
+                    }
+                } else {
+                    try await runAgent(r)
                 }
                 finish()
             } catch is CancellationError {
@@ -133,8 +145,30 @@ final class Assistant {
         }
     }
 
+    /// Streams a `claude` / `codex` CLI run into the last assistant turn; `toolNote` shows what it is doing.
+    private func runAgent(_ r: Route) async throws {
+        var gotText = false, needBreak = false
+        func add(_ t: String) {
+            waiting = false; streaming = true; toolNote = nil
+            if needBreak, !turns[turns.count - 1].text.isEmpty { turns[turns.count - 1].text += "\n\n" }
+            needBreak = false; gotText = true
+            turns[turns.count - 1].text += t
+        }
+        do {
+            for try await e in AgentRunner.run(r, session: sessions[r.backend]) {
+                switch e {
+                case .session(let s): sessions[r.backend] = s
+                case .text(let t): add(t)
+                case .tool(let n): toolNote = n; needBreak = true
+                case .final(let t): if !gotText { add(t) }
+                case .error(let m): throw Failure(m)
+                }
+            }
+        } catch let m as AgentRunner.Missing { throw Failure("`\(m.name)` not found. Install it and log in.") }
+    }
+
     private func finish() {
-        waiting = false; streaming = false
+        waiting = false; streaming = false; toolNote = nil
         if turns.last?.role == "assistant", turns.last?.text.isEmpty == true, error != nil { turns.removeLast() }
     }
 
