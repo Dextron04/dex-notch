@@ -6,7 +6,7 @@
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="Python stdlib only" src="https://img.shields.io/badge/recorder-Python%20stdlib%20only-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
-  <img alt="195 tests" src="https://img.shields.io/badge/tests-195%20passing-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
+  <img alt="212 tests" src="https://img.shields.io/badge/tests-212%20passing-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="No API keys" src="https://img.shields.io/badge/API%20keys-none%20needed-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
 </p>
@@ -147,7 +147,6 @@ A borderless, non-activating panel pinned to the top centre of the notched displ
 - **Gemma is a chat model with retrieved snippets, not an agent.** It cannot open a note or run tools.
 - **The vault is plain text.** Redaction is pattern-based. Treat the vault like any other folder of your private conversations.
 - **Edit runs are powerful.** An edit run with Desktop selected can rearrange it, with no confirmation prompt. Ask for a plan first if it matters.
-- **Hosts are constants for now.** The Gemma host and model are set in `NotchApp/Assistant.swift`.
 
 ---
 
@@ -161,11 +160,23 @@ xcodegen generate
 xcodebuild -scheme NotchApp -configuration Debug build   # or open NotchApp.xcodeproj
 ```
 
-**Point Gemma at your own host.** Set `host` and `model` in `NotchApp/Assistant.swift`, then store the gateway token:
+**Point Gemma at your own host.** Create `~/Library/Application Support/NotchApp/settings.json` (a template is in [`docs/settings.example.json`](docs/settings.example.json)):
+
+```json
+{ "gemma": { "host": "ai.example.com", "model": "gemma3:12b" } }
+```
+
+- `host` is a bare hostname (a pasted `https://…/` is tidied). Requests always use HTTPS.
+- `model` is the name your Ollama server knows (`ollama list`). There is no default, so the app never assumes one.
+- Optional: `keychain_service` (defaults to the host) and `keychain_account` (defaults to `notchapp`).
+
+Then store your gateway token in the Keychain:
 
 ```bash
 security add-generic-password -s ai.example.com -a notchapp -w
 ```
+
+Edit the file any time, then press `⌥ Space` or **Check connection** in the menu bar. It is re-read, no rebuild. Without a settings file the notch still works for `@claude`, `@codex` and recall, and Gemma shows "not set up". The recorder reads the same file for its RAG sync.
 
 **Start the recorder** (a launchd agent, Python standard library only):
 
@@ -217,12 +228,13 @@ NotchApp/                 SwiftUI + AppKit menu-bar agent
   AgentRunner.swift         launches claude / codex headless
   RecallView.swift          chats, heatmap, projects
   VaultReader.swift         reads the vault the recorder writes
+  Settings.swift            settings.json: where Gemma lives (shared with the recorder)
 memory/
   agentvault/               recorder, adapters, redaction, MCP server, RAG push
     remote/                 OAuth + MCP over HTTP for ChatGPT and Claude.ai
   hooks/                    Claude Code start-up digest
-  tests/                    111 tests
-NotchAppTests/             84 tests
+  tests/                    117 tests
+NotchAppTests/             95 tests
 scripts/demo_vault.py      synthetic vault for screenshots
 docs/                      specs, plans and assets
 ```
@@ -230,8 +242,8 @@ docs/                      specs, plans and assets
 ## Tests
 
 ```bash
-xcodebuild test -scheme NotchApp -destination 'platform=macOS'   # 84 Swift tests
-cd memory && python3 -m unittest discover -s tests               # 111 Python tests
+xcodebuild test -scheme NotchApp -destination 'platform=macOS'   # 95 Swift tests
+cd memory && python3 -m unittest discover -s tests               # 117 Python tests
 ```
 
 Everything here was built test-first: the stream parsers, the sandbox arguments, the OAuth flow, the lockout, the redaction rules, the idempotent note writer.

@@ -103,9 +103,10 @@ struct NotchView: View {
             return a.busy ? (a.toolNote.map { "\(a.backend.rawValue) · using \($0)" } ?? "\(a.backend.rawValue) · thinking")
                           : (a.work ? "\(a.backend.rawValue)+ · \(a.folder ?? "sandbox")" : "\(a.backend.rawValue) · subscription")
         }
+        if a.setupProblem != nil { return "gemma · not set up" }
         return switch a.link {
         case .ready: a.waiting ? "thinking" : "gemma · mac-mini"
-        case .connecting: "connecting to \(Assistant.host)…"
+        case .connecting: "connecting to \(a.gemma?.host ?? "gemma")…"
         case .offline: "offline"
         }
     }

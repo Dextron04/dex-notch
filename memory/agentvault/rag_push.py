@@ -3,11 +3,10 @@ The tunnel in front drops requests slower than ~100s, so notes go in small batch
 import hashlib, json, re, subprocess, urllib.error, urllib.request
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
+from . import settings as _settings
 from .index import session_files
 from .notes import read_frontmatter, write_atomic
 
-TARGET = "https://ai.example.com"
-KEYCHAIN = ("ai.example.com", "notchapp")
 MAX_DOC_BYTES = 100_000     # one part of a long note
 BATCH_BYTES = 250_000       # one request
 USER_AGENT = "agentvault/0.1"  # Cloudflare rejects Python's default agent
@@ -58,13 +57,19 @@ def _load(path: Path) -> Dict[str, str]:
     try: return json.loads(path.read_text())
     except (OSError, ValueError): return {}  # losing this file only means one redundant (idempotent) push
 
-def keychain_key() -> str:
-    r = subprocess.run(["/usr/bin/security", "find-generic-password", "-s", KEYCHAIN[0], "-a", KEYCHAIN[1], "-w"],
+def _config(settings_path=None) -> dict:
+    cfg = _settings.load(settings_path)
+    if cfg is None: raise PushError("RAG sync is not configured: create the notch app's settings.json with a gemma.host (see docs/settings.example.json)")
+    return cfg
+
+def keychain_key(settings_path=None) -> str:
+    cfg = _config(settings_path)
+    r = subprocess.run(["/usr/bin/security", "find-generic-password", "-s", cfg["keychain_service"], "-a", cfg["keychain_account"], "-w"],
                        capture_output=True, text=True)
-    if r.returncode != 0 or not r.stdout.strip(): raise PushError("no API token in Keychain for %s" % KEYCHAIN[0])
+    if r.returncode != 0 or not r.stdout.strip(): raise PushError("no token in the Keychain (service %s)" % cfg["keychain_service"])
     return r.stdout.strip()
 
-def post_http(payload: dict, key: str, target: str = TARGET) -> dict:
+def post_http(payload: dict, key: str, target: str) -> dict:
     req = urllib.request.Request(target.rstrip("/") + "/rag/ingest", json.dumps(payload).encode(),
                                  {"Content-Type": "application/json", "User-Agent": USER_AGENT, "Authorization": "Bearer " + key})
     try:
@@ -73,13 +78,14 @@ def post_http(payload: dict, key: str, target: str = TARGET) -> dict:
     except (urllib.error.URLError, OSError, ValueError) as e: raise PushError("ingest failed: %s" % e) from e
 
 def sync(vault: Path, post: Optional[Callable[[dict], dict]] = None, state_path: Optional[Path] = None,
-         batch_bytes: int = BATCH_BYTES) -> Dict[str, int]:
+         batch_bytes: int = BATCH_BYTES, settings_path=None) -> Dict[str, int]:
     """Pushes only notes whose content changed. State is saved per batch, so a failure resumes where it stopped.
     Bundles are always `complete: false`, so the service never deletes anything on our account."""
     vault = Path(vault)
     state_path = Path(state_path) if state_path else vault / ".recorder" / "rag_state.json"
     if post is None:
-        key = keychain_key(); post = lambda payload: post_http(payload, key)
+        target = _config(settings_path)["base"]; key = keychain_key(settings_path)
+        post = lambda payload: post_http(payload, key, target)
     state = _load(state_path)
     docs = build_docs(vault)
     todo = [d for d in docs if state.get(d["id"]) != _digest(d)]
@@ -100,9 +106,12 @@ def sync(vault: Path, post: Optional[Callable[[dict], dict]] = None, state_path:
 
 _key_cache: List[str] = []
 
-def semantic_paths(query: str, target: str = TARGET) -> List[str]:
+def semantic_paths(query: str, target: Optional[str] = None, settings_path=None) -> List[str]:
     """Vault notes the RAG judges relevant to `query` (relative paths). Short timeout: search must never hang on the network."""
-    if not _key_cache: _key_cache.append(keychain_key())
+    cfg = _settings.load(settings_path)
+    if cfg is None: return []          # not configured: search simply has no semantic half
+    target = target or cfg["base"]
+    if not _key_cache: _key_cache.append(keychain_key(settings_path))
     body = json.dumps({"messages": [{"role": "user", "content": query}]}).encode()
     req = urllib.request.Request(target.rstrip("/") + "/rag/search", body, {"Content-Type": "application/json",
                                  "User-Agent": USER_AGENT, "Authorization": "Bearer " + _key_cache[0]})

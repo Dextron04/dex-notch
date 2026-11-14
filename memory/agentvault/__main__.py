@@ -1,7 +1,7 @@
 import argparse, sys, time
 from pathlib import Path
 from .adapters import default_adapters
-from . import rag_push, recorder, remote_sync
+from . import rag_push, recorder, remote_sync, settings
 
 RAG_EVERY = 600  # seconds between pushes of changed notes
 REMOTE_EVERY = 300  # seconds between syncs with the remote connector host
@@ -17,7 +17,8 @@ def main(argv=None) -> int:
     if a.cmd == "backfill":
         s = recorder.backfill(vault, default_adapters()); print(s); return 1 if s["errors"] else 0
     if a.cmd == "rag-sync":
-        print(rag_push.sync(vault)); return 0
+        try: print(rag_push.sync(vault)); return 0
+        except rag_push.PushError as e: print("rag-sync:", e, file=sys.stderr); return 1
     if a.cmd == "remote-sync":
         if not a.remote: ap.error("--remote required"); 
         print(remote_sync.sync(vault, a.remote)); return 0
@@ -27,7 +28,7 @@ def main(argv=None) -> int:
     while True:  # run: never die on a bad tick
         try: recorder.tick(vault, default_adapters())
         except Exception as e: print("tick failed:", e, file=sys.stderr, flush=True)
-        if time.time() - last_push > RAG_EVERY:  # keep the mini's RAG in step; offline is fine, it retries next round
+        if time.time() - last_push > RAG_EVERY and settings.load() is not None:  # keep the RAG in step (only once settings.json names a host); offline is fine, it retries next round
             last_push = time.time()
             try: print("rag:", rag_push.sync(vault), flush=True)
             except Exception as e: print("rag sync failed:", e, file=sys.stderr, flush=True)

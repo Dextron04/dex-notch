@@ -6,10 +6,9 @@ import Observation
 final class Assistant {
     enum Link { case connecting, ready, offline }
 
-    static let model = "gemma3:12b"
-    static let host = "ai.example.com"   // cloudflare tunnel -> caddy gateway on the mac-mini (bearer token)
-    private static let base = "https://\(host)"
-    private static let keychainService = host // token lives in the login keychain: service=host, account=notchapp
+    /// Where Gemma lives, from settings.json. nil until that file exists and is valid (`setupProblem` says why).
+    private(set) var gemma: GemmaSettings?
+    private(set) var setupProblem: String?
     private static let system = "You answer inside a tiny overlay beside the Mac's notch. Be brief and direct: plain sentences, no headings, no preamble. Use short lists only when asked. Put any code in fenced blocks with a language tag."
 
     struct Turn { var role: String; var text: String }
@@ -58,11 +57,24 @@ final class Assistant {
 
     private var closedAt: Date?
     private let storeURL: URL
+    private let settingsURL: URL
     private var convID = UUID().uuidString
     private var journaled = 0                         // turns already written to the vault journal
     private var exchange: (backend: Backend, askedAt: Date) = (.gemma, Date())
 
-    init(storeURL: URL = ConversationStore.defaultURL) { self.storeURL = storeURL; restore() }
+    init(storeURL: URL = ConversationStore.defaultURL, settingsURL: URL = Settings.defaultURL) {
+        self.storeURL = storeURL; self.settingsURL = settingsURL
+        loadSettings(); restore()
+    }
+
+    /// Re-read on every connection check, so editing settings.json and pressing ⌥Space (or "Check connection") is enough.
+    func loadSettings() {
+        switch Settings.load(from: settingsURL) {
+        case .ok(let g): if g != gemma { token = nil }; gemma = g; setupProblem = nil
+        case .missing: gemma = nil; setupProblem = "Gemma isn't set up. Create \(settingsURL.path) (see docs/settings.example.json)."
+        case .invalid(let why): gemma = nil; setupProblem = why + " Fix settings.json, then press Check connection."
+        }
+    }
 
     // MARK: persistence — the open conversation survives quitting the app
 
@@ -184,14 +196,15 @@ final class Assistant {
 
     /// POSTs a chat to the gateway and calls `onToken` for every streamed piece of the reply.
     private func streamChat(_ messages: [[String: String]], onToken: (String) -> Void) async throws {
+        guard let g = gemma else { throw Failure(setupProblem ?? "Gemma isn't set up.") }
         let tok = try loadToken()
-        var req = URLRequest(url: URL(string: Self.base + "/api/chat")!)
+        var req = URLRequest(url: URL(string: g.base + "/api/chat")!)
         req.httpMethod = "POST"
         req.timeoutInterval = 300 // first call may load the model into memory
         req.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject:
-            ["model": Self.model, "messages": messages, "stream": true, "think": false] as [String: Any])
+            ["model": g.model, "messages": messages, "stream": true, "think": false] as [String: Any])
         let (bytes, resp) = try await URLSession.shared.bytes(for: req)
         if let code = (resp as? HTTPURLResponse)?.statusCode, code != 200 {
             throw Failure(code == 401 ? "Gateway rejected the token. Re-store it in Keychain." : "Model returned HTTP \(code)")
@@ -207,8 +220,8 @@ final class Assistant {
 
     /// Asks the mini's RAG which vault notes bear on the question. Never blocks the answer: any failure just means no context.
     private func vaultRecall(_ question: String) async -> [Snippet] {
-        guard let tok = try? loadToken() else { return [] }
-        var req = URLRequest(url: URL(string: Self.base + "/rag/search")!)
+        guard let g = gemma, let tok = try? loadToken() else { return [] }
+        var req = URLRequest(url: URL(string: g.base + "/rag/search")!)
         req.httpMethod = "POST"; req.timeoutInterval = 5
         req.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -262,7 +275,7 @@ final class Assistant {
     private func friendly(_ e: Error) -> String {
         let n = e as NSError
         if n.domain == NSURLErrorDomain, n.code == NSURLErrorCannotConnectToHost || n.code == NSURLErrorNetworkConnectionLost {
-            return "Can't reach \(Self.host)."
+            return "Can't reach \(gemma?.host ?? "the Gemma host")."
         }
         return e.localizedDescription
     }
@@ -326,16 +339,17 @@ final class Assistant {
     /// Reads the bearer token from the login keychain via `security` (the tool that stored it, so no prompt).
     private func loadToken() throws -> String {
         if let token { return token }
+        guard let g = gemma else { link = .offline; throw Failure(setupProblem ?? "Gemma isn't set up.") }
         let p = Process(), out = Pipe()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-        p.arguments = ["find-generic-password", "-s", Self.keychainService, "-a", "notchapp", "-w"]
+        p.arguments = ["find-generic-password", "-s", g.keychainService, "-a", g.keychainAccount, "-w"]
         p.standardOutput = out; p.standardError = FileHandle.nullDevice
         try? p.run(); p.waitUntilExit()
         let t = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard p.terminationStatus == 0, !t.isEmpty else {
             link = .offline
-            throw Failure("No API token in Keychain for \(Self.host).")
+            throw Failure("No token in the Keychain (service \(g.keychainService), account \(g.keychainAccount)).")
         }
         token = t
         return t
@@ -345,8 +359,10 @@ final class Assistant {
     func connect() {
         Task {
             link = .connecting
+            loadSettings()
+            guard let g = gemma else { link = .offline; return }
             guard let tok = try? loadToken() else { return } // loadToken set .offline
-            var r = URLRequest(url: URL(string: Self.base + "/api/tags")!)
+            var r = URLRequest(url: URL(string: g.base + "/api/tags")!)
             r.timeoutInterval = 6
             r.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
             let code = (try? await URLSession.shared.data(for: r).1 as? HTTPURLResponse)?.statusCode
