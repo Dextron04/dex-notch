@@ -7,6 +7,7 @@
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="Python stdlib only" src="https://img.shields.io/badge/recorder-Python%20stdlib%20only-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="195 tests" src="https://img.shields.io/badge/tests-195%20passing-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
+  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="No API keys" src="https://img.shields.io/badge/API%20keys-none%20needed-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
 </p>
 
@@ -147,7 +148,6 @@ A borderless, non-activating panel pinned to the top centre of the notched displ
 - **The vault is plain text.** Redaction is pattern-based. Treat the vault like any other folder of your private conversations.
 - **Edit runs are powerful.** An edit run with Desktop selected can rearrange it, with no confirmation prompt. Ask for a plan first if it matters.
 - **Hosts are constants for now.** The Gemma host and model are set in `NotchApp/Assistant.swift`.
-- **No license has been chosen yet.**
 
 ---
 
@@ -235,3 +235,7 @@ cd memory && python3 -m unittest discover -s tests               # 111 Python te
 ```
 
 Everything here was built test-first: the stream parsers, the sandbox arguments, the OAuth flow, the lockout, the redaction rules, the idempotent note writer.
+
+## License
+
+[MIT](LICENSE). Use it, change it, ship it.
