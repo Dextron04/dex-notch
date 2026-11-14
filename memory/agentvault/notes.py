@@ -56,6 +56,12 @@ def _render(t: Turn, key: str) -> str:
         return "> %s · %s <!-- t:%s -->\n\n" % (t.ts, " ".join(text.split()), key)
     return "## %s · %s\n\n%s\n\n<!-- t:%s -->\n\n" % (t.role, t.ts, text, key)
 
+def _links(meta: SessionMeta) -> str:
+    """Wikilinks to the generated hub notes, so Obsidian's graph clusters sessions by project, day and agent."""
+    day = meta.started[:10] if re.match(r"\d{4}-\d{2}-\d{2}", meta.started or "") else "0000-00-00"
+    name = re.sub(r"[\[\]|]", "", meta.project) or "misc"
+    return "[[Projects/%s|%s]] · [[Days/%s]] · [[Agents/%s]]" % (slug(meta.project), name, day, slug(meta.agent))
+
 def add_turns(vault: Path, meta: SessionMeta, turns: List[Turn]) -> Tuple[Path, int]:
     """Idempotent append: each section carries a hash marker, and turns already in the note are skipped.
     That makes state loss, crashes between note write and state save, and copies of a session harmless."""
@@ -68,7 +74,7 @@ def add_turns(vault: Path, meta: SessionMeta, turns: List[Turn]) -> Tuple[Path, 
     else:
         fm = {"agent": meta.agent, "project": meta.project, "cwd": meta.cwd, "session_id": meta.session_id,
               "started": meta.started, "updated": meta.started, "turns": 0, "source_path": meta.source_path}
-        body = "\n# %s\n\n" % redact(meta.title or meta.project)
+        body = "\n# %s\n\n%s\n\n" % (redact(meta.title or meta.project), _links(meta))
         have = set()
     fresh = []
     for t in turns:

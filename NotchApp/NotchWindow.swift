@@ -34,7 +34,7 @@ final class NotchWindow {
         else { return }
 
         let notch = Self.notchSize(for: screen)
-        let size = CGSize(width: Self.panelWidth, height: notch.height + Self.maxBody + 210)
+        let size = CGSize(width: Self.panelWidth, height: notch.height + Self.maxBody + 250)
         let origin = CGPoint(x: screen.frame.midX - size.width / 2, y: screen.frame.maxY - size.height)
 
         let p = KeyPanel(contentRect: NSRect(origin: origin, size: size),
@@ -59,13 +59,16 @@ final class NotchWindow {
             let handled = MainActor.assumeIsolated { () -> Bool in
                 guard assistant.isOpen, assistant.mode == .recall else { return false }
                 switch code {
+                case 48: assistant.stepPage(flags.contains(.shift) ? -1 : 1)                         // ⇥ / ⇧⇥ switch page
+                case 123: if assistant.page == .activity { assistant.moveCursor(-1) } else { assistant.stepPage(-1) }   // ←
+                case 124: if assistant.page == .activity { assistant.moveCursor(1) } else { assistant.stepPage(1) }     // →
                 case 126: assistant.moveSelection(-1)                                                // ↑
                 case 125: assistant.moveSelection(1)                                                 // ↓
                 case 36, 76:                                                                         // ↩ / keypad enter
                     if flags.contains(.command) { assistant.summarizeSelected() } else { assistant.openSelectedNote() }
                 case 53:                                                                             // esc: leave search first, then close
                     if assistant.searching { assistant.searching = false; assistant.recallQuery = "" } else { assistant.close() }
-                case 44 where !assistant.searching && flags.intersection([.command, .option, .control]).isEmpty:
+                case 44 where !assistant.searching && assistant.page == .chats && flags.intersection([.command, .option, .control]).isEmpty:
                     assistant.searching = true                                                       // "/"
                 default: return false
                 }

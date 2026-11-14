@@ -12,6 +12,18 @@ struct AgentSummary: Identifiable, Equatable {
     let state: String   // recorder state for this agent: ok | unsupported | error
 }
 
+/// One cell per agent per day (a session counts on the day it started and the day it last changed).
+struct ActivityGrid: Equatable {
+    let days: [Date]                 // oldest → newest, local midnights
+    let agents: [String]             // only agents with activity in the window
+    let cells: [String: [Int]]       // agent → sessions per day, aligned with `days`
+    let maxCount: Int
+    func total(onDay i: Int) -> Int { cells.values.reduce(0) { $0 + (($1.indices.contains(i)) ? $1[i] : 0) } }
+    var total: Int { cells.values.reduce(0) { $0 + $1.reduce(0, +) } }
+}
+
+struct ProjectStat: Equatable { let name: String; let sessions: Int; let turns: Int }
+
 struct VaultSnapshot: Equatable {
     let totalSessions: Int
     let todayCount: Int      // sessions updated since local midnight
@@ -24,7 +36,7 @@ struct VaultSnapshot: Equatable {
 enum VaultReader {
     static var defaultVault: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Vault") }
 
-    private struct Note { let agent: String; let title: String; let project: String; let updated: Date; let url: URL }
+    private struct Note { let agent: String; let title: String; let project: String; let started: Date; let updated: Date; let turns: Int; let url: URL }
 
     static func snapshot(vault: URL, now: Date = Date()) -> VaultSnapshot {
         let all = notes(in: vault)
@@ -56,6 +68,39 @@ enum VaultReader {
                                 lastUpdated: $0.updated, notePath: $0.url, state: "ok") }
     }
 
+    static func activity(vault: URL, days: Int = 84, now: Date = Date(), calendar: Calendar = .current) -> ActivityGrid {
+        let today = calendar.startOfDay(for: now)
+        let grid = (0..<days).map { calendar.date(byAdding: .day, value: $0 - (days - 1), to: today)! }
+        var cells: [String: [Int]] = [:]
+        for n in notes(in: vault) {
+            var seen = Set<Int>()
+            for d in [n.started, n.updated] where d != .distantPast {
+                let i = calendar.dateComponents([.day], from: calendar.startOfDay(for: d), to: today).day.map { days - 1 - $0 } ?? -1
+                if (0..<days).contains(i), seen.insert(i).inserted { cells[n.agent, default: Array(repeating: 0, count: days)][i] += 1 }
+            }
+        }
+        return ActivityGrid(days: grid, agents: cells.keys.sorted(), cells: cells, maxCount: cells.values.flatMap { $0 }.max() ?? 0)
+    }
+
+    /// Sessions that started or last changed on `day`, newest first (max 4).
+    static func sessions(on day: Date, vault: URL, calendar: Calendar = .current) -> [AgentSummary] {
+        notes(in: vault)
+            .filter { calendar.isDate($0.started, inSameDayAs: day) || calendar.isDate($0.updated, inSameDayAs: day) }
+            .sorted { $0.updated > $1.updated }.prefix(4)
+            .map { AgentSummary(name: $0.agent, sessions: 1, lastTitle: $0.title, lastProject: $0.project, lastUpdated: $0.updated, notePath: $0.url, state: "ok") }
+    }
+
+    /// Where the conversation went: turns per project, biggest first.
+    static func projects(vault: URL, limit: Int = 6) -> [ProjectStat] {
+        var acc: [String: (sessions: Int, turns: Int)] = [:]
+        for n in notes(in: vault) {
+            let k = n.project.isEmpty ? "misc" : n.project
+            acc[k, default: (0, 0)].sessions += 1; acc[k, default: (0, 0)].turns += n.turns
+        }
+        return acc.map { ProjectStat(name: $0.key, sessions: $0.value.sessions, turns: $0.value.turns) }
+            .sorted { $0.turns != $1.turns ? $0.turns > $1.turns : $0.name < $1.name }.prefix(limit).map { $0 }
+    }
+
     /// ↑/↓ over the rows that are actually DRAWN (search can return more than fit); wraps around.
     static func moveIndex(_ i: Int, by d: Int, rows: Int, visible: Int) -> Int {
         let n = min(rows, visible)
@@ -77,7 +122,9 @@ enum VaultReader {
                     out.append(Note(agent: (h["agent"] as? String) ?? agentDir.lastPathComponent,
                                     title: (h["title"] as? String) ?? url.deletingPathExtension().lastPathComponent,
                                     project: (h["project"] as? String) ?? "",
+                                    started: (h["started"] as? String).flatMap(parseDate) ?? (h["updated"] as? String).flatMap(parseDate) ?? .distantPast,
                                     updated: (h["updated"] as? String).flatMap(parseDate) ?? .distantPast,
+                                    turns: (h["turns"] as? Int) ?? 0,
                                     url: url))
                 }
             }

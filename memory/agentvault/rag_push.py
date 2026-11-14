@@ -18,8 +18,10 @@ class PushError(Exception):
 _MARK = re.compile(r" ?<!-- t:[0-9a-f]{10} -->")
 _TOOL = re.compile(r"^> \S+ · ran: .*$\n?", re.M)
 
+_LINKS = re.compile(r"^\[\[Projects/.*$\n?", re.M)  # graph links for Obsidian; noise for retrieval
+
 def _clean(body: str) -> str:
-    return re.sub(r"\n{3,}", "\n\n", _MARK.sub("", _TOOL.sub("", body))).strip()
+    return re.sub(r"\n{3,}", "\n\n", _LINKS.sub("", _MARK.sub("", _TOOL.sub("", body)))).strip()
 
 def _split(text: str, limit: int) -> List[str]:
     parts, cur, size = [], [], 0

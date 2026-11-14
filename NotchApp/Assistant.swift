@@ -15,6 +15,10 @@ final class Assistant {
     struct Turn { var role: String; var text: String }
 
     enum Mode { case prompt, recall }
+    enum RecallPage: Int, CaseIterable {
+        case chats, activity, projects
+        var label: String { ["Last chats", "Activity", "Projects"][rawValue] }
+    }
 
     var isOpen = false
     var mode: Mode = .prompt
@@ -29,6 +33,11 @@ final class Assistant {
     var onOpenChange: ((Bool) -> Void)?
 
     // recall view state
+    var page: RecallPage = .chats
+    var grid = ActivityGrid(days: [], agents: [], cells: [:], maxCount: 0)
+    var cursor = 0                       // selected day on the Activity page (index into grid.days)
+    var daySessions: [AgentSummary] = []
+    var projectStats: [ProjectStat] = []
     var snapshot = VaultSnapshot(totalSessions: 0, todayCount: 0, recorderOK: false, agents: [])
     var recallRows: [AgentSummary] = []
     var recallIndex = 0
@@ -53,7 +62,7 @@ final class Assistant {
     func open(_ m: Mode = .prompt) {
         if isOpen && mode == m { return }
         mode = m
-        if m == .recall { searching = false; recallQuery = ""; refreshRecall(); recallIndex = 0; summary = "" }
+        if m == .recall { searching = false; recallQuery = ""; page = .chats; refreshRecall(); recallIndex = 0; summary = ""; cursor = max(grid.days.count - 1, 0); loadDay() }
         guard !isOpen else { return } // already open in the other mode: just switch content
         isOpen = true
         onOpenChange?(true)
@@ -143,18 +152,32 @@ final class Assistant {
     func refreshRecall() {
         snapshot = VaultReader.snapshot(vault: VaultReader.defaultVault)
         recallRows = searching && !recallQuery.isEmpty ? VaultReader.search(vault: VaultReader.defaultVault, query: recallQuery) : snapshot.agents
+        grid = VaultReader.activity(vault: VaultReader.defaultVault, days: 70)
+        projectStats = VaultReader.projects(vault: VaultReader.defaultVault, limit: 6)
+        cursor = min(max(cursor, 0), max(grid.days.count - 1, 0))
         recallIndex = min(recallIndex, max(min(recallRows.count, RecallView.maxRows) - 1, 0))
     }
 
+    /// The rows ↑/↓/↩ act on: day sessions on the Activity page, otherwise the chat list.
+    var currentRows: [AgentSummary] { page == .activity ? daySessions : recallRows }
+    var currentVisible: Int { page == .activity ? RecallView.maxDayRows : RecallView.maxRows }
+
+    func setPage(_ p: RecallPage) { page = p; recallIndex = 0; summary = ""; summaryTask?.cancel(); summarizing = false; if p == .activity { loadDay() } }
+    func stepPage(_ d: Int) { let n = RecallPage.allCases.count; setPage(RecallPage(rawValue: ((page.rawValue + d) % n + n) % n)!) }
+
+    func moveCursor(_ d: Int) { setCursor(cursor + d) }
+    func setCursor(_ i: Int) { cursor = min(max(i, 0), max(grid.days.count - 1, 0)); recallIndex = 0; summary = ""; loadDay() }
+    func loadDay() { daySessions = grid.days.indices.contains(cursor) ? VaultReader.sessions(on: grid.days[cursor], vault: VaultReader.defaultVault) : [] }
+
     func moveSelection(_ d: Int) {
-        guard !recallRows.isEmpty else { return }
-        recallIndex = VaultReader.moveIndex(recallIndex, by: d, rows: recallRows.count, visible: RecallView.maxRows)
+        guard !currentRows.isEmpty else { return }
+        recallIndex = VaultReader.moveIndex(recallIndex, by: d, rows: currentRows.count, visible: currentVisible)
         summaryTask?.cancel(); summary = ""; summarizing = false
     }
 
     func openSelectedNote() {
-        guard recallRows.indices.contains(recallIndex) else { return }
-        let note = recallRows[recallIndex].notePath
+        guard currentRows.indices.contains(recallIndex) else { return }
+        let note = currentRows[recallIndex].notePath
         var c = URLComponents(string: "obsidian://open")!
         c.queryItems = [URLQueryItem(name: "path", value: note.path)]
         // Obsidian only resolves notes inside a vault it knows (open ~/Vault in Obsidian once); otherwise fall back to the default .md app
@@ -163,8 +186,8 @@ final class Assistant {
 
     /// ⌘↩: three-line summary of the selected note from the model.
     func summarizeSelected() {
-        guard recallRows.indices.contains(recallIndex), !summarizing,
-              var text = try? String(contentsOf: recallRows[recallIndex].notePath, encoding: .utf8) else { return }
+        guard currentRows.indices.contains(recallIndex), !summarizing,
+              var text = try? String(contentsOf: currentRows[recallIndex].notePath, encoding: .utf8) else { return }
         if text.count > 4000 { text = String(text.prefix(2000)) + "\n…\n" + String(text.suffix(2000)) } // long notes are slow to read on the mini
         summary = ""; summarizing = true
         let messages = [["role": "system", "content": "Summarize this recorded agent conversation in at most three short lines: what was asked, what was done or decided, what is left. Plain text, no preamble."],

@@ -65,6 +65,25 @@ class NotesTests(unittest.TestCase):
         self.assertEqual((n1, n2), (2, 1)); self.assertEqual(notes.read_frontmatter(p)["turns"], 3)
         self.assertEqual(p.read_text().count("q1"), 1)  # the repeated turn was not written twice
 
+    def test_note_links_to_project_day_and_agent_hubs(self):
+        p = notes.append_turns(self.vault, meta(project="My Proj"), [Turn("user", "hi", "2026-11-14T10:00:01Z")])
+        t = p.read_text()
+        for link in ("[[Projects/my-proj|My Proj]]", "[[Days/2026-11-14]]", "[[Agents/claude-code]]"): self.assertIn(link, t)
+        self.assertLess(t.index("# Fix hotkey"), t.index("[[Projects/"))
+
+    def test_hub_notes_for_projects_and_days(self):
+        notes.append_turns(self.vault, meta(sid="aaaaaaaaaa1", title="First", started="2026-11-13T09:00:00Z"), [Turn("user", "x", "2026-11-13T09:00:01Z")])
+        p2 = notes.append_turns(self.vault, meta(sid="bbbbbbbbbb2", title="Second", started="2026-11-14T09:00:00Z"), [Turn("user", "x", "2026-11-14T09:00:01Z")])
+        (p2.parent / (p2.stem + ".sync-conflict-20261114-XYZ.md")).write_text(p2.read_text().replace("Second", "CONFLICT"))
+        index.rebuild_indexes(self.vault)
+        proj = (self.vault / "Projects" / "notch.md").read_text()
+        self.assertIn("First", proj); self.assertIn("Second", proj); self.assertNotIn("CONFLICT", proj)
+        self.assertLess(proj.index("Second"), proj.index("First"))
+        day = (self.vault / "Days" / "2026-11-14.md").read_text()
+        self.assertIn("Second", day); self.assertNotIn("First", day)
+        index.rebuild_indexes(self.vault)  # idempotent
+        self.assertEqual((self.vault / "Days" / "2026-11-14.md").read_text(), day)
+
     def test_reset_note_deletes(self):
         m = meta(); p = notes.append_turns(self.vault, m, [Turn("user", "x", "2026-11-14T10:00:01Z")])
         notes.reset_note(self.vault, m); self.assertFalse(p.exists())

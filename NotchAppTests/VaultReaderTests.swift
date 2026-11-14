@@ -11,11 +11,12 @@ final class VaultReaderTests: XCTestCase {
     override func tearDownWithError() throws { try? FileManager.default.removeItem(at: vault) }
 
     @discardableResult
-    func note(_ agent: String, _ id: String, title: String, project: String, updated: String, file: String? = nil) throws -> URL {
+    func note(_ agent: String, _ id: String, title: String, project: String, updated: String, file: String? = nil,
+              started: String? = nil, turns: Int = 3) throws -> URL {
         let dir = vault.appendingPathComponent("Sessions/\(agent)/2026-11")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent(file ?? "2026-11-14-\(project)-\(id).md")
-        let fm = "---\nagent: \"\(agent)\"\nproject: \"\(project)\"\ntitle: \"\(title)\"\nupdated: \"\(updated)\"\nturns: 3\n---\n\n# \(title)\n"
+        let fm = "---\nagent: \"\(agent)\"\nproject: \"\(project)\"\ntitle: \"\(title)\"\nstarted: \"\(started ?? updated)\"\nupdated: \"\(updated)\"\nturns: \(turns)\n---\n\n# \(title)\n"
         try fm.write(to: url, atomically: true, encoding: .utf8)
         return url
     }
@@ -76,5 +77,46 @@ final class VaultReaderTests: XCTestCase {
         XCTAssertEqual(VaultReader.moveIndex(0, by: -1, rows: 30, visible: 6), 5)
         XCTAssertEqual(VaultReader.moveIndex(2, by: 1, rows: 3, visible: 6), 0)
         XCTAssertEqual(VaultReader.moveIndex(0, by: 1, rows: 0, visible: 6), 0)
+    }
+
+    // MARK: activity + projects pages
+
+    var utc: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }
+
+    func testActivityCountsStartAndUpdateDays() throws {
+        try note("claude-code", "a1", title: "Long one", project: "notch", updated: "2026-11-14T10:00:00Z", started: "2026-11-12T09:00:00Z")
+        try note("codex", "b1", title: "Same day", project: "auth", updated: "2026-11-14T11:00:00Z")
+        let g = VaultReader.activity(vault: vault, days: 5, now: now, calendar: utc)
+        XCTAssertEqual(g.days.count, 5)
+        XCTAssertEqual(utc.component(.day, from: g.days.first!), 10); XCTAssertEqual(utc.component(.day, from: g.days.last!), 14)
+        XCTAssertEqual(g.agents, ["claude-code", "codex"])
+        XCTAssertEqual(g.cells["claude-code"], [0, 0, 1, 0, 1])
+        XCTAssertEqual(g.cells["codex"], [0, 0, 0, 0, 1])
+        XCTAssertEqual(g.maxCount, 1); XCTAssertEqual(g.total(onDay: 4), 2)
+    }
+
+    func testActivityIgnoresSessionsOutsideTheWindow() throws {
+        try note("codex", "b1", title: "Old", project: "auth", updated: "2026-10-01T10:00:00Z")
+        let g = VaultReader.activity(vault: vault, days: 5, now: now, calendar: utc)
+        XCTAssertEqual(g.agents, []); XCTAssertEqual(g.maxCount, 0); XCTAssertEqual(g.days.count, 5)
+    }
+
+    func testProjectsAggregateAndSortByTurns() throws {
+        try note("claude-code", "a1", title: "x", project: "notch", updated: "2026-11-14T10:00:00Z", turns: 10)
+        try note("codex", "b1", title: "y", project: "notch", updated: "2026-11-13T10:00:00Z", turns: 5)
+        try note("codex", "b2", title: "z", project: "auth", updated: "2026-11-12T10:00:00Z", turns: 20)
+        try note("gemini", "c1", title: "w", project: "", updated: "2026-11-12T10:00:00Z", turns: 1)
+        let p = VaultReader.projects(vault: vault, limit: 3)
+        XCTAssertEqual(p.map(\.name), ["auth", "notch", "misc"])
+        XCTAssertEqual(p[1], ProjectStat(name: "notch", sessions: 2, turns: 15))
+        XCTAssertEqual(VaultReader.projects(vault: vault, limit: 1).count, 1)
+    }
+
+    func testSessionsOnADayListsStartedOrUpdatedThatDayNewestFirst() throws {
+        try note("claude-code", "a1", title: "Long one", project: "notch", updated: "2026-11-14T10:00:00Z", started: "2026-11-12T09:00:00Z")
+        try note("codex", "b1", title: "Later", project: "auth", updated: "2026-11-14T11:00:00Z")
+        XCTAssertEqual(VaultReader.sessions(on: ISO8601DateFormatter().date(from: "2026-11-14T00:00:00Z")!, vault: vault, calendar: utc).map(\.lastTitle), ["Later", "Long one"])
+        XCTAssertEqual(VaultReader.sessions(on: ISO8601DateFormatter().date(from: "2026-11-13T00:00:00Z")!, vault: vault, calendar: utc).count, 0)
+        XCTAssertEqual(VaultReader.sessions(on: ISO8601DateFormatter().date(from: "2026-11-12T00:00:00Z")!, vault: vault, calendar: utc).map(\.lastTitle), ["Long one"])
     }
 }

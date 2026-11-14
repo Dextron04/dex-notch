@@ -25,10 +25,7 @@ struct NotchView: View {
     private let inputH: CGFloat = 52
     private var hasAnswer: Bool { !a.turns.isEmpty }
     private var bodyH: CGFloat { hasAnswer ? min((contentH / 8).rounded(.up) * 8, NotchWindow.maxBody) : 0 }
-    private var recallRowCount: Int { max(min(a.recallRows.count, RecallView.maxRows), 1) }
-    private var recallH: CGFloat {
-        notch.height + 6 + 44 + CGFloat(recallRowCount) * RecallView.rowH + (a.summarizing || !a.summary.isEmpty ? 76 : 0) + 36 + 12
-    }
+    private var recallH: CGFloat { notch.height + 6 + RecallView.bodyHeight(a) + 12 }
     private var pillH: CGFloat {
         guard a.isOpen else { return notch.height }
         return a.mode == .recall ? recallH : notch.height + 6 + bodyH + inputH + 12

@@ -23,7 +23,7 @@ class RagPushTests(unittest.TestCase):
         self.assertTrue(d["source"].startswith("vault:Sessions/codex/"))
         self.assertIn("agent: codex", d["text"]); self.assertIn("project: auth", d["text"])
         self.assertIn("why the keychain prompt", d["text"]); self.assertIn("ACL on the item", d["text"])
-        self.assertNotIn("ran: Bash", d["text"]); self.assertNotIn("<!-- t:", d["text"])
+        self.assertNotIn("ran: Bash", d["text"]); self.assertNotIn("<!-- t:", d["text"]); self.assertNotIn("[[Projects/", d["text"])
 
     def test_big_note_is_split_into_parts_under_the_limit(self):
         add(self.v, "aaaaaaaaaa1", [("user", "para %d. " % i + "word " * 200) for i in range(400)])
