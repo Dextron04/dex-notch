@@ -6,7 +6,7 @@
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="Universal app" src="https://img.shields.io/badge/Apple%20silicon%20%2B%20Intel-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
-  <img alt="250 tests" src="https://img.shields.io/badge/tests-250%20passing-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
+  <img alt="263 tests" src="https://img.shields.io/badge/tests-263%20passing-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="No API keys" src="https://img.shields.io/badge/API%20keys-none%20needed-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
 </p>
@@ -110,7 +110,7 @@ Press `⌥⇧ Space` to see what you and your agents have been doing.
   <br><sub><b>Projects.</b> Where the conversation actually went.</sub>
 </p>
 
-<sub>Screenshots use a synthetic vault and demo settings (`scripts/demo_vault.py`), not real conversations. The three model marks are simplified original drawings, not the brands' official logos.</sub>
+<sub>Screenshots use a synthetic vault and demo settings (`scripts/demo_vault.py`), not real conversations. The Claude and Codex logos belong to Anthropic and OpenAI and only identify those products; see [NOTICE.md](NOTICE.md). The local-model mark is original.</sub>
 
 ---
 
@@ -307,7 +307,8 @@ NOTCH_VAULT=/tmp/demo-vault NOTCH_SETTINGS=/tmp/none.json NOTCH_CLIS=none open p
 NotchApp/                 SwiftUI + AppKit menu-bar agent
   NotchWindow.swift         the fixed-size panel and key handling
   NotchView.swift           pill, wings, model dial, transcript, setup card
-  ModelMark.swift           the three vector logos
+  ModelMark.swift           the dial's marks: official Claude and Codex logos, plus the local-model mark
+  SVGPath.swift             reads SVG path data so the real vector logos can be drawn (tested)
   SetupView.swift           first-run and settings window
   Assistant.swift           state, local-model streaming, vault recall, persistence
   AgentStream.swift         routing, CLI arguments, stream parsing (pure, tested)
@@ -320,14 +321,14 @@ memory/
     remote/                 OAuth + MCP over HTTP for ChatGPT and Claude.ai
   hooks/                    Claude Code start-up digest
   tests/                    117 tests
-NotchAppTests/             133 tests
+NotchAppTests/             146 tests
 scripts/                   make-dmg.sh, demo_vault.py
 .github/workflows/         CI and release
 docs/                      specs, plans, example settings, assets
 ```
 
 ```bash
-xcodebuild test -scheme NotchApp -destination 'platform=macOS'   # 133 Swift tests
+xcodebuild test -scheme NotchApp -destination 'platform=macOS'   # 146 Swift tests
 cd memory && python3 -m unittest discover -s tests               # 117 Python tests
 ```
 
@@ -335,4 +336,4 @@ Everything here was built test-first where it could be: the stream parsers, the 
 
 ## License
 
-[MIT](LICENSE). Use it, change it, ship it.
+[MIT](LICENSE). Use it, change it, ship it. The Claude and Codex logos are their owners' trademarks and are not covered by that licence: see [NOTICE.md](NOTICE.md).

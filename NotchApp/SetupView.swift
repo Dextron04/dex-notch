@@ -128,7 +128,7 @@ struct SetupView: View {
                     Text("Start with").font(.system(size: 14, design: .serif)).foregroundStyle(Ink.dim)
                     ForEach(a.cliFound.sorted { $0.rawValue < $1.rawValue }, id: \.self) { b in
                         Button { m.start = b } label: {
-                            HStack(spacing: 6) { ModelMark(backend: b, size: 15); Text(b.displayName) }
+                            HStack(spacing: 6) { ModelMark(backend: b, size: 16, active: m.start == b); Text(b.displayName) }
                                 .font(.system(size: 14, weight: m.start == b ? .semibold : .regular, design: .serif))
                                 .foregroundStyle(m.start == b ? Ink.ember : Ink.dim)
                                 .padding(.vertical, 4).overlay(alignment: .bottom) { if m.start == b { Rectangle().fill(Ink.ember).frame(height: 1) } }
@@ -147,7 +147,7 @@ struct SetupView: View {
         let found = a.cliFound.contains(b)
         let cmd = b == .claude ? "npm install -g @anthropic-ai/claude-code" : "npm install -g @openai/codex"
         return HStack(alignment: .top, spacing: 14) {
-            ModelMark(backend: b, size: 22).foregroundStyle(found ? Ink.ember : Ink.dim).padding(.top, 2)
+            ModelMark(backend: b, size: 24, active: found).padding(.top, 1)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Text(b.displayName).font(.system(size: 17, weight: .semibold, design: .serif)).foregroundStyle(Ink.text)
@@ -220,7 +220,7 @@ struct SetupView: View {
             }.padding(.top, 14)
         } label: {
             HStack(spacing: 8) {
-                ModelMark(backend: .gemma, size: 18).foregroundStyle(m.localOpen ? Ink.ember : Ink.dim)
+                ModelMark(backend: .gemma, size: 20, active: m.localOpen)
                 Text("Add a model from Ollama").font(.system(size: 16, design: .serif)).foregroundStyle(Ink.text)
             }.contentShape(Rectangle())
         }

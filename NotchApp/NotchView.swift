@@ -198,11 +198,10 @@ struct NotchView: View {
                 Button { a.setBackend(b) } label: {
                     VStack(spacing: 3) {
                         HStack(spacing: 2) {
-                            ModelMark(backend: b, size: 17)
+                            ModelMark(backend: b, size: 18, active: on)
                             if on && a.work { Text("+").font(.system(size: 13, weight: .semibold, design: .serif)).foregroundStyle(Ink.emberDeep) }
                         }
                         .frame(minWidth: 40, minHeight: 20)
-                        .foregroundStyle(on ? Ink.ember : Ink.dim)
                         ZStack {
                             Color.clear.frame(height: 1)
                             if on { Rectangle().fill(Ink.ember).frame(height: 1).matchedGeometryEffect(id: "underline", in: dialNS) }
