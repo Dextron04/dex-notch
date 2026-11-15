@@ -51,6 +51,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if SetupWindow.needsWalkthrough {      // first launch: walk through every permission and choice, don't make people hunt for a config file
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [assistant] in SetupWindow.shared.show(assistant: assistant, guided: true) }
         }
+        // NOTCH_OPEN_SETTINGS=models|folders|mail|iphone|updates opens Settings on that page (README screenshots)
+        if let p = ProcessInfo.processInfo.environment["NOTCH_OPEN_SETTINGS"], !p.isEmpty {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [assistant] in SetupWindow.shared.show(assistant: assistant) }
+        }
         // rebuild on display changes (plug/unplug, resolution)
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main

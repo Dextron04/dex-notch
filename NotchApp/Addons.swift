@@ -176,6 +176,7 @@ struct AddonState: Codable, Equatable {
     var consent = 0                     // which version of the permissions the sign-ins were given for; bumped when the app needs more
     var stale: [String] = []            // accounts that must sign in again before the app reads them
     var reconnectNudged: Date?          // when the "reconnect" card was last queued
+    var phoneNudged: Date?              // when the "iPhone needs Full Disk Access" card was last queued
     var replyAccounts: [String] = []    // accounts that have allowed drafts and sending (the rest are read-only)
     var history: [AddonAlert] = []      // the last alerts that were shown, newest first, so nothing you dismissed by accident is gone
     var modelCalls: [Date] = []         // when the model last ran (kept for an hour): the ceiling on model use
@@ -201,6 +202,7 @@ struct AddonState: Codable, Equatable {
         consent = try c.decodeIfPresent(Int.self, forKey: .consent) ?? 0
         stale = try c.decodeIfPresent([String].self, forKey: .stale) ?? []
         reconnectNudged = try c.decodeIfPresent(Date.self, forKey: .reconnectNudged)
+        phoneNudged = try c.decodeIfPresent(Date.self, forKey: .phoneNudged)
         lastTry = try c.decodeIfPresent(Date.self, forKey: .lastTry)
         lastOK = try c.decodeIfPresent(Bool.self, forKey: .lastOK) ?? false
     }
@@ -224,6 +226,10 @@ struct AddonState: Codable, Equatable {
     mutating func applyConsent(current: Int) {
         if accounts.isEmpty { consent = current }
         else if consent < current { stale = accounts; consent = current; reconnectNudged = nil }
+    }
+    /// Time to tell the user iPhone notifications can't be read: none already waiting, and a day since the last ask.
+    func phoneAccessCardDue(now: Date) -> Bool {
+        !pending.contains { $0.kind == "phone-access" } && (phoneNudged.map { now.timeIntervalSince($0) > 86_400 } ?? true)
     }
     mutating func reconnected(_ email: String) { stale.removeAll { $0 == email } }
     /// Time to put the "reconnect" card in the queue: there are accounts to redo, none is already waiting, and it has been a day since the last one.

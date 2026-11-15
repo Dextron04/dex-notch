@@ -379,6 +379,20 @@ final class AddonsTests: XCTestCase {
     private func blob(_ titl: String, _ body: String) -> Data {
         try! PropertyListSerialization.data(fromPropertyList: ["app": "com.burbn.instagram", "req": ["titl": titl, "subt": "", "body": body]], format: .binary, options: 0)
     }
+    func testPhoneAccessCardDue() {
+        var s = AddonState(), now = Date()
+        XCTAssertTrue(s.phoneAccessCardDue(now: now))
+        s.phoneNudged = now; XCTAssertFalse(s.phoneAccessCardDue(now: now.addingTimeInterval(3600)))
+        XCTAssertTrue(s.phoneAccessCardDue(now: now.addingTimeInterval(86_401)))
+        s.pending = [AddonAlert(id: "x", addon: "phone", sender: "", address: "", headline: "", reason: "", url: "", score: 1, created: now, account: nil, kind: "phone-access")]
+        XCTAssertFalse(s.phoneAccessCardDue(now: now.addingTimeInterval(200_000)))
+        let back = try? JSONDecoder().decode(AddonState.self, from: JSONEncoder().encode(s))
+        XCTAssertEqual(back?.phoneNudged, s.phoneNudged)
+    }
+    func testPhoneUnreadableDbIsDenied() {
+        XCTAssertThrowsError(try PhoneNotes.latestID(at: URL(fileURLWithPath: "/nonexistent/db"))) { XCTAssertEqual($0 as? PhoneNotes.Problem, .denied) }
+    }
+
     func testPhoneDecodeAndFilter() {
         XCTAssertEqual(PhoneNotes.decode(blob("Ana", "hey")).map { [$0.title, $0.body] }, ["Ana", "hey"])
         XCTAssertNil(PhoneNotes.decode(blob("", "")))

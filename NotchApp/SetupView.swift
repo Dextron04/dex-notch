@@ -590,6 +590,7 @@ final class SetupWindow {
         assistant.refreshAvailability()
         let model = SetupModel(assistant: assistant)
         if guided { model.pane = .welcome }
+        else if let p = ProcessInfo.processInfo.environment["NOTCH_OPEN_SETTINGS"]?.lowercased(), let pane = SetupPane.allCases.first(where: { $0.rawValue.lowercased() == p }) { model.pane = pane }
         let h = min(600, (NSScreen.main?.visibleFrame.height ?? 900) - 40)
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: SetupView.width, height: h), styleMask: [.titled, .closable, .fullSizeContentView],
                          backing: .buffered, defer: false)

@@ -1,6 +1,7 @@
 import SwiftUI
 import Observation
 import Carbon.HIToolbox
+import os
 
 /// Runs the add-ons: checks on a schedule, keeps the queue of things worth your attention, and hands them to the notch
 /// only when you are actually at the machine (screen awake and unlocked, notch not already in use).
@@ -128,6 +129,7 @@ final class AddonCenter {
     private func pollPhone() {
         guard settings.phoneAlerts else { return }
         do {
+            if state.pending.contains(where: { $0.kind == "phone-access" }) { state.pending.removeAll { $0.kind == "phone-access" && $0.id != current?.id } }   // readable now
             guard let cursor = state.phoneCursor else { state.phoneCursor = try PhoneNotes.latestID(); state.save(to: stateURL); phoneStatus = "Watching for iPhone notifications."; return }
             let notes = try PhoneNotes.rows(after: cursor)
             guard let last = notes.last else { return }
@@ -137,7 +139,23 @@ final class AddonCenter {
             state.pending += fresh.suffix(10)                                   // a burst after sleep is a few cards, not a flood
             state.phoneCursor = last.rec; state.save(to: stateURL)
             if !fresh.isEmpty { presentIfPossible() }
-        } catch { phoneStatus = error.localizedDescription }
+        } catch {
+            phoneStatus = error.localizedDescription
+            if phoneStatus != lastPhoneLog { lastPhoneLog = phoneStatus; Logger(subsystem: "in.dextron04.notch", category: "phone").error("iPhone poll failed: \(self.phoneStatus, privacy: .public)") }
+            queuePhoneAccessCard(error)
+        }
+    }
+    private var lastPhoneLog = ""
+
+    /// Reading failed: say so at the notch (once a day) instead of only in Settings.
+    private func queuePhoneAccessCard(_ error: Error) {
+        guard state.phoneAccessCardDue(now: Date()) else { return }
+        let denied = (error as? PhoneNotes.Problem) == .denied
+        state.pending.append(AddonAlert(id: "phone-access|\(Int(Date().timeIntervalSince1970))", addon: "phone", sender: "Dex Notch", address: "",
+            headline: denied ? "iPhone notifications need Full Disk Access" : "Couldn't read iPhone notifications",
+            reason: denied ? "Allow Dex Notch in Privacy & Security, then reopen the app." : error.localizedDescription,
+            url: "", score: 10, created: Date(), account: nil, kind: "phone-access"))
+        state.phoneNudged = Date(); state.save(to: stateURL); presentIfPossible()
     }
 
     // MARK: schedule
@@ -571,6 +589,7 @@ final class AddonCenter {
 
     func open() {
         guard let c = current else { return }
+        if c.kind == "phone-access" { retire(c.id); NSWorkspace.shared.open(PhoneNotes.privacyPane); return }
         if c.kind == "reconnect" { retire(c.id); reconnectAll(); return }                 // this card's "Open" is "Reconnect"
         guard !c.url.isEmpty, let u = URL(string: c.url) else { retire(c.id); return }       // an iPhone card has nowhere to go: Done just closes it
         NSWorkspace.shared.open(u); retire(c.id)
@@ -610,6 +629,12 @@ final class AddonCenter {
             AddonAlert(id: "demo2", addon: "gmail", sender: "Chase", address: "alerts@example.com", headline: "Your card payment failed",
                        reason: "Payment due today; a failed one can add a late fee.", url: "https://mail.google.com", score: 8, created: now),
         ]
+        // NOTCH_ALERT_DEMO=gmail | phone shows just that one card (README screenshots); any other value shows the lot
+        switch ProcessInfo.processInfo.environment["NOTCH_ALERT_DEMO"] {
+        case "gmail": state.pending = Array(state.pending.filter { $0.id == "demo1" })
+        case "phone": state.pending = Array(state.pending.prefix(1))
+        default: break
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.presentIfPossible() }
     }
 }

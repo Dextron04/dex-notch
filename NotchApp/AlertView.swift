@@ -78,11 +78,11 @@ struct AlertView: View {
     }
 
     private var actions: some View {
-        let reconnect = c.current?.kind == "reconnect", phone = c.current?.addon == "phone"
+        let access = c.current?.kind == "phone-access", reconnect = c.current?.kind == "reconnect" || access, phone = c.current?.addon == "phone"
         return HStack(spacing: 22) {
             if reconnect {
                 Button { c.open() } label: {
-                    HStack(spacing: 6) { Text("Reconnect").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
+                    HStack(spacing: 6) { Text(access ? "Open Settings" : "Reconnect").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
                 }
                 Button { c.dismiss() } label: {
                     HStack(spacing: 6) { Text("Later").font(.system(size: 14)).foregroundStyle(Ink.dim); key("⌥esc") }.contentShape(Rectangle())
