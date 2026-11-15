@@ -34,7 +34,7 @@ struct AlertView: View {
                 .clipShape(shape)
                 .allowsHitTesting(open)
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel("\(a.sender) on \(a.addon == "phone" ? "iPhone" : "Gmail"): \(a.headline). \(a.reason)")
+                .accessibilityLabel("\(a.sender) on \(AddonMark.name(a.addon)): \(a.headline). \(a.reason)")
         }
     }
 
@@ -45,7 +45,7 @@ struct AlertView: View {
             HStack(spacing: 0) {
                 HStack(spacing: 7) {
                     AddonMark(addon: a.addon, size: 17)
-                    Text(a.addon == "phone" ? "iPhone" : c.accounts.count > 1 && a.kind == nil ? (a.account.map { String($0.split(separator: "@").first ?? "") } ?? "Gmail") : "Gmail")   // with several accounts, say which
+                    Text(a.addon == "phone" ? "iPhone" : c.accounts.count > 1 && a.kind == nil ? (a.account.map { String($0.split(separator: "@").first ?? "") } ?? AddonMark.name(a.addon)) : AddonMark.name(a.addon))   // with several accounts, say which
                         .font(.system(size: 11, weight: .medium)).tracking(0.3).foregroundStyle(Ink.dim).lineLimit(1)
                     if c.queued > 0 { Text("+\(c.queued)").font(.system(size: 11, weight: .medium)).foregroundStyle(Ink.ember).help("\(c.queued) more waiting") }
                 }

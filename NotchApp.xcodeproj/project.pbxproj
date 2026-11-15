@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		029A6F7614CCBB48A636A655 /* Outlook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EA06C1877B686D4AD839108 /* Outlook.swift */; };
 		07DDFEAAC32C48FC7609BA86 /* OfficialMarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72682E91183BD251F579ACB6 /* OfficialMarks.swift */; };
 		080441BECA232EC426BC9C0C /* AppUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5341F0FBE3246CF85E71F48C /* AppUpdater.swift */; };
 		0999A29BFF7BFEF67D4DB6DD /* Gmail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */; };
@@ -37,6 +38,7 @@
 		8503551F1B10B24D06E2FF0A /* AlertView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E76E22DDB3A2D28B85B7C092 /* AlertView.swift */; };
 		898D7FB93A9186B951B4088F /* NotchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CBB2E551130DD2CE010BFF /* NotchView.swift */; };
 		9D7DA6C3F8755AD1BA023406 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F216985AFA23BC8E9805806 /* ConversationStore.swift */; };
+		A3DD3777F50EAD9EA6B956FD /* Outlook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EA06C1877B686D4AD839108 /* Outlook.swift */; };
 		A48F6F5CAD79AB60BD5BB30C /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04FED0FDAE6B5FC7FE0D0983 /* SetupView.swift */; };
 		A8E7AF7E5FB0A8A3AA08ABB9 /* MailReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F02AF06F7646206E66DA662 /* MailReply.swift */; };
 		AB5858CF9C6BCC0882589DB0 /* SVGPathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A408D4D4233E5DC1C8E2622A /* SVGPathTests.swift */; };
@@ -64,6 +66,7 @@
 		11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultReaderTests.swift; sourceTree = "<group>"; };
 		1699F9A9CD5771ED2F953B05 /* VaultReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultReader.swift; sourceTree = "<group>"; };
 		1BA1BFB9DA2701025378F6A5 /* ReplyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyView.swift; sourceTree = "<group>"; };
+		1EA06C1877B686D4AD839108 /* Outlook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Outlook.swift; sourceTree = "<group>"; };
 		218A6628EE36C2AEDB045329 /* Assistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Assistant.swift; sourceTree = "<group>"; };
 		2F1487592A6A941D9CB95947 /* AgentRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRunner.swift; sourceTree = "<group>"; };
 		2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gmail.swift; sourceTree = "<group>"; };
@@ -142,6 +145,7 @@
 				A4CBB2E551130DD2CE010BFF /* NotchView.swift */,
 				0A42C48BB475251A9D6BB6BD /* NotchWindow.swift */,
 				72682E91183BD251F579ACB6 /* OfficialMarks.swift */,
+				1EA06C1877B686D4AD839108 /* Outlook.swift */,
 				34B56D0B5E24A59E4A23F196 /* RecallView.swift */,
 				4B63938FF0CDB184A70CB883 /* ReplySession.swift */,
 				1BA1BFB9DA2701025378F6A5 /* ReplyView.swift */,
@@ -286,6 +290,7 @@
 				D6FDE1727C6435EFD74B6B69 /* KeychainStoreTests.swift in Sources */,
 				3338925AA7C0F57D8C9465BA /* MailReply.swift in Sources */,
 				07DDFEAAC32C48FC7609BA86 /* OfficialMarks.swift in Sources */,
+				A3DD3777F50EAD9EA6B956FD /* Outlook.swift in Sources */,
 				50C799904FBE799B42C449D1 /* SVGPath.swift in Sources */,
 				AB5858CF9C6BCC0882589DB0 /* SVGPathTests.swift in Sources */,
 				654D8443649142B3C79DDA2D /* Settings.swift in Sources */,
@@ -318,6 +323,7 @@
 				898D7FB93A9186B951B4088F /* NotchView.swift in Sources */,
 				69D5965BE316E7D1A8F923DF /* NotchWindow.swift in Sources */,
 				11C732EA3D38A55B3B378D11 /* OfficialMarks.swift in Sources */,
+				029A6F7614CCBB48A636A655 /* Outlook.swift in Sources */,
 				1C26891F3606A3AEA83E86B1 /* RecallView.swift in Sources */,
 				2452662E03B5DE52879166A7 /* ReplySession.swift in Sources */,
 				E63B2AF16E49E360BBFAD95D /* ReplyView.swift in Sources */,

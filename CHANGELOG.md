@@ -6,6 +6,15 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## Unreleased: Outlook and Microsoft 365 mail
+
+- **Connect Outlook.** Settings → Mail → **Connect Outlook** adds an Outlook.com, Hotmail or work or school Microsoft 365 mailbox. Its important mail reaches the notch like Gmail's does, with an Outlook mark and the account name when you have several.
+- **Reply from Outlook mail too.** Reply, Send with Undo and Save draft work the same. A reply is sent from the original message, so Outlook threads it and quotes the original; Save draft puts it in your Outlook Drafts.
+- **Read-only until you say so.** The same **Allow replies** switch decides whether the sign-in also asks Microsoft for permission to create drafts and send mail.
+- **Mix accounts freely.** Gmail and Outlook accounts sit side by side in Settings, each with its own Remove link.
+- **Needs a Microsoft application ID.** Builds that carry one just work; otherwise create a free one (steps in the README) and paste it in Settings → Mail → *Use your own Microsoft application*.
+- Mail from IMAP or other providers is not supported yet.
+
 ## v0.4.0: Your iPhone's notifications, at the notch
 
 *14 November 2026*

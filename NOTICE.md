@@ -6,6 +6,7 @@ The Claude and Codex marks that appear in the app and in this repository's scree
 
 - **Claude** and **Anthropic** are trademarks of Anthropic, PBC.
 - **Codex** and **OpenAI** are trademarks of OpenAI.
+- **Outlook** and **Microsoft** are trademarks of the Microsoft group of companies. The Outlook mark in the add-on card is simple-icons' `microsoftoutlook.svg` (`NotchApp/OfficialMarks.swift`).
 - **Gmail** and **Google** are trademarks of Google LLC. The Gmail mark in the add-on card is a redraw of Google's published icon (`NotchApp/OfficialMarks.swift`).
 
 They are shown only to identify the products Dex Notch talks to. This project is **not affiliated with, sponsored by or endorsed by**
@@ -23,6 +24,7 @@ Updates use [Sparkle](https://github.com/sparkle-project/Sparkle) (MIT licence, 
 | Mark | Source | Licence of that source |
 |---|---|---|
 | Claude | [simple-icons](https://github.com/simple-icons/simple-icons) `claude.svg` | CC0 1.0 Universal (trademarks still belong to Anthropic) |
+| Outlook | [simple-icons](https://github.com/simple-icons/simple-icons) `microsoftoutlook.svg` | CC0 1.0 Universal (trademarks still belong to Microsoft) |
 | Codex | [lobe-icons](https://github.com/lobehub/lobe-icons) `codex.svg` | MIT (below). Trademarks still belong to OpenAI |
 
 ### lobe-icons

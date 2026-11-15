@@ -17,6 +17,8 @@ final class SetupModel {
     var gmailID = ""
     var gmailSecret = ""
     var ownClientOpen = false
+    var msID = ""
+    var msOpen = false
     var importance = ""
     var myName = ""
     var repliesOnConnect = true
@@ -40,6 +42,7 @@ final class SetupModel {
         importance = ad.importance; myName = ad.name; repliesOnConnect = ad.repliesOnConnect; checkMinutes = ad.checkMinutes
         if ad.gmailIsOwn, let g = ad.gmail { gmailID = g.clientID; gmailSecret = g.clientSecret; ownClientOpen = true }
         else if ad.gmail == nil { ownClientOpen = true }
+        if ad.microsoftIsOwn, let id = ad.microsoftClientID { msID = id; msOpen = true } else if ad.microsoftClientID == nil { msOpen = true }
         if let g = a.gemma { host = g.host; model = g.model; keychainService = g.keychainService; keychainAccount = g.keychainAccount; localOpen = true }
     }
 
@@ -82,7 +85,7 @@ final class SetupModel {
         if let g = gemma, !t.isEmpty, !KeychainStore.set(token: t, service: g.keychainService, account: g.keychainAccount) {
             message = "Saved, but the token couldn't be stored. Tokens must be plain letters, digits and symbols, with no line breaks."; return false
         }
-        do { try AddonSettings.saveImportance(at: url, importance); try AddonSettings.saveName(at: url, myName); try AddonSettings.saveRepliesOnConnect(at: url, repliesOnConnect); try AddonSettings.saveCheckMinutes(at: url, checkMinutes) } catch { message = "Couldn't save settings.json: \(error.localizedDescription)"; return false }
+        do { try AddonSettings.saveImportance(at: url, importance); try AddonSettings.saveName(at: url, myName); try AddonSettings.saveRepliesOnConnect(at: url, repliesOnConnect); try AddonSettings.saveCheckMinutes(at: url, checkMinutes); if !msID.trimmingCharacters(in: .whitespaces).isEmpty { try AddonSettings.saveMicrosoft(at: url, msID) } } catch { message = "Couldn't save settings.json: \(error.localizedDescription)"; return false }
         AddonCenter.shared.reload()      // the new check frequency and importance apply right away
         assistant.connect()      // re-reads settings, looks for the CLIs again, checks the local model
         return true
@@ -331,7 +334,7 @@ struct SetupView: View {
         let builtIn = AddonSettings.bundled() != nil
         return VStack(alignment: .leading, spacing: 0) {
             header("Mail", "New mail is judged as it arrives, and only the few emails that need you reach the notch. Dex Notch only reads mail until you allow replies.")
-            why("To tell you about important email, Dex Notch has to read your inbox. You sign in on Google's own page, so we never see your password. It starts read-only. Sending replies is a second permission that you can leave off.")
+            why("To tell you about important email, Dex Notch has to read your inbox. You sign in on Google's or Microsoft's own page, so we never see your password. It starts read-only. Sending replies is a second permission that you can leave off.")
             if !center.needsReconnect.isEmpty {
                 row(title: "Reconnect needed", detail: "This update asks Google for one new permission, so you can reply from the notch. Alerts for these accounts are paused until you sign in again.",
                     lead: { Image(systemName: "exclamationmark.arrow.triangle.2.circlepath").font(.system(size: 16)).foregroundStyle(Ink.emberDeep) },
@@ -342,7 +345,7 @@ struct SetupView: View {
                     row(title: "No account connected", muted: true, lead: { AddonMark(addon: "gmail", size: 24).opacity(0.45) }, trail: { EmptyView() })
                 }
                 ForEach(accounts, id: \.self) { e in
-                    row(title: e, detail: center.needsReconnect.contains(e) ? "Reconnect needed" : center.canReply(e) ? "Gmail, can draft and send replies" : "Gmail, read-only", lead: { AddonMark(addon: "gmail", size: 24) },
+                    row(title: e, detail: center.needsReconnect.contains(e) ? "Reconnect needed" : center.canReply(e) ? "\(AddonMark.name(center.addon(for: e))), can draft and send replies" : "\(AddonMark.name(center.addon(for: e))), read-only", lead: { AddonMark(addon: center.addon(for: e), size: 24) },
                         trail: {
                             HStack(spacing: 16) {
                                 if center.needsReconnect.contains(e) { link("Reconnect") { center.reconnectAll() } }
@@ -356,10 +359,23 @@ struct SetupView: View {
                 lead: { Image(systemName: "arrowshape.turn.up.left").font(.system(size: 16)).foregroundStyle(Ink.dim) },
                 trail: { Toggle("", isOn: $m.repliesOnConnect).labelsHidden().toggleStyle(.switch) })
             HStack(spacing: 20) {
-                link(accounts.isEmpty ? "Connect Gmail" : "Add another account") { center.connectGmail(clientID: m.gmailID, clientSecret: m.gmailSecret) }
+                link(accounts.isEmpty ? "Connect Gmail" : "Add a Gmail account") { center.connectGmail(clientID: m.gmailID, clientSecret: m.gmailSecret) }
+                link("Connect Outlook") { center.connectOutlook(clientID: m.msID) }.help("Outlook.com, Hotmail, or a work or school Microsoft 365 account")
                 if center.connected { link("Check now", dim: true) { center.checkNow() } }
             }.padding(.top, 18)
             Text(center.status).font(.system(size: 13, design: .serif)).italic().foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true).padding(.top, 8)
+
+            DisclosureGroup(isExpanded: $m.msOpen) {
+                VStack(alignment: .leading, spacing: 18) {
+                    field("Application (client) ID", "00000000-0000-0000-0000-000000000000", text: $m.msID)
+                    Text("A free app registration in Microsoft Entra (Azure), for any account type, with a Mobile and desktop redirect of http://localhost and the Mail.Read, Mail.ReadWrite and Mail.Send permissions. It stays on this Mac. Clear the field to use the built-in sign-in.")
+                        .font(.system(size: 12.5, design: .serif)).italic().foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
+                }.padding(.top, 14)
+            } label: {
+                Text(AddonSettings.bundledMicrosoft() != nil ? "Use your own Microsoft application" : "Your Microsoft application (this build has none built in)")
+                    .font(.system(size: 14, design: .serif)).foregroundStyle(Ink.dim).contentShape(Rectangle())
+            }
+            .tint(Ink.dim).padding(.top, 22)
 
             if !builtIn {
             DisclosureGroup(isExpanded: $m.ownClientOpen) {

@@ -97,7 +97,7 @@ final class LoopbackListener: @unchecked Sendable {
         conn.start(queue: q)
         conn.receive(minimumIncompleteLength: 1, maximumLength: 8192) { [weak self] data, _, _, _ in
             let head = data.map { String(decoding: $0, as: UTF8.self) }?.split(separator: "\r\n").first.map(String.init) ?? ""
-            let page = "<!doctype html><meta charset=utf-8><title>Dex Notch</title><body style=\"background:#000;color:#f2ebde;font:20px Georgia,serif;display:grid;place-items:center;height:100vh;margin:0\"><p>Gmail is connected. You can close this tab.</p>"
+            let page = "<!doctype html><meta charset=utf-8><title>Dex Notch</title><body style=\"background:#000;color:#f2ebde;font:20px Georgia,serif;display:grid;place-items:center;height:100vh;margin:0\"><p>Your account is connected. You can close this tab.</p>"
             let body = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(page.utf8.count)\r\nConnection: close\r\n\r\n" + page
             conn.send(content: Data(body.utf8), completion: .contentProcessed { _ in conn.cancel() })
             if GoogleOAuth.parseCallback(head) != nil { self?.deliver(.success(head)) }

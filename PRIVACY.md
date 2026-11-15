@@ -17,6 +17,16 @@ If you connect Gmail:
 Dex Notch's use of information received from Google APIs adheres to the
 [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.
 
+## Outlook and Microsoft 365 (optional add-on)
+
+Works like Gmail, with Microsoft instead of Google:
+
+- **What it asks Microsoft for:** `Mail.Read` to see new mail, plus `Mail.ReadWrite` and `Mail.Send` so it can create drafts and send a reply, but only when you press **Save draft** or **Send** (turn **Allow replies** off in Settings → Mail and new accounts ask for read access only). `offline_access` keeps you signed in, and `User.Read` tells it which address you signed in as.
+- **What it reads in the background:** for unread inbox mail from the last three days, the sender, subject and a short preview, and whether Outlook filed it under *Other* or marked it as a mailing list. Message bodies and attachments are not downloaded to look for mail that needs you.
+- **Everything else is as for Gmail:** one email is read in full only when you ask to reply to it or ask about it, the sender, subject and preview go to the AI model you chose, and nothing is sent without your Send. Replies are sent from the original message, so the recipient and subject come from it, never from the AI.
+- **What is stored on your Mac:** a sign-in token in your login Keychain (`dex-notch.outlook`), and the same small file as for Gmail.
+- **Disconnecting:** remove Dex Notch at <https://account.live.com/consent/Manage> (personal accounts) or <https://myapps.microsoft.com> (work or school), and delete the Keychain item `dex-notch.outlook`.
+
 ## Updates
 
 Once a day Dex Notch asks `github.com` for the list of releases (a small file named `appcast.xml`) to see whether a newer version exists. That is an ordinary HTTPS request, so GitHub sees your IP address and the app's version like it would for any download. Nothing else is sent: no system profile, no account, no mail, no chats. A new version is only installed if it carries a signature that matches the key built into the app, and it only restarts the app after you say so. You can turn automatic checks off in Settings → Updates.

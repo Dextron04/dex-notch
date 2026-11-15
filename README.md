@@ -228,6 +228,7 @@ The settings window writes `~/Library/Application Support/NotchApp/settings.json
 | `addons.max_model_calls_per_hour` | A ceiling on how often the AI reads mail. Default 8. |
 | `addons.order` | Which model reads your mail first, then the fallbacks. Default `claude`, `codex`, `gemma`. |
 | `addons.importance` | One or two lines on what matters to you. Added to the rules that decide what interrupts you. |
+| `addons.microsoft` | `client_id` of your own Microsoft application for Outlook sign-in (see [Outlook](#outlook-and-microsoft-365)). Release builds carry their own. |
 | `addons.gmail` | `client_id` and `client_secret` of your own Google client. Only needed when building from source; release builds carry their own. |
 
 **Folder rules.** A folder must exist, sit *inside* your home folder, and not be your home folder itself, a hidden top-level folder (`~/.ssh`, `~/.aws`, …) or `~/Library`. `..` and symlinks can't be used to escape. Rejected entries are reported and ignored; the rest still apply.
@@ -275,6 +276,20 @@ Dex Notch can watch your inbox and tell you at the notch about the few emails th
 </p>
 
 Mail is treated as untrusted. The models run with no tools and no saved session (so mail never reaches the shared memory), their answers are checked against the ids they were sent, and the link opened is built by the app, never taken from model text.
+
+### Outlook and Microsoft 365
+
+**Settings → Mail → Connect Outlook** does for Outlook.com, Hotmail and work or school Microsoft 365 mailboxes what Connect Gmail does for Google: the same cards, the same filters, the same reply panel. Outlook's own *Other* tab plays the part of Gmail's Promotions tab, and **Save draft** puts the reply in your Outlook Drafts. Mix Gmail and Outlook accounts freely.
+
+Sign-in needs an application ID from Microsoft. Release builds carry one; building from source, or want your own? It is free and takes about five minutes:
+
+1. In [Microsoft Entra](https://entra.microsoft.com) → *App registrations* → **New registration**. Name it anything. For *Supported account types* choose **Accounts in any organizational directory and personal Microsoft accounts**.
+2. *Redirect URI*: platform **Mobile and desktop applications**, value `http://localhost`.
+3. *API permissions* → **Add a permission** → Microsoft Graph → *Delegated*: `Mail.Read`, `Mail.ReadWrite`, `Mail.Send`, `User.Read`, `offline_access`.
+4. *Authentication* → **Allow public client flows: Yes**.
+5. Copy the **Application (client) ID** into Settings → Mail → *Use your own Microsoft application*, or put it in `settings.json` as `addons.microsoft.client_id`. A work or school tenant may need an admin to approve the permissions.
+
+IMAP and other mail providers are not supported yet.
 
 ## Updates
 
@@ -384,6 +399,7 @@ NotchApp/                 SwiftUI + AppKit menu-bar agent
   SetupView.swift           the settings window: a rail and one page at a time (Models, Folders, Mail)
   Addons.swift              mail triage: filters, the model prompt, parsing, settings and state (pure, tested)
   Gmail.swift               Google sign-in (PKCE), the Gmail client, one token per account (tested)
+  Outlook.swift             Microsoft sign-in, the Outlook client (Microsoft Graph), and the mail-provider interface (tested)
   AddonCenter.swift         schedule, accounts, model fallback, and when a card may appear
   AlertView.swift           the mail card and its arrival: the comet round the rim, the rim as a timer
   Hotkey.swift              global hotkeys (the model hotkeys and the card keys)

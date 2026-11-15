@@ -43,14 +43,18 @@ struct ModelMark: View {
     }
 }
 
-/// An add-on's own logo, in its own colours (never recoloured). Gmail is the only one so far.
+/// An add-on's own logo, in its own colours (never recoloured): Gmail and Outlook, plus a plain iPhone symbol.
 struct AddonMark: View {
+    private static let outlook = SVGPath.parse(OfficialMarks.outlook)
+    private static let outlookBlue = Color(red: 0, green: 0.471, blue: 0.831)   // #0078D4
     private static let gmail = OfficialMarks.gmail.map { (Color(hex: $0.0), SVGPath.parse($0.1)) }
     let addon: String
     var size: CGFloat = 16      // width; Gmail's mark is 4:3
+    static func name(_ addon: String) -> String { addon == "outlook" ? "Outlook" : addon == "phone" ? "iPhone" : "Gmail" }
 
     var body: some View {
-        if addon == "phone" { Image(systemName: "iphone").font(.system(size: size * 0.9)).foregroundStyle(Ink.dim).frame(width: size, height: size * 0.75).accessibilityLabel("iPhone") }
+        if addon == "outlook" { GridShape(path: Self.outlook).fill(Self.outlookBlue).frame(width: size, height: size).accessibilityLabel("Outlook") }
+        else if addon == "phone" { Image(systemName: "iphone").font(.system(size: size * 0.9)).foregroundStyle(Ink.dim).frame(width: size, height: size * 0.75).accessibilityLabel("iPhone") }
         else { gmailMark }
     }
 

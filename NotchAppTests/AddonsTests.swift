@@ -373,9 +373,7 @@ final class AddonsTests: XCTestCase {
         XCTAssertFalse(GmailAPI.lacksPermission(Data(#"{"error":{"code":403,"message":"Rate Limit Exceeded"}}"#.utf8)))
         XCTAssertEqual(AddonAlert(id: "me@x.com|abc123", addon: "gmail", sender: "S", address: "a@b.com", headline: "h", reason: "r", url: "u", score: 8, created: Date()).messageID, "abc123")
     }
-}
 
-private actor Counter { var n = 0; func bump() { n += 1 } 
     // MARK: iPhone notifications
 
     private func blob(_ titl: String, _ body: String) -> Data {
@@ -404,4 +402,58 @@ private actor Counter { var n = 0; func bump() { n += 1 }
         XCTAssertTrue(try PhoneNotes.rows(after: 2, at: url).isEmpty)
         XCTAssertThrowsError(try PhoneNotes.rows(after: 0, at: url.appendingPathExtension("nope"))) { XCTAssertEqual($0 as? PhoneNotes.Problem, .denied) }
     }
+
+    // MARK: Outlook
+
+    private let outlookMessage: [String: Any] = [
+        "id": "AAMk=1", "conversationId": "conv-9", "subject": "Interview moved", "bodyPreview": "Can you do Thursday?",
+        "receivedDateTime": "2026-11-14T10:00:00Z", "webLink": "https://outlook.office.com/mail/id/AAMk%3D1", "inferenceClassification": "focused",
+        "from": ["emailAddress": ["name": "Priya <Nair>", "address": "priya@acme.com"]],
+        "internetMessageHeaders": [["name": "Received", "value": "x"]]]
+
+    func testOutlookParseMapsAMessage() {
+        let m = OutlookAPI.parse(outlookMessage)!
+        XCTAssertEqual(m.provider, "outlook")
+        XCTAssertEqual(m.from, "Priya Nair <priya@acme.com>")      // angle brackets stripped from the name so the address parses
+        XCTAssertEqual(Triage.address(m.from), "priya@acme.com")
+        XCTAssertEqual(m.threadId, "conv-9"); XCTAssertEqual(m.snippet, "Can you do Thursday?")
+        XCTAssertEqual(m.link, "https://outlook.office.com/mail/id/AAMk%3D1")
+        XCTAssertEqual(m.date, Date(timeIntervalSince1970: 1_794_650_400))
+        XCTAssertFalse(m.bulk); XCTAssertTrue(Triage.skipLabels.isDisjoint(with: m.labels))
+    }
+    func testOutlookOtherTabAndListHeaderAreFilteredLikePromotions() {
+        var j = outlookMessage; j["inferenceClassification"] = "other"
+        XCTAssertEqual(Triage.prefilter([OutlookAPI.parse(j)!], seen: [], muted: []).count, 0)
+        j["inferenceClassification"] = "focused"; j["internetMessageHeaders"] = [["name": "List-Unsubscribe", "value": "<mailto:x>"]]
+        XCTAssertTrue(OutlookAPI.parse(j)!.bulk)
+        XCTAssertNil(OutlookAPI.parse(["id": "x"]))
+    }
+    func testOutlookAlertOpensTheMessageLink() {
+        var m = OutlookAPI.parse(outlookMessage)!; m.account = "me@outlook.com"; m.id = "me@outlook.com|AAMk=1"
+        let a = Triage.parse(#"[{"id":"me@outlook.com|AAMk=1","score":9,"headline":"Interview moved","reason":"She is waiting on you"}]"#, items: [m])!
+        XCTAssertEqual(a.first?.addon, "outlook"); XCTAssertEqual(a.first?.url, m.link); XCTAssertEqual(a.first?.messageID, "AAMk=1")
+    }
+    func testOutlookContextReadsTextAndHtmlBodies() {
+        var j = outlookMessage; j["internetMessageId"] = "<abc@x>"; j["replyTo"] = [["emailAddress": ["name": "Desk", "address": "desk@acme.com"]]]
+        j["body"] = ["contentType": "html", "content": "<p>Hello &amp; welcome</p><script>x()</script>"]
+        let c = OutlookAPI.context(j, account: "me@outlook.com")!
+        XCTAssertEqual(c.body, "Hello & welcome"); XCTAssertEqual(c.messageID, "<abc@x>")
+        XCTAssertEqual(MailReply.recipient(c), "Desk <desk@acme.com>")           // Reply-To wins, as with Gmail
+        XCTAssertEqual(c.id, "AAMk=1")
+    }
+    func testOutlookReplyTextCannotBecomeMarkupAndIdsStayOneURLPiece() {
+        XCTAssertEqual(OutlookAPI.comment("a <b>x</b> & c\nline2"), "a &lt;b&gt;x&lt;/b&gt; &amp; c<br>line2")
+        XCTAssertEqual(OutlookAPI.pathID("AAMk/+1="), "AAMk%2F%2B1=")
+    }
+    func testOutlookSignInAsksForReplyPermissionsOnlyWhenAsked() {
+        let read = MicrosoftOAuth.authURL(clientID: "cid", redirect: "http://localhost:5", challenge: "c", state: "s", replies: false).absoluteString
+        let both = MicrosoftOAuth.authURL(clientID: "cid", redirect: "http://localhost:5", challenge: "c", state: "s", replies: true, loginHint: "a@b.com").absoluteString
+        XCTAssertTrue(read.contains("Mail.Read")); XCTAssertFalse(read.contains("Mail.Send"))
+        XCTAssertTrue(both.contains("Mail.Send")); XCTAssertTrue(both.contains("login_hint=a@b.com"))
+        XCTAssertEqual(OutlookAPI.explain(code: 429, body: Data()).retry, true)
+        XCTAssertEqual(OutlookAPI.explain(code: 401, body: Data()).retry, false)
+        XCTAssertTrue(OutlookAPI.lacksPermission(Data(#"{"error":{"code":"ErrorAccessDenied","message":"Access is denied."}}"#.utf8)))
+    }
 }
+
+private actor Counter { var n = 0; func bump() { n += 1 } }

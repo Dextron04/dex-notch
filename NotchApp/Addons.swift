@@ -15,14 +15,16 @@ struct MailItem: Codable, Equatable, Sendable {
     var date: Date
     var labels: [String]
     var bulk: Bool          // carries a List-Unsubscribe header: a mailing list or automated sender
-    var account = ""        // which connected Gmail account it arrived in
+    var account = ""        // which connected account it arrived in
+    var provider = "gmail"  // "gmail" or "outlook"
+    var link = ""           // where to open it, when the provider gives one (Outlook does; Gmail's is built from the thread id)
     var address: String { Triage.address(from) }
 }
 
 /// What the notch shows: a two-line brief and the reason it is worth your attention.
 struct AddonAlert: Codable, Equatable, Identifiable, Sendable {
     var id: String          // mail id
-    var addon: String       // "gmail"
+    var addon: String       // "gmail", "outlook" or "phone"
     var sender: String      // display name
     var address: String
     var headline: String    // what it is
@@ -43,6 +45,8 @@ struct GmailConfig: Equatable { var clientID: String; var clientSecret: String }
 struct AddonSettings: Equatable {
     var gmail: GmailConfig?             // yours from settings.json if given, otherwise the one this build shipped with
     var gmailIsOwn = false              // true when settings.json supplied it
+    var microsoftClientID: String?      // the Outlook / Microsoft 365 application ID: yours from settings.json, otherwise the one this build shipped with
+    var microsoftIsOwn = false
     var order: [Backend] = [.claude, .codex, .gemma]   // who triages, first to last: the next one runs when a model is rate-limited or down
     var checkMinutes: Double = 5                        // how often to look for new mail while the Mac is awake (a look is cheap; the model only runs for new mail)
     var maxModelCallsPerHour = 8                        // a ceiling on model use, so a flood of mail can't eat your Claude or Codex limits
@@ -58,8 +62,13 @@ struct AddonSettings: Equatable {
         return GmailConfig(clientID: id, clientSecret: secret)
     }
 
-    static func load(from url: URL, bundled: GmailConfig? = AddonSettings.bundled()) -> AddonSettings {
-        var base = AddonSettings(); base.gmail = bundled
+    /// The Microsoft application ID a release build carries (injected into Info.plist by CI). Nil in a plain checkout.
+    static func bundledMicrosoft(_ info: [String: Any]? = Bundle.main.infoDictionary) -> String? {
+        (info?["MicrosoftClientID"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmptyResolved
+    }
+
+    static func load(from url: URL, bundled: GmailConfig? = AddonSettings.bundled(), bundledMicrosoft: String? = AddonSettings.bundledMicrosoft()) -> AddonSettings {
+        var base = AddonSettings(); base.gmail = bundled; base.microsoftClientID = bundledMicrosoft
         guard let d = try? Data(contentsOf: url), let root = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
               let a = root["addons"] as? [String: Any] else { return base }
         var s = base
@@ -75,6 +84,9 @@ struct AddonSettings: Equatable {
         s.name = clip((a["name"] as? String) ?? "", 80)
         if let r = a["replies_on_connect"] as? Bool { s.repliesOnConnect = r }
         if let p = a["phone_alerts"] as? Bool { s.phoneAlerts = p }
+        if let m = (a["microsoft"] as? [String: Any])?["client_id"] as? String, !m.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            s.microsoftClientID = m.trimmingCharacters(in: .whitespacesAndNewlines); s.microsoftIsOwn = true
+        }
         if let g = a["gmail"] as? [String: Any],
            let id = (g["client_id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty,
            let secret = (g["client_secret"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !secret.isEmpty {
@@ -88,6 +100,16 @@ struct AddonSettings: Equatable {
         try Settings.mutate(at: url) { root in
             var a = root["addons"] as? [String: Any] ?? [:]
             a["gmail"] = ["client_id": g.clientID, "client_secret": g.clientSecret]
+            root["addons"] = a
+        }
+    }
+
+    /// Saves the Microsoft application ID into settings.json, keeping every other key. Empty removes it.
+    static func saveMicrosoft(at url: URL, _ id: String) throws {
+        try Settings.mutate(at: url) { root in
+            var a = root["addons"] as? [String: Any] ?? [:]
+            let t = id.trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.isEmpty { a.removeValue(forKey: "microsoft") } else { a["microsoft"] = ["client_id": t] }
             root["addons"] = a
         }
     }
@@ -157,7 +179,8 @@ struct AddonState: Codable, Equatable {
     var replyAccounts: [String] = []    // accounts that have allowed drafts and sending (the rest are read-only)
     var history: [AddonAlert] = []      // the last alerts that were shown, newest first, so nothing you dismissed by accident is gone
     var modelCalls: [Date] = []         // when the model last ran (kept for an hour): the ceiling on model use
-    var accounts: [String] = []         // connected Gmail addresses; each one's sign-in token is in the Keychain under its address
+    var accounts: [String] = []         // connected addresses; each one's sign-in token is in the Keychain under its address
+    var outlook: [String] = []          // the accounts above that are Outlook / Microsoft 365 (the rest are Gmail)
     var phoneCursor: Int64?             // newest Notification Center record already looked at; nil = start from now
     var lastTry: Date?
     var lastOK = false
@@ -173,6 +196,8 @@ struct AddonState: Codable, Equatable {
         modelCalls = try c.decodeIfPresent([Date].self, forKey: .modelCalls) ?? []
         history = try c.decodeIfPresent([AddonAlert].self, forKey: .history) ?? []
         replyAccounts = try c.decodeIfPresent([String].self, forKey: .replyAccounts) ?? []
+        outlook = try c.decodeIfPresent([String].self, forKey: .outlook) ?? []
+        phoneCursor = try c.decodeIfPresent(Int64.self, forKey: .phoneCursor)
         consent = try c.decodeIfPresent(Int.self, forKey: .consent) ?? 0
         stale = try c.decodeIfPresent([String].self, forKey: .stale) ?? []
         reconnectNudged = try c.decodeIfPresent(Date.self, forKey: .reconnectNudged)
@@ -312,8 +337,8 @@ enum Triage {
                   let score = (o["score"] as? Int) ?? (o["score"] as? Double).map(Int.init), score >= threshold else { continue }
             let head = clean((o["headline"] as? String) ?? "", max: 80), why = clean((o["reason"] as? String) ?? "", max: 110)
             guard !head.isEmpty, !why.isEmpty else { continue }       // an alert without its reason is just noise
-            out.append(AddonAlert(id: id, addon: "gmail", sender: clean(displayName(m.from), max: 40), address: m.address, headline: head, reason: why,
-                                  url: AddonSettings.mailURL(account: m.account, thread: m.threadId), score: min(score, 10), created: now, account: m.account.isEmpty ? nil : m.account))
+            out.append(AddonAlert(id: id, addon: m.provider, sender: clean(displayName(m.from), max: 40), address: m.address, headline: head, reason: why,
+                                  url: m.link.isEmpty ? AddonSettings.mailURL(account: m.account, thread: m.threadId) : m.link, score: min(score, 10), created: now, account: m.account.isEmpty ? nil : m.account))
         }
         return Array(out.sorted { $0.score > $1.score }.prefix(maxAlerts))
     }

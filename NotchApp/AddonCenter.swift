@@ -43,7 +43,7 @@ final class AddonCenter {
 
     private var state = AddonState()
     private var assistant: Assistant?
-    private var clients: [String: GmailClient] = [:]
+    private var clients: [String: any MailProvider] = [:]
     private var locked = false
     private var forceDemo = false          // the demo ignores "are you at the keyboard"
     private var retiring = false
@@ -77,11 +77,14 @@ final class AddonCenter {
     func reload() {
         settings = AddonSettings.load(from: settingsURL)
         clients = [:]
-        if let cfg = settings.gmail { for e in state.accounts { clients[e] = GmailClient(cfg, email: e) } }
+        for e in state.accounts {
+            if state.outlook.contains(e) { if let id = settings.microsoftClientID { clients[e] = OutlookClient(clientID: id, email: e) } }
+            else if let cfg = settings.gmail { clients[e] = GmailClient(cfg, email: e) }
+        }
         if status == "Not connected." || status.hasPrefix("Add a Google") || status.hasPrefix("Connected") { status = idleStatus }
     }
     private var idleStatus: String {
-        settings.gmail == nil ? "Add a Google client ID to begin."
+        settings.gmail == nil && settings.microsoftClientID == nil ? "Add a Google client ID to begin."
             : accounts.isEmpty ? "No account connected yet."
             : "Looks for new mail every \(settings.checkMinutes < 60 ? "\(Int(settings.checkMinutes)) minutes" : "\(Int(settings.checkMinutes / 60)) hours")."
     }
@@ -102,7 +105,8 @@ final class AddonCenter {
 
     /// Settings → Remove: forget the sign-in, and drop anything of theirs still waiting to be shown.
     func removeAccount(_ email: String) {
-        GmailClient.forget(email)
+        if state.outlook.contains(email) { OutlookClient.forget(email) } else { GmailClient.forget(email) }
+        state.outlook.removeAll { $0 == email }
         state.accounts.removeAll { $0 == email }
         state.replyAccounts.removeAll { $0 == email }
         state.stale.removeAll { $0 == email }
@@ -173,7 +177,7 @@ final class AddonCenter {
 
     private func tick() {
         queueReconnectCard()
-        guard settings.gmail != nil, connected, state.isDue(now: Date(), minutes: settings.checkMinutes) else { return }
+        guard !clients.isEmpty, connected, state.isDue(now: Date(), minutes: settings.checkMinutes) else { return }
         checkNow(manual: false)
     }
 
@@ -192,7 +196,7 @@ final class AddonCenter {
                 var out: [MailItem] = []; failed = []
                 for e in accounts {
                     guard let c = clients[e] else { continue }
-                    do { out += try await c.fetchUnread(skipping: Set(state.seen)) }
+                    do { out += try await c.fetchUnread(skipping: Set(state.seen), limit: Triage.batch) }
                     catch { failed.append(e); why = error.localizedDescription }
                 }
                 return out
@@ -282,6 +286,32 @@ final class AddonCenter {
         }
     }
 
+    /// Settings → Connect Outlook. Empty field = the application ID this build carries; a filled one is yours, and is kept.
+    func connectOutlook(clientID: String) {
+        let own = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let id: String
+        if !own.isEmpty {
+            do { try AddonSettings.saveMicrosoft(at: settingsURL, own) } catch { status = "Couldn't save settings.json: \(error.localizedDescription)"; return }
+            id = own
+        } else if let b = AddonSettings.bundledMicrosoft() { id = b }
+        else { status = "This build has no Microsoft sign-in built in. Add your own application ID under Use your own Microsoft application."; return }
+        status = "Finish signing in in your browser…"
+        Task {
+            do {
+                let r = try await OutlookClient.connect(clientID: id, replies: settings.repliesOnConnect)
+                let isNew = !state.accounts.contains(r.email)
+                if !state.outlook.contains(r.email) { state.outlook.append(r.email) }
+                if r.canReply, !state.replyAccounts.contains(r.email) { state.replyAccounts.append(r.email) }
+                addAccount(r.email)
+                status = (isNew ? "Added \(r.email)." : "\(r.email) signed in again.") + (r.canReply ? " Replies are on." : " Read-only: use Allow replies to draft and send.")
+                try? await Task.sleep(for: .milliseconds(300)); state.lastTry = nil; checkNow()
+            } catch { status = error.localizedDescription }
+        }
+    }
+
+    /// "gmail" or "outlook": which mark and name an account gets.
+    func addon(for email: String) -> String { state.outlook.contains(email) ? "outlook" : "gmail" }
+
     // MARK: replying
 
     /// Which agent writes first: the first in your order that is actually available.
@@ -290,7 +320,7 @@ final class AddonCenter {
 
     /// "Reply" on the card (⌥R). The card grows into the reply panel; if this account can only read, it first asks for the permission.
     func startReply() {
-        guard let alert = current, alert.addon == "gmail" else { return }
+        guard let alert = current, alert.addon == "gmail" || alert.addon == "outlook" else { return }
         let acct = alert.account ?? state.accounts.first ?? ""
         if session?.alert.id != alert.id { session = ReplySession(alert: alert, stage: canReply(acct) ? .loading : .needsPermission, backend: firstAgent) }
         countdown?.cancel(); cardKeys = []
@@ -316,12 +346,12 @@ final class AddonCenter {
     private func finishReply() { sendTask?.cancel(); let c = current; session = nil; if let c { retire(c.id) } }
 
     func allowReplies() {
-        guard let s = session, let cfg = settings.gmail else { return }
+        guard let s = session else { return }
         let acct = s.alert.account ?? state.accounts.first ?? ""
         s.note = "Finish in your browser…"
         Task {
             do {
-                let r = try await GmailClient.connect(cfg, replies: true, loginHint: acct)
+                let r = try await signIn(acct, replies: true)
                 guard r.canReply else { throw GmailError("Google didn't allow drafts and sending. Try again and tick the box for writing email.") }
                 if !state.replyAccounts.contains(r.email) { state.replyAccounts.append(r.email) }
                 if !state.accounts.contains(r.email) { state.accounts.append(r.email) }
@@ -332,13 +362,22 @@ final class AddonCenter {
         }
     }
 
+    /// Signs one existing account in again with the right provider's page.
+    private func signIn(_ email: String, replies: Bool) async throws -> (email: String, canReply: Bool) {
+        if state.outlook.contains(email) {
+            guard let id = settings.microsoftClientID else { throw GmailError("This build has no Microsoft sign-in. Add your application ID in Settings → Mail.") }
+            return try await OutlookClient.connect(clientID: id, replies: replies, loginHint: email)
+        }
+        guard let cfg = settings.gmail else { throw GmailError("This build has no Google sign-in. Add your own client in Settings → Mail.") }
+        return try await GmailClient.connect(cfg, replies: replies, loginHint: email)
+    }
+
     /// From Settings: let one account draft and send.
     func allowReplies(for email: String) {
-        guard let cfg = settings.gmail else { return }
         status = "Finish in your browser…"
         Task {
             do {
-                let r = try await GmailClient.connect(cfg, replies: true, loginHint: email)
+                let r = try await signIn(email, replies: true)
                 guard r.canReply else { throw GmailError("Google didn't allow drafts and sending. Try again and tick the box for writing email.") }
                 if !state.replyAccounts.contains(r.email) { state.replyAccounts.append(r.email) }
                 state.reconnected(r.email)
@@ -413,7 +452,7 @@ final class AddonCenter {
 
     /// Send, with a few seconds to change your mind. Nothing leaves before they run out.
     func beginSend() {
-        guard let s = session, s.canSend, let ctx = s.context, let raw = MailReply.raw(ctx, body: s.draft) else {
+        guard let s = session, s.canSend, let ctx = s.context, MailReply.raw(ctx, body: s.draft) != nil else {
             session?.note = session?.context.flatMap { MailReply.recipient($0) } == nil ? "This sender has no address to reply to." : session?.note
             return
         }
@@ -435,7 +474,7 @@ final class AddonCenter {
                 if forceDemo { try? await Task.sleep(for: .milliseconds(500)) }
                 else {
                     guard let client = clients[acct] else { throw GmailError("\(acct) isn't connected.") }
-                    try await client.send(raw: raw, threadId: ctx.threadId)
+                    try await client.send(ctx, body: s.draft)
                 }
                 s.outcome = .sent; sealTick += 1
                 try? await Task.sleep(for: .milliseconds(2300))          // long enough to see the check drawn and the comet land
@@ -449,7 +488,7 @@ final class AddonCenter {
 
     /// Saves it as a draft in Gmail, in the same thread, and closes. Nothing is sent.
     func saveDraft() {
-        guard let s = session, s.canSend, let ctx = s.context, let raw = MailReply.raw(ctx, body: s.draft) else { return }
+        guard let s = session, s.canSend, let ctx = s.context, MailReply.raw(ctx, body: s.draft) != nil else { return }
         let acct = ctx.account
         s.outcome = .sending
         Task {
@@ -457,7 +496,7 @@ final class AddonCenter {
                 if forceDemo { try? await Task.sleep(for: .milliseconds(500)) }
                 else {
                     guard let client = clients[acct] else { throw GmailError("\(acct) isn't connected.") }
-                    _ = try await client.createDraft(raw: raw, threadId: ctx.threadId)
+                    try await client.saveDraft(ctx, body: s.draft)
                 }
                 s.outcome = .saved; sealTick += 1
                 try? await Task.sleep(for: .milliseconds(2300))
