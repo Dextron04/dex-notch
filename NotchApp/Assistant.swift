@@ -227,8 +227,9 @@ final class Assistant {
                     var messages = messages
                     let hits = await vaultRecall(r.prompt)
                     recalled = hits.reduce(into: [String]()) { if !$0.contains($1.title) { $0.append($1.title) } }
-                    let extra = AgentStream.memoryPrompt(hits)
-                    if !extra.isEmpty { messages[0]["content"] = Self.system + "\n\n" + extra }
+                    let overview = AgentStream.wantsOverview(r.prompt) ? VaultReader.overview(vault: VaultReader.defaultVault) : nil
+                    if overview != nil { recalled.insert("vault overview", at: 0) }
+                    messages[0]["content"] = Self.system + "\n\n" + AgentStream.memoryPrompt(hits, overview: overview)   // the briefing goes in every time
                     try await streamChat(messages) { t in
                         guard !turns.isEmpty else { return }
                         waiting = false; streaming = true
@@ -273,6 +274,13 @@ final class Assistant {
 
     /// Asks the mini's RAG which vault notes bear on the question. Never blocks the answer: any failure just means no context.
     private func vaultRecall(_ question: String) async -> [Snippet] {
+        let keywords = AgentStream.keywordQuery(question)
+        async let plain = searchVault(question)
+        async let focused = keywords == question ? [] : searchVault(keywords)       // filler-free version: finds notes a vague question misses
+        return AgentStream.mergeSnippets(await plain, await focused)
+    }
+
+    private func searchVault(_ question: String) async -> [Snippet] {
         guard let g = gemma, let tok = try? loadToken() else { return [] }
         var req = URLRequest(url: URL(string: g.base + "/rag/search")!)
         req.httpMethod = "POST"; req.timeoutInterval = 5

@@ -190,7 +190,7 @@ enum AgentStream {
         guard let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let rows = j["sources"] as? [[String: Any]] else { return [] }
         var perNote: [String: Int] = [:], out: [Snippet] = []
         for r in rows {
-            guard let src = r["source"] as? String, src.hasPrefix("vault:"), let text = r["snippet"] as? String, !text.isEmpty else { continue }
+            guard let src = r["source"] as? String, src.hasPrefix("vault:"), !src.hasPrefix("vault:Sessions/gemma/"), let text = r["snippet"] as? String, !text.isEmpty else { continue }
             let path = String(src.dropFirst(6))
             guard perNote[path, default: 0] < 2 else { continue }
             perNote[path, default: 0] += 1
@@ -201,8 +201,47 @@ enum AgentStream {
     }
 
     /// Appended to Gemma's system prompt. Empty when nothing was found, so plain questions stay plain.
-    static func memoryPrompt(_ s: [Snippet], limit: Int = 3000) -> String {
-        guard !s.isEmpty else { return "" }
+    /// Questions about time, or about the vault itself, can't be answered by similarity search ("today" matches nothing),
+    /// so they get an overview of what is actually in the vault.
+    static func wantsOverview(_ q: String) -> Bool {
+        let t = q.lowercased()
+        let cues = ["today", "yesterday", "tonight", "this week", "last week", "lately", "recent", "last conversation", "last chat", "last session",
+                    "just now", "been doing", "what did i do", "what have i", "my vault", "the vault", "my memory", "my notes", "what do you know",
+                    "what can you do", "how does the memory", "how do you use", "what's in", "what is in", "whats in"]
+        return cues.contains { t.contains($0) }
+    }
+
+    /// The question with filler words removed, for the search's keyword half. Falls back to the original when too little is left.
+    static func keywordQuery(_ q: String) -> String {
+        let filler: Set<String> = ["what", "did", "we", "do", "does", "is", "are", "was", "were", "the", "a", "an", "about", "of", "for", "to", "in", "on", "my",
+                                   "me", "i", "you", "your", "our", "and", "or", "with", "how", "why", "when", "where", "which", "who", "that", "this", "it",
+                                   "its", "be", "been", "have", "has", "had", "can", "could", "should", "would", "will", "just", "please", "tell", "show", "give"]
+        let words = q.split(whereSeparator: { !($0.isLetter || $0.isNumber || "_@+-./".contains($0)) })
+            .map(String.init).map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ".-/")) }.filter { !$0.isEmpty && !filler.contains($0.lowercased()) }
+        return words.count >= 2 ? words.joined(separator: " ") : q
+    }
+
+    /// Results of the plain search first, then anything new from the keyword search. Same limits as one search: two per note, six in all.
+    static func mergeSnippets(_ a: [Snippet], _ b: [Snippet], max: Int = 6) -> [Snippet] {
+        var seen = Set<String>(), perNote: [String: Int] = [:], out: [Snippet] = []
+        for x in a + b {
+            let key = x.source + "|" + String(x.snippet.prefix(60))
+            guard seen.insert(key).inserted, perNote[x.source, default: 0] < 2 else { continue }
+            perNote[x.source, default: 0] += 1; out.append(x)
+            if out.count == max { break }
+        }
+        return out
+    }
+
+    static let vaultBriefing = "You are connected to the user's memory vault: Obsidian notes of their past conversations with AI agents (Claude Code, Codex, Gemini, ChatGPT and you). "
+        + "Notes that match the question, and sometimes an overview of the vault, are included below. When the question is about the user's own work or history, answer from them and name the note you used. "
+        + "Use a note only if it is clearly about the question; ignore the ones that are not. If none clearly answer it, say you couldn't find it in the vault; do not invent details, notes or dates beyond what is shown. For general questions, just answer."
+
+    /// Added to Gemma's system prompt on every question, so it always knows what the vault is and the rules for using it.
+    static func memoryPrompt(_ s: [Snippet], overview: String? = nil, limit: Int = 3000) -> String {
+        var out = vaultBriefing
+        if let o = overview, !o.isEmpty { out += "\n\nVault overview:\n" + o }
+        guard !s.isEmpty else { return out + "\n\nNo notes matched this question." }
         var body = "", n = 0
         for x in s {
             let month = x.source.split(separator: "/").first { $0.range(of: #"^\d{4}-\d{2}$"#, options: .regularExpression) != nil }.map(String.init) ?? ""
@@ -210,8 +249,7 @@ enum AgentStream {
             if body.count + entry.count > limit { body += String(entry.prefix(max(limit - body.count, 0))); break }
             body += entry; n += 1
         }
-        return "Notes from the user's long-term memory (past conversations with their AI agents). Use them when they bear on the question and say which note you used. "
-            + "If they don't answer it, say so; do not invent details beyond them.\n\n" + body
+        return out + "\n\nNotes:\n" + body
     }
 
     private static func object(_ line: String) -> [String: Any]? {

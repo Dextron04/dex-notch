@@ -105,6 +105,27 @@ enum VaultReader {
             .sorted { $0.turns != $1.turns ? $0.turns > $1.turns : $0.name < $1.name }.prefix(limit).map { $0 }
     }
 
+    /// A short plain-text picture of the vault for the local model: totals, today's sessions, the latest ones. Its own chats are
+    /// counted but not listed as work. Capped so it stays cheap to read.
+    static func overview(vault: URL, now: Date = Date(), calendar: Calendar = .current) -> String {
+        let all = notes(in: vault)
+        guard !all.isEmpty else { return "- The vault is empty: no conversations have been recorded yet." }
+        func clip(_ t: String) -> String { t.count > 70 ? String(t.prefix(67)) + "..." : t }
+        let day = DateFormatter(); day.calendar = calendar; day.timeZone = calendar.timeZone; day.locale = Locale(identifier: "en_US_POSIX")
+        func fmt(_ f: String, _ d: Date) -> String { day.dateFormat = f; return day.string(from: d) }
+        func item(_ n: Note, withDate: Bool) -> String {
+            "\(n.agent) · \(n.project.isEmpty ? "misc" : n.project) · \(clip(n.title))" + (withDate ? " (\(fmt("MMM d", n.updated)))" : "")
+        }
+        let counts = Dictionary(grouping: all, by: \.agent).map { ($0.key, $0.value.count) }.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0 < $1.0 }
+        let work = all.filter { $0.agent != "gemma" }.sorted { $0.updated > $1.updated }
+        let today = work.filter { calendar.isDate($0.updated, inSameDayAs: now) || calendar.isDate($0.started, inSameDayAs: now) }
+        var lines = ["- Date: \(fmt("EEEE, MMMM d, yyyy", now))",
+                     "- \(all.count) conversations across \(counts.count) agents: " + counts.map { "\($0.0) \($0.1)" }.joined(separator: ", ")]
+        lines.append(today.isEmpty ? "- Today: no conversations yet." : "- Today (\(today.count)): " + today.prefix(8).map { item($0, withDate: false) }.joined(separator: "; "))
+        lines.append("- Most recent: " + work.prefix(6).map { item($0, withDate: true) }.joined(separator: "; "))
+        return lines.joined(separator: "\n")
+    }
+
     /// ↑/↓ over the rows that are actually DRAWN (search can return more than fit); wraps around.
     static func moveIndex(_ i: Int, by d: Int, rows: Int, visible: Int) -> Int {
         let n = min(rows, visible)

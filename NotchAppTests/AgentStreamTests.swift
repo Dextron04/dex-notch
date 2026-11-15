@@ -159,8 +159,10 @@ final class MemoryRecallTests: XCTestCase {
         XCTAssertEqual(AgentStream.parseSnippets(json([])), [])
         XCTAssertEqual(AgentStream.parseSnippets(Data(#"{"error":"x"}"#.utf8)), [])
     }
-    func testMemoryPromptEmptyWhenNothingFound() {
-        XCTAssertEqual(AgentStream.memoryPrompt([]), "")
+    func testWithNoMatchesTheModelIsToldSoInsteadOfLeftToGuess() {
+        let p = AgentStream.memoryPrompt([])
+        XCTAssertTrue(p.lowercased().contains("no notes matched"))
+        XCTAssertTrue(p.lowercased().contains("do not invent"))
     }
     func testMemoryPromptCarriesTitlesSnippetsAndHonestyRule() {
         let p = AgentStream.memoryPrompt([Snippet(title: "Notch picker", source: "Sessions/claude-code/2026-11/a.md", snippet: "we chose claude -p")])
@@ -170,7 +172,7 @@ final class MemoryRecallTests: XCTestCase {
     }
     func testMemoryPromptIsCappedByLimit() {
         let big = (0..<5).map { Snippet(title: "N\($0)", source: "Sessions/x/\($0).md", snippet: String(repeating: "z", count: 2000)) }
-        XCTAssertLessThanOrEqual(AgentStream.memoryPrompt(big, limit: 3000).count, 3300)  // limit + fixed header/footer
+        XCTAssertLessThanOrEqual(AgentStream.memoryPrompt(big, limit: 3000).count, 4400)  // limit + the fixed briefing
     }
 }
 
@@ -375,5 +377,65 @@ final class GemmaRequestTests: XCTestCase {
         XCTAssertFalse(AgentStream.shouldWarm(last: t0, now: t0.addingTimeInterval(60)))
         XCTAssertFalse(AgentStream.shouldWarm(last: t0, now: t0.addingTimeInterval(20 * 60)))   // still inside the 30-minute keep-alive
         XCTAssertTrue(AgentStream.shouldWarm(last: t0, now: t0.addingTimeInterval(26 * 60)))    // refresh just before it would expire
+    }
+}
+
+
+final class VaultBriefingTests: XCTestCase {
+    func testTheModelIsAlwaysToldWhatTheVaultIsAndHowToUseIt() {
+        let p = AgentStream.memoryPrompt([Snippet(title: "T", source: "Sessions/codex/x.md", snippet: "s")])
+        for must in ["memory vault", "past conversations", "name the note", "do not invent"] { XCTAssertTrue(p.lowercased().contains(must), must) }
+    }
+    func testAnOverviewIsIncludedWhenGiven() {
+        let p = AgentStream.memoryPrompt([], overview: "- 164 conversations across 5 agents")
+        XCTAssertTrue(p.contains("164 conversations across 5 agents"))
+    }
+    func testItsOwnPastAnswersAreNeverOfferedAsFacts() {
+        let rows: [[String: String]] = [["source": "vault:Sessions/gemma/2026-11/a.md", "title": "own", "snippet": "an old answer"],
+                                        ["source": "vault:Sessions/codex/2026-11/b.md", "title": "real", "snippet": "a fact"]]
+        let data = try! JSONSerialization.data(withJSONObject: ["sources": rows])
+        XCTAssertEqual(AgentStream.parseSnippets(data).map(\.title), ["real"])
+    }
+    func testTimeAndOverviewQuestionsGetTheOverview() {
+        for q in ["what did I work on today?", "what happened yesterday", "what have I been doing lately", "anything from this week?",
+                  "what was my last conversation", "what's in my vault?", "what do you know about me", "how does the memory work", "what can you do with my notes"] {
+            XCTAssertTrue(AgentStream.wantsOverview(q), q)
+        }
+    }
+    func testSpecificQuestionsDoNot() {
+        for q in ["why does the retry loop need an idempotency key?", "what did we decide about the model dial", "explain monads"] {
+            XCTAssertFalse(AgentStream.wantsOverview(q), q)
+        }
+    }
+}
+
+final class SearchQueryTests: XCTestCase {
+    func testFillerWordsAreStrippedLeavingTheKeywords() {
+        XCTAssertEqual(AgentStream.keywordQuery("what did we decide about the notch model dial?"), "decide notch model dial")
+    }
+    func testIdentifiersAndHandlesSurvive() {
+        XCTAssertEqual(AgentStream.keywordQuery("why does retry_loop break with @claude+ in v0.1.0?"), "retry_loop break @claude+ v0.1.0")
+    }
+    func testAQuestionThatIsAllFillerFallsBackToTheOriginal() {
+        XCTAssertEqual(AgentStream.keywordQuery("what is it?"), "what is it?")
+    }
+    func testASingleLeftoverWordIsNotEnoughToSearchOn() {
+        XCTAssertEqual(AgentStream.keywordQuery("tell me about monads"), "tell me about monads")   // one keyword would match far too widely
+    }
+    private func s(_ title: String, _ src: String, _ text: String = "t") -> Snippet { Snippet(title: title, source: src, snippet: text) }
+    func testMergeKeepsTheFirstListsOrderAndDropsDuplicates() {
+        let a = [s("A", "Sessions/x/a.md", "one"), s("B", "Sessions/x/b.md", "two")]
+        let b = [s("B", "Sessions/x/b.md", "two"), s("C", "Sessions/x/c.md", "three")]
+        XCTAssertEqual(AgentStream.mergeSnippets(a, b).map(\.title), ["A", "B", "C"])
+    }
+    func testMergeStillLimitsOneNoteToTwoSnippetsAndSixInTotal() {
+        let a = (0..<4).map { s("A", "Sessions/x/a.md", "a\($0)") }
+        let b = (0..<8).map { s("N\($0)", "Sessions/x/n\($0).md") }
+        let m = AgentStream.mergeSnippets(a, b)
+        XCTAssertEqual(m.filter { $0.source == "Sessions/x/a.md" }.count, 2); XCTAssertEqual(m.count, 6)
+    }
+    func testTheBriefingTellsTheModelToIgnoreWeakMatches() {
+        let p = AgentStream.memoryPrompt([Snippet(title: "T", source: "Sessions/x/t.md", snippet: "s")]).lowercased()
+        XCTAssertTrue(p.contains("clearly about the question")); XCTAssertTrue(p.contains("couldn't find"))
     }
 }

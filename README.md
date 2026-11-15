@@ -6,7 +6,7 @@
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="Universal app" src="https://img.shields.io/badge/Apple%20silicon%20%2B%20Intel-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
-  <img alt="263 tests" src="https://img.shields.io/badge/tests-263%20passing-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
+  <img alt="288 tests" src="https://img.shields.io/badge/tests-288%20passing-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="No API keys" src="https://img.shields.io/badge/API%20keys-none%20needed-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
 </p>
@@ -214,6 +214,8 @@ Skip it on day one and add it whenever you like:
 
 Without it everything else works, and the dial simply has two models.
 
+**How it uses your memory.** Every question to the local model carries a short briefing: what the vault is, to use a note only if it is clearly about the question, to name it, and to say so when nothing matches instead of guessing. Questions about time or about the vault itself ("what did I work on today?", "what's in my vault?") also get an overview built from the vault's own files (counts, today's sessions, the latest sessions), because similarity search can't tell what "today" means. The model's own earlier answers are never offered back to it as facts.
+
 **Keeping it fast.** A model that isn't in memory takes about a minute to load, which feels like the notch hanging. So the notch asks Ollama to keep the model for 30 minutes, loads it in the background the moment you open the notch on it, and caps every answer at 1,024 tokens so one runaway reply can't block the server. Ollama runs one request at a time by default; if several apps share the server, a long request from one will make the others wait.
 
 ---
@@ -322,16 +324,16 @@ memory/
   agentvault/               recorder, adapters, redaction, MCP server, RAG push
     remote/                 OAuth + MCP over HTTP for ChatGPT and Claude.ai
   hooks/                    Claude Code start-up digest
-  tests/                    117 tests
-NotchAppTests/             146 tests
+  tests/                    118 tests
+NotchAppTests/             170 tests
 scripts/                   make-dmg.sh, demo_vault.py
 .github/workflows/         CI and release
 docs/                      specs, plans, example settings, assets
 ```
 
 ```bash
-xcodebuild test -scheme NotchApp -destination 'platform=macOS'   # 146 Swift tests
-cd memory && python3 -m unittest discover -s tests               # 117 Python tests
+xcodebuild test -scheme NotchApp -destination 'platform=macOS'   # 170 Swift tests
+cd memory && python3 -m unittest discover -s tests               # 118 Python tests
 ```
 
 Everything here was built test-first where it could be: the stream parsers, the sandbox arguments, the folder rules, the OAuth flow, the lockout, the redaction rules, the idempotent note writer.

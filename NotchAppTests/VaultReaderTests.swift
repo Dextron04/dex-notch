@@ -136,3 +136,51 @@ final class VaultLocationTests: XCTestCase {
         XCTAssertEqual(VaultReader.defaultVault.lastPathComponent, "Vault")
     }
 }
+
+final class VaultOverviewTests: XCTestCase {
+    var vault: URL!
+    let now = ISO8601DateFormatter().date(from: "2026-11-14T15:00:00Z")!
+    var cal: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }
+    override func setUpWithError() throws {
+        vault = FileManager.default.temporaryDirectory.appendingPathComponent("ov-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: vault, withIntermediateDirectories: true)
+    }
+    override func tearDownWithError() throws { try? FileManager.default.removeItem(at: vault) }
+    func note(_ agent: String, _ id: String, _ title: String, _ project: String, _ updated: String) throws {
+        let dir = vault.appendingPathComponent("Sessions/\(agent)/2026-11"); try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try "---\nagent: \"\(agent)\"\nproject: \"\(project)\"\ntitle: \"\(title)\"\nstarted: \"\(updated)\"\nupdated: \"\(updated)\"\nturns: 3\n---\n".write(to: dir.appendingPathComponent("\(id).md"), atomically: true, encoding: .utf8)
+    }
+
+    func testCountsAndAgents() throws {
+        try note("codex", "a", "One", "p", "2026-11-14T10:00:00Z"); try note("codex", "b", "Two", "p", "2026-11-13T10:00:00Z"); try note("gemini", "c", "Three", "q", "2026-11-12T10:00:00Z")
+        let t = VaultReader.overview(vault: vault, now: now, calendar: cal)
+        XCTAssertTrue(t.contains("3 conversations across 2 agents")); XCTAssertTrue(t.contains("codex 2")); XCTAssertTrue(t.contains("gemini 1"))
+    }
+    func testTodayListsOnlyTodaysSessionsWithAgentProjectAndTitle() throws {
+        try note("claude-code", "a", "Fix the retry loop", "atlas", "2026-11-14T10:00:00Z"); try note("codex", "b", "Yesterday thing", "atlas", "2026-11-13T10:00:00Z")
+        let t = VaultReader.overview(vault: vault, now: now, calendar: cal)
+        let today = t.components(separatedBy: "\n").first { $0.hasPrefix("- Today") } ?? ""
+        XCTAssertTrue(today.contains("Fix the retry loop")); XCTAssertTrue(today.contains("claude-code")); XCTAssertTrue(today.contains("atlas"))
+        XCTAssertFalse(today.contains("Yesterday thing"))
+    }
+    func testANoActivityDayIsStatedPlainly() throws {
+        try note("codex", "b", "Old", "p", "2026-11-10T10:00:00Z")
+        XCTAssertTrue(VaultReader.overview(vault: vault, now: now, calendar: cal).contains("Today: no conversations"))
+    }
+    func testMostRecentComesNewestFirstAndIsCapped() throws {
+        for i in 0..<12 { try note("codex", "n\(i)", "Session \(i)", "p", String(format: "2026-11-%02dT10:00:00Z", 1 + i)) }
+        let line = VaultReader.overview(vault: vault, now: now, calendar: cal).components(separatedBy: "\n").first { $0.hasPrefix("- Most recent") } ?? ""
+        XCTAssertTrue(line.contains("Session 11")); XCTAssertFalse(line.contains("Session 0;")); XCTAssertLessThanOrEqual(line.components(separatedBy: ";").count, 8)
+        XCTAssertLessThan(line.range(of: "Session 11")!.lowerBound, line.range(of: "Session 10")!.lowerBound)
+    }
+    func testItsOwnChatsAreNotCountedAsWork() throws {
+        try note("gemma", "g", "My question to the model", "notch", "2026-11-14T10:00:00Z"); try note("codex", "a", "Real work", "p", "2026-11-14T09:00:00Z")
+        let t = VaultReader.overview(vault: vault, now: now, calendar: cal)
+        XCTAssertFalse(t.contains("My question to the model")); XCTAssertTrue(t.contains("Real work"))
+    }
+    func testEmptyVaultSaysSo() { XCTAssertTrue(VaultReader.overview(vault: vault, now: now, calendar: cal).lowercased().contains("empty")) }
+    func testOverviewStaysShortEvenForAHugeVault() throws {
+        for i in 0..<200 { try note("codex", "h\(i)", String(repeating: "long title ", count: 12) + "\(i)", "proj", "2026-11-14T10:00:00Z") }
+        XCTAssertLessThan(VaultReader.overview(vault: vault, now: now, calendar: cal).count, 2200)
+    }
+}
