@@ -6,7 +6,7 @@
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="Universal app" src="https://img.shields.io/badge/Apple%20silicon%20%2B%20Intel-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
-  <img alt="288 tests" src="https://img.shields.io/badge/tests-288%20passing-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
+  <img alt="295 tests" src="https://img.shields.io/badge/tests-295%20passing-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="No API keys" src="https://img.shields.io/badge/API%20keys-none%20needed-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
 </p>
@@ -209,7 +209,7 @@ The setup window writes `~/Library/Application Support/NotchApp/settings.json`. 
 Skip it on day one and add it whenever you like:
 
 1. Run [Ollama](https://ollama.com) somewhere you control and put it behind HTTPS with a bearer token (Caddy and a Cloudflare tunnel work well).
-2. Menu bar → **Settings…** → open *A model on your own server*, fill in the host, the model name and the token, and **Save and start**. The token goes into your Keychain, never into `settings.json`.
+2. Menu bar → **Settings…** → open *A model on your own server*, fill in the host, the model name and the token, and **Save and start**. The token goes into your Keychain (through Apple's `security` tool, so updates never trigger a password prompt), never into `settings.json`.
 3. A third logo appears on the dial.
 
 Without it everything else works, and the dial simply has two models.
@@ -260,7 +260,7 @@ args = ["-m", "agentvault.mcp_server", "--vault", "/Users/you/Vault"]
 env = { PYTHONPATH = "/path/to/dex-notch/memory" }
 ```
 
-If you added a local model, the recorder also indexes your vault on that server for semantic search. It reads the same `settings.json`. The first sync asks once for access to the token in your Keychain; choose **Always Allow**.
+If you added a local model, the recorder also indexes your vault on that server for semantic search. It reads the same `settings.json` and the same Keychain token, through Apple's `security` tool, so macOS never asks for your password again after an update.
 
 ### For ChatGPT and Claude.ai
 
@@ -325,14 +325,14 @@ memory/
     remote/                 OAuth + MCP over HTTP for ChatGPT and Claude.ai
   hooks/                    Claude Code start-up digest
   tests/                    118 tests
-NotchAppTests/             170 tests
+NotchAppTests/             177 tests
 scripts/                   make-dmg.sh, demo_vault.py
 .github/workflows/         CI and release
 docs/                      specs, plans, example settings, assets
 ```
 
 ```bash
-xcodebuild test -scheme NotchApp -destination 'platform=macOS'   # 170 Swift tests
+xcodebuild test -scheme NotchApp -destination 'platform=macOS'   # 177 Swift tests
 cd memory && python3 -m unittest discover -s tests               # 118 Python tests
 ```
 

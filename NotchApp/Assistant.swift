@@ -171,6 +171,7 @@ final class Assistant {
     func toggleRecall() { if isOpen && mode == .recall { close() } else { open(.recall) } }
 
     func open(_ m: Mode = .prompt) {
+        NSLog("NotchApp: open %@ (already open: %d)", m == .prompt ? "ask" : "recall", isOpen ? 1 : 0)
         if isOpen && mode == m { return }
         mode = m
         if m == .recall { searching = false; recallQuery = ""; page = .chats; refreshRecall(); recallIndex = 0; summary = ""; cursor = max(grid.days.count - 1, 0); loadDay() }
@@ -183,6 +184,7 @@ final class Assistant {
     }
 
     func close() {
+        NSLog("NotchApp: close (was open: %d)", isOpen ? 1 : 0)
         guard isOpen else { return }
         summaryTask?.cancel(); summarizing = false; summary = "" // recall-only state
         // The conversation is NOT cleared and a running answer is NOT cancelled: clicking away must never lose work.
@@ -251,7 +253,7 @@ final class Assistant {
 
     /// POSTs a chat to the gateway and calls `onToken` for every streamed piece of the reply.
     private func streamChat(_ messages: [[String: String]], onToken: (String) -> Void) async throws {
-        guard let g = gemma else { throw Failure(gemmaProblem ?? settingsProblem ?? "Gemma isn't set up. Choose “Set up Gemma…” in the menu bar.") }
+        guard let g = gemma else { throw Failure(gemmaProblem ?? settingsProblem ?? "Gemma isn't set up. Choose “Settings…” in the menu bar.") }
         let tok = try loadToken()
         var req = URLRequest(url: URL(string: g.base + "/api/chat")!)
         req.httpMethod = "POST"
@@ -400,18 +402,10 @@ final class Assistant {
     /// Reads the bearer token from the login keychain via `security` (the tool that stored it, so no prompt).
     private func loadToken() throws -> String {
         if let token { return token }
-        if let g = gemma, let t = KeychainStore.get(service: g.keychainService, account: g.keychainAccount) { token = t; return t }
-        guard let g = gemma else { link = .offline; throw Failure(gemmaProblem ?? settingsProblem ?? "Gemma isn't set up. Choose “Set up Gemma…” in the menu bar.") }
-        let p = Process(), out = Pipe()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-        p.arguments = ["find-generic-password", "-s", g.keychainService, "-a", g.keychainAccount, "-w"]
-        p.standardOutput = out; p.standardError = FileHandle.nullDevice
-        try? p.run(); p.waitUntilExit()
-        let t = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard p.terminationStatus == 0, !t.isEmpty else {
+        guard let g = gemma else { link = .offline; throw Failure(gemmaProblem ?? settingsProblem ?? "Gemma isn't set up. Choose “Settings…” in the menu bar.") }
+        guard let t = KeychainStore.get(service: g.keychainService, account: g.keychainAccount) else {   // via `security`: never prompts
             link = .offline
-            throw Failure("No token in the Keychain (service \(g.keychainService), account \(g.keychainAccount)).")
+            throw Failure("No token in the Keychain (service \(g.keychainService), account \(g.keychainAccount)). Add it in Settings…")
         }
         token = t
         return t

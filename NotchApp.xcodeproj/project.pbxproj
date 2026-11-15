@@ -15,6 +15,7 @@
 		23B64ECBB548D9A23A57FD34 /* AgentRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1487592A6A941D9CB95947 /* AgentRunner.swift */; };
 		2F9D4C587D08A0A859566F25 /* SettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA22C6E41EAD33D9E8DD129E /* SettingsTests.swift */; };
 		33A991DD0C8D532FDD7C271B /* VaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1699F9A9CD5771ED2F953B05 /* VaultReader.swift */; };
+		359D34323BEAC44A4AC0AF5C /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */; };
 		3DAB1EE2139C1FD0BE520C84 /* JournalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 930E261BCB82A59819B0A2A3 /* JournalTests.swift */; };
 		4589E5F5759E858CC57E6466 /* Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582019F4D21E660A42477FFC /* Journal.swift */; };
 		50C799904FBE799B42C449D1 /* SVGPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99408511A3D90560197E556F /* SVGPath.swift */; };
@@ -35,6 +36,7 @@
 		BFF5DE6C28BCA61791F88A08 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */; };
 		C7D2A3408E46CB0BBFCAD224 /* AnswerBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE562AE9C74255701B08F531 /* AnswerBody.swift */; };
 		CB95895D7A39CCCEEF6EAD02 /* Hotkey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01C444F1096C79018A64B462 /* Hotkey.swift */; };
+		D6FDE1727C6435EFD74B6B69 /* KeychainStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3FDC75598EA2E996BF9FAE8 /* KeychainStoreTests.swift */; };
 		E07EEF3C06EADD40BE52F384 /* NotchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */; };
 		E3ADAE4DD1240F04D154E5CD /* VaultReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */; };
 		ED50E03DCA4D07EBAC51DB90 /* ModelMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794A0159731A8951203F5BD8 /* ModelMark.swift */; };
@@ -67,6 +69,7 @@
 		BA22C6E41EAD33D9E8DD129E /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
 		CE562AE9C74255701B08F531 /* AnswerBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerBody.swift; sourceTree = "<group>"; };
 		CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchApp.swift; sourceTree = "<group>"; };
+		E3FDC75598EA2E996BF9FAE8 /* KeychainStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStoreTests.swift; sourceTree = "<group>"; };
 		F5DE5AEC6077BF0580C62802 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -112,6 +115,7 @@
 				93222A27B250E3C8A8AE083F /* AgentStreamTests.swift */,
 				3B7D87E48BF594612257808A /* ConversationStoreTests.swift */,
 				930E261BCB82A59819B0A2A3 /* JournalTests.swift */,
+				E3FDC75598EA2E996BF9FAE8 /* KeychainStoreTests.swift */,
 				BA22C6E41EAD33D9E8DD129E /* SettingsTests.swift */,
 				A408D4D4233E5DC1C8E2622A /* SVGPathTests.swift */,
 				11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */,
@@ -213,6 +217,8 @@
 				797AB89EE2D18992578450C4 /* ConversationStoreTests.swift in Sources */,
 				4589E5F5759E858CC57E6466 /* Journal.swift in Sources */,
 				3DAB1EE2139C1FD0BE520C84 /* JournalTests.swift in Sources */,
+				359D34323BEAC44A4AC0AF5C /* KeychainStore.swift in Sources */,
+				D6FDE1727C6435EFD74B6B69 /* KeychainStoreTests.swift in Sources */,
 				07DDFEAAC32C48FC7609BA86 /* OfficialMarks.swift in Sources */,
 				50C799904FBE799B42C449D1 /* SVGPath.swift in Sources */,
 				AB5858CF9C6BCC0882589DB0 /* SVGPathTests.swift in Sources */,

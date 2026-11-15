@@ -15,12 +15,14 @@ final class Hotkey {
                 var hk = EventHotKeyID()
                 GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
                                   nil, MemoryLayout<EventHotKeyID>.size, nil, &hk)
+                NSLog("NotchApp: hotkey %u pressed", hk.id)
                 MainActor.assumeIsolated { Hotkey.actions[hk.id]?() }
                 return noErr
             }, 1, &spec, nil, nil)
         }
         let status = RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), EventHotKeyID(signature: 0x4E544348, id: id),
                                          GetApplicationEventTarget(), 0, &ref)
+        NSLog("NotchApp: hotkey id %u registered (status %d)", id, status)
         if status != noErr { NSLog("NotchApp: hotkey id %u failed to register (OSStatus %d) — another app may own that combination", id, status) }
     }
 }

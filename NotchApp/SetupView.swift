@@ -68,7 +68,7 @@ final class SetupModel {
         do { try Settings.update(at: url, defaultBackend: start, workspaceDefault: workspace, folders: folders, gemma: gemma, removeGemma: !wantsLocal) }
         catch { message = "Couldn't save settings.json: \(error.localizedDescription)"; return false }
         if let g = gemma, !t.isEmpty, !KeychainStore.set(token: t, service: g.keychainService, account: g.keychainAccount) {
-            message = "Saved, but the token couldn't be stored in the Keychain."; return false
+            message = "Saved, but the token couldn't be stored. Tokens must be plain letters, digits and symbols, with no line breaks."; return false
         }
         assistant.connect()      // re-reads settings, looks for the CLIs again, checks the local model
         return true

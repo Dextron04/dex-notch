@@ -21,7 +21,7 @@ targets:
   NotchAppTests:
     type: bundle.unit-test
     platform: macOS
-    sources: [NotchAppTests, NotchApp/VaultReader.swift, NotchApp/AgentStream.swift, NotchApp/ConversationStore.swift, NotchApp/Journal.swift, NotchApp/Settings.swift, NotchApp/SVGPath.swift, NotchApp/OfficialMarks.swift] # these have no UI deps, so tests compile it directly (no app host needed)
+    sources: [NotchAppTests, NotchApp/VaultReader.swift, NotchApp/AgentStream.swift, NotchApp/ConversationStore.swift, NotchApp/Journal.swift, NotchApp/Settings.swift, NotchApp/SVGPath.swift, NotchApp/OfficialMarks.swift, NotchApp/KeychainStore.swift] # these have no UI deps, so tests compile it directly (no app host needed)
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
