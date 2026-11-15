@@ -21,6 +21,7 @@ final class AddonCenter {
     // what Settings shows
     private(set) var status = "Not connected."
     private(set) var checking = false
+    private(set) var phoneStatus = ""
     var accounts: [String] { state.accounts }
     /// Bump when a new release asks for more permission: every account then has to sign in again.
     static let consentVersion = 2
@@ -67,7 +68,7 @@ final class AddonCenter {
         // lid closed onto an external display, or a display plugged in: the notch moves, and the queue follows it
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.welcomeBack() } }
         // alerts wait for you: this is what shows them the moment you are back at the keyboard
-        Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.presentIfPossible() } }
+        Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.pollPhone(); self?.presentIfPossible() } }
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.tick(); self?.presentIfPossible() }
         if ProcessInfo.processInfo.environment["NOTCH_ALERT_DEMO"] != nil { forceDemo = true; demo() }
@@ -109,6 +110,30 @@ final class AddonCenter {
         state.pending.removeAll { $0.account == email }
         state.save(to: stateURL); reload()
         status = "Removed \(email)."
+    }
+
+    // MARK: iPhone notifications
+
+    /// Settings → iPhone notifications. Turning it on starts from now.
+    func setPhoneAlerts(_ on: Bool) {
+        do { try AddonSettings.savePhoneAlerts(at: settingsURL, on) } catch { phoneStatus = "Couldn't save settings.json: \(error.localizedDescription)"; return }
+        state.phoneCursor = nil; phoneStatus = ""; reload(); pollPhone()
+    }
+
+    /// A cheap local query every few seconds; no model involved. New rows from apps this Mac doesn't have become cards.
+    private func pollPhone() {
+        guard settings.phoneAlerts else { return }
+        do {
+            guard let cursor = state.phoneCursor else { state.phoneCursor = try PhoneNotes.latestID(); state.save(to: stateURL); phoneStatus = "Watching for iPhone notifications."; return }
+            let notes = try PhoneNotes.rows(after: cursor)
+            guard let last = notes.last else { return }
+            let have = Set(state.pending.map(\.id))
+            let fresh = notes.filter { PhoneNotes.fromPhone($0.app) { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil } }
+                .map(PhoneNotes.alert).filter { !have.contains($0.id) && !state.muted.contains($0.address) }
+            state.pending += fresh.suffix(10)                                   // a burst after sleep is a few cards, not a flood
+            state.phoneCursor = last.rec; state.save(to: stateURL)
+            if !fresh.isEmpty { presentIfPossible() }
+        } catch { phoneStatus = error.localizedDescription }
     }
 
     // MARK: schedule
@@ -265,7 +290,7 @@ final class AddonCenter {
 
     /// "Reply" on the card (⌥R). The card grows into the reply panel; if this account can only read, it first asks for the permission.
     func startReply() {
-        guard let alert = current else { return }
+        guard let alert = current, alert.addon == "gmail" else { return }
         let acct = alert.account ?? state.accounts.first ?? ""
         if session?.alert.id != alert.id { session = ReplySession(alert: alert, stage: canReply(acct) ? .loading : .needsPermission, backend: firstAgent) }
         countdown?.cancel(); cardKeys = []
@@ -508,7 +533,7 @@ final class AddonCenter {
     func open() {
         guard let c = current else { return }
         if c.kind == "reconnect" { retire(c.id); reconnectAll(); return }                 // this card's "Open" is "Reconnect"
-        guard let u = URL(string: c.url) else { return }
+        guard !c.url.isEmpty, let u = URL(string: c.url) else { retire(c.id); return }       // an iPhone card has nowhere to go: Done just closes it
         NSWorkspace.shared.open(u); retire(c.id)
     }
     func dismiss() { if let c = current { retire(c.id) } }
@@ -540,6 +565,7 @@ final class AddonCenter {
     private func demo() {
         let now = Date()
         state.pending = [
+            PhoneNotes.alert(.init(rec: 0, app: "com.burbn.instagram", title: "Ana sent you a message", body: "are we still on for dinner tonight? i can book for 8", date: now.addingTimeInterval(-60))),
             AddonAlert(id: "demo1", addon: "gmail", sender: "Priya Nair", address: "priya@example.com", headline: "Interview moved to Thursday 3:00 PM",
                        reason: "A real person is waiting on your reply, and the slot is in two days.", url: "https://mail.google.com", score: 9, created: now),
             AddonAlert(id: "demo2", addon: "gmail", sender: "Chase", address: "alerts@example.com", headline: "Your card payment failed",

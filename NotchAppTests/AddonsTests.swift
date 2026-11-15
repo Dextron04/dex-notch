@@ -1,4 +1,5 @@
 import XCTest
+import SQLite3
 
 final class AddonsTests: XCTestCase {
     private func mail(_ id: String, from: String = "Priya Nair <priya@acme.com>", labels: [String] = ["INBOX", "UNREAD"], bulk: Bool = false, age: TimeInterval = 0) -> MailItem {
@@ -374,4 +375,33 @@ final class AddonsTests: XCTestCase {
     }
 }
 
-private actor Counter { var n = 0; func bump() { n += 1 } }
+private actor Counter { var n = 0; func bump() { n += 1 } 
+    // MARK: iPhone notifications
+
+    private func blob(_ titl: String, _ body: String) -> Data {
+        try! PropertyListSerialization.data(fromPropertyList: ["app": "com.burbn.instagram", "req": ["titl": titl, "subt": "", "body": body]], format: .binary, options: 0)
+    }
+    func testPhoneDecodeAndFilter() {
+        XCTAssertEqual(PhoneNotes.decode(blob("Ana", "hey")).map { [$0.title, $0.body] }, ["Ana", "hey"])
+        XCTAssertNil(PhoneNotes.decode(blob("", "")))
+        XCTAssertNil(PhoneNotes.decode(Data("junk".utf8)))
+        XCTAssertTrue(PhoneNotes.fromPhone("com.burbn.instagram") { _ in false })
+        XCTAssertFalse(PhoneNotes.fromPhone("com.tinyspeck.slackmacgap") { _ in true })      // installed here: the Mac's own
+        XCTAssertFalse(PhoneNotes.fromPhone("com.apple.mobilephone") { _ in false })
+    }
+    func testPhoneReadsRecordsAfterCursor() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("usernoted-\(UUID().uuidString).db"); defer { try? FileManager.default.removeItem(at: url) }
+        var db: OpaquePointer?; XCTAssertEqual(sqlite3_open(url.path, &db), SQLITE_OK)
+        XCTAssertEqual(sqlite3_exec(db, "CREATE TABLE app (app_id INTEGER PRIMARY KEY, identifier TEXT); CREATE TABLE record (rec_id INTEGER PRIMARY KEY, app_id INTEGER, data BLOB, request_date REAL, delivered_date REAL); INSERT INTO app VALUES (1,'com.burbn.instagram'); INSERT INTO record (rec_id, app_id, request_date) VALUES (1,1,5);", nil, nil, nil), SQLITE_OK)
+        var st: OpaquePointer?; sqlite3_prepare_v2(db, "INSERT INTO record VALUES (2,1,?,100,NULL)", -1, &st, nil)
+        let b = blob("Ana", "hey"); _ = b.withUnsafeBytes { sqlite3_bind_blob(st, 1, $0.baseAddress, Int32(b.count), nil) }   // nil destructor: the bytes outlive the step
+        sqlite3_step(st); sqlite3_finalize(st); sqlite3_close(db)
+        XCTAssertEqual(try PhoneNotes.latestID(at: url), 2)
+        let n = try PhoneNotes.rows(after: 0, at: url)
+        XCTAssertEqual(n.map(\.rec), [2])                                  // record 1 has no blob: skipped
+        XCTAssertEqual(n.first?.date, Date(timeIntervalSinceReferenceDate: 100))
+        XCTAssertEqual(PhoneNotes.alert(n[0]).sender, "Instagram")
+        XCTAssertTrue(try PhoneNotes.rows(after: 2, at: url).isEmpty)
+        XCTAssertThrowsError(try PhoneNotes.rows(after: 0, at: url.appendingPathExtension("nope"))) { XCTAssertEqual($0 as? PhoneNotes.Problem, .denied) }
+    }
+}

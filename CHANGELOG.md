@@ -6,6 +6,26 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.4.0: Your iPhone's notifications, at the notch
+
+*Unreleased*
+
+<p align="center">
+  <img src="docs/assets/shot-phone.png" alt="A card at the notch: iPhone, Instagram, 'Ana sent you a message', with Done and Not important" width="62%">
+</p>
+
+<p align="center">
+  <img src="docs/assets/phone-alert.gif" alt="The notch opens and shows a notification from your iPhone, then folds away" width="62%">
+</p>
+
+[Watch it as a video](docs/assets/phone-alert.mp4)
+
+- **Notifications from your iPhone show at the notch.** They reach your Mac through iPhone Mirroring; Dex Notch picks them up and shows them like a mail alert: which app, who, and what they said. **Done** closes the card, **Not important** hides that app for good.
+- **Off until you turn it on.** Settings → iPhone has the switch. It starts from the moment you turn it on and never shows old notifications.
+- **It needs one Mac permission, and says why.** Your Mac keeps notifications in a private file that apps can't open unless you allow it. **Full Disk Access** lets Dex Notch open that one file. It only looks for new notifications, and nothing leaves your Mac. The settings page shows a green check as soon as you allow it.
+- **A guided first launch.** A new install now walks you through everything in six short steps: the AI to ask, folders it may edit, Gmail, iPhone notifications, and a final summary. Every step explains in plain English why it needs what it asks for, and every step can be skipped. If you already had Dex Notch, you skip the walk-through and find the new iPhone page in Settings.
+- **Good to know.** iPhone Mirroring must be set up, and System Settings → Notifications must allow notifications from your iPhone. Apple does not document where these are stored, so a future macOS update could break this; Settings then says so instead of failing quietly. An iPhone app that is also installed on your Mac is treated as the Mac's own and shows as usual.
+
 ## v0.3.2: Reply from the notch, and alerts that wait for you
 
 *15 November 2026*

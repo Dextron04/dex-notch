@@ -90,8 +90,10 @@ final class SetupModel {
 }
 
 enum SetupPane: String, CaseIterable, Identifiable {
-    case models = "Models", folders = "Folders", mail = "Mail", updates = "Updates"
+    case welcome = "Welcome", models = "Models", folders = "Folders", mail = "Mail", phone = "iPhone", updates = "Updates", finish = "All set"
     var id: String { rawValue }
+    static let settings: [SetupPane] = [.models, .folders, .mail, .phone, .updates]
+    static let guided: [SetupPane] = [.welcome, .models, .folders, .mail, .phone, .finish]       // the first-run walk-through, in order
 }
 
 /// One quiet window: a rail to pick the pane, one pane at a time, plain rows divided by hairlines. Same ink and ember as the notch.
@@ -99,6 +101,7 @@ struct SetupView: View {
     static let width: CGFloat = 780
     @Bindable var m: SetupModel
     var height: CGFloat = 600
+    var guided = false              // first run: Back / Continue through every step instead of Save / Cancel
     var done: () -> Void
     @Namespace private var railNS
     private var a: Assistant { m.assistant }
@@ -132,7 +135,7 @@ struct SetupView: View {
                 Text("Dex Notch").font(.system(size: 18, weight: .semibold, design: .serif)).foregroundStyle(Ink.text)
             }
             .padding(.top, 52).padding(.bottom, 36)
-            ForEach(SetupPane.allCases) { p in
+            ForEach(guided ? SetupPane.guided : SetupPane.settings) { p in
                 let on = m.pane == p
                 Button { withAnimation(.spring(duration: 0.4, bounce: 0.12)) { m.pane = p } } label: {
                     HStack(spacing: 11) {
@@ -155,10 +158,13 @@ struct SetupView: View {
 
     @ViewBuilder private var pane: some View {
         switch m.pane {
+        case .welcome: welcomePane
         case .models: modelsPane
         case .folders: foldersPane
         case .mail: mailPane
+        case .phone: phonePane
         case .updates: updatesPane
+        case .finish: finishPane
         }
     }
 
@@ -170,6 +176,18 @@ struct SetupView: View {
             Text(lede).font(.system(size: 15, design: .serif)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
         }
         .padding(.bottom, 22)
+    }
+
+    /// Plain-English reason for a permission or a choice, shown at the top of the step that asks for it.
+    private func why(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Rectangle().fill(Ink.ember.opacity(0.7)).frame(width: 2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Why this is needed").font(.system(size: 12, weight: .semibold)).tracking(0.4).foregroundStyle(Ink.ember)
+                Text(text).font(.system(size: 14, design: .serif)).foregroundStyle(Ink.text.opacity(0.85)).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.bottom, 20)
     }
 
     private func subhead(_ t: String) -> some View {
@@ -226,6 +244,7 @@ struct SetupView: View {
     private var modelsPane: some View {
         VStack(alignment: .leading, spacing: 0) {
             header("Models", "Who answers when you ask. One is enough to start. They run on your own subscriptions, so there are no keys to enter.")
+            why("Dex Notch doesn't think for itself. It passes your questions to an AI you already use, such as Claude or Codex, running on this Mac. We only check that one is installed. Nothing goes through our servers.")
             VStack(spacing: 0) {
                 cliRow(.claude); cliRow(.codex); localRow
             }
@@ -282,6 +301,7 @@ struct SetupView: View {
     private var foldersPane: some View {
         VStack(alignment: .leading, spacing: 0) {
             header("Folders", "Where a model may edit files. Edit runs are sandboxed to the folders you allow here.")
+            why("When you ask an AI to change files, it may only touch the folders you list here. The rest of your Mac stays off limits to it. If you skip this, it can only use a throwaway scratch folder.")
             row(title: "Default folder", detail: m.workspace.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? "Scratch folder only",
                 lead: { Image(systemName: "folder").font(.system(size: 17)).foregroundStyle(Ink.dim) },
                 trail: {
@@ -311,6 +331,7 @@ struct SetupView: View {
         let builtIn = AddonSettings.bundled() != nil
         return VStack(alignment: .leading, spacing: 0) {
             header("Mail", "New mail is judged as it arrives, and only the few emails that need you reach the notch. Dex Notch only reads mail until you allow replies.")
+            why("To tell you about important email, Dex Notch has to read your inbox. You sign in on Google's own page, so we never see your password. It starts read-only. Sending replies is a second permission that you can leave off.")
             if !center.needsReconnect.isEmpty {
                 row(title: "Reconnect needed", detail: "This update asks Google for one new permission, so you can reply from the notch. Alerts for these accounts are paused until you sign in again.",
                     lead: { Image(systemName: "exclamationmark.arrow.triangle.2.circlepath").font(.system(size: 16)).foregroundStyle(Ink.emberDeep) },
@@ -417,6 +438,56 @@ struct SetupView: View {
         }
     }
 
+    // MARK: welcome, iPhone, finish
+
+    private var welcomePane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header("Welcome to Dex Notch", "Dex Notch turns your Mac's notch into a quiet place for the few things that need you: an AI to ask, important email, and notifications from your iPhone.")
+            Text("Next, a few short steps. Each one says what it needs and why, and every step can be skipped. You can change anything later in Settings.")
+                .font(.system(size: 15, design: .serif)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.bottom, 14)
+            row(title: "An AI to ask", detail: "Uses Claude or Codex if they are installed here.", lead: { Image(systemName: "sparkles").font(.system(size: 16)).foregroundStyle(Ink.dim) }, trail: { EmptyView() })
+            row(title: "Folders the AI may edit", detail: "Only the ones you choose.", lead: { Image(systemName: "folder").font(.system(size: 16)).foregroundStyle(Ink.dim) }, trail: { EmptyView() })
+            row(title: "Gmail", detail: "Read-only unless you allow replies.", lead: { Image(systemName: "envelope").font(.system(size: 16)).foregroundStyle(Ink.dim) }, trail: { EmptyView() })
+            row(title: "iPhone notifications", detail: "Needs one Mac permission, Full Disk Access.", lead: { Image(systemName: "iphone").font(.system(size: 16)).foregroundStyle(Ink.dim) }, trail: { EmptyView() })
+        }
+    }
+
+    private var phonePane: some View {
+        // looked at once a second, so the row turns green the moment you tick the box in System Settings
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            let allowed = PhoneNotes.canRead()
+            VStack(alignment: .leading, spacing: 0) {
+                header("iPhone", "See your iPhone's notifications at the notch, on the Mac, without picking up your phone.")
+                why("Your iPhone sends its notifications to this Mac, and macOS keeps them in a private file that apps can't open unless you say so. Full Disk Access lets Dex Notch open that one file. It only looks for new notifications and shows them at the notch. Nothing is sent anywhere, and you can switch it off at any time.")
+                row(title: "Show iPhone notifications", detail: center.phoneStatus.isEmpty ? "Off until you switch it on." : center.phoneStatus,
+                    lead: { Image(systemName: "iphone").font(.system(size: 16)).foregroundStyle(Ink.dim) },
+                    trail: { Toggle("", isOn: Binding(get: { center.settings.phoneAlerts }, set: { center.setPhoneAlerts($0) })).labelsHidden().toggleStyle(.switch) })
+                row(title: "Full Disk Access", detail: allowed ? "Allowed." : "Not allowed yet. Open System Settings, find Dex Notch in the list (press + to add it if it isn't there) and switch it on. macOS may ask you to reopen Dex Notch.",
+                    lead: { Image(systemName: allowed ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(allowed ? Ink.ember : Ink.dim) },
+                    trail: { if !allowed { link("Open System Settings") { _ = PhoneNotes.canRead(); NSWorkspace.shared.open(PhoneNotes.privacyPane) } } })
+                subhead("Before this can work")
+                Text("Your iPhone must be set up with iPhone Mirroring on this Mac, and System Settings → Notifications must allow notifications from your iPhone. Dex Notch can't change either of those for you.")
+                    .font(.system(size: 13.5, design: .serif)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var finishPane: some View {
+        let ok = PhoneNotes.canRead() && center.settings.phoneAlerts
+        return VStack(alignment: .leading, spacing: 0) {
+            header("You're set", "Here is what Dex Notch will do. Change any of it later from the menu bar icon → Settings.")
+            row(title: "AI to ask", detail: a.cliFound.isEmpty ? "None found yet. Install Claude or Codex, then press Check again in Settings." : a.cliFound.map(\.displayName).sorted().joined(separator: ", "),
+                lead: { Image(systemName: a.cliFound.isEmpty ? "circle.dashed" : "checkmark.circle.fill").foregroundStyle(a.cliFound.isEmpty ? Ink.dim : Ink.ember) }, trail: { EmptyView() })
+            row(title: "Folders", detail: m.folders.isEmpty ? "None. Edits stay in the scratch folder." : "\(m.folders.count) allowed",
+                lead: { Image(systemName: m.folders.isEmpty ? "circle.dashed" : "checkmark.circle.fill").foregroundStyle(m.folders.isEmpty ? Ink.dim : Ink.ember) }, trail: { EmptyView() })
+            row(title: "Gmail", detail: center.accounts.isEmpty ? "Not connected." : center.accounts.joined(separator: ", "),
+                lead: { Image(systemName: center.accounts.isEmpty ? "circle.dashed" : "checkmark.circle.fill").foregroundStyle(center.accounts.isEmpty ? Ink.dim : Ink.ember) }, trail: { EmptyView() })
+            row(title: "iPhone notifications", detail: ok ? "On." : center.settings.phoneAlerts ? "Switched on, but Full Disk Access is still missing." : "Off.",
+                lead: { Image(systemName: ok ? "checkmark.circle.fill" : "circle.dashed").foregroundStyle(ok ? Ink.ember : Ink.dim) }, trail: { EmptyView() })
+            Text("Press ⌥ Space any time to ask.").font(.system(size: 15, design: .serif)).italic().foregroundStyle(Ink.dim).padding(.top, 26)
+        }
+    }
+
     // MARK: updates
 
     private var updatesPane: some View {
@@ -439,6 +510,31 @@ struct SetupView: View {
     // MARK: footer
 
     private var footer: some View {
+        guided ? AnyView(guidedFooter) : AnyView(settingsFooter)
+    }
+
+    private var guidedFooter: some View {
+        let steps = SetupPane.guided, i = steps.firstIndex(of: m.pane) ?? 0, last = i == steps.count - 1
+        return VStack(spacing: 0) {
+            Rectangle().fill(Ink.text.opacity(0.09)).frame(height: 1)
+            HStack(spacing: 18) {
+                if let msg = m.message { Text(msg).font(.system(size: 13, design: .serif)).foregroundStyle(Ink.emberDeep).lineLimit(2).fixedSize(horizontal: false, vertical: true) }
+                else { Text("Step \(i + 1) of \(steps.count)").font(.system(size: 13, design: .serif)).foregroundStyle(Ink.dim) }
+                Spacer(minLength: 12)
+                if i > 0 { Button("Back") { withAnimation(.spring(duration: 0.4, bounce: 0.12)) { m.pane = steps[i - 1] } }.buttonStyle(.plain).font(.system(size: 15, design: .serif)).foregroundStyle(Ink.dim) }
+                Button {
+                    if last { if m.save() { done() } } else { withAnimation(.spring(duration: 0.4, bounce: 0.12)) { m.pane = steps[i + 1] } }
+                } label: {
+                    Text(last ? "Start using Dex Notch" : i == 0 ? "Begin" : "Continue").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(.black).lineLimit(1).fixedSize()
+                        .padding(.horizontal, 22).padding(.vertical, 8).background(Capsule().fill(Ink.ember))
+                }.buttonStyle(.plain).keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, 48).padding(.vertical, 14)
+        }
+        .background(Color.black)
+    }
+
+    private var settingsFooter: some View {
         VStack(spacing: 0) {
             Rectangle().fill(Ink.text.opacity(0.09)).frame(height: 1)
             HStack(spacing: 18) {
@@ -465,10 +561,19 @@ final class SetupWindow {
     static let shared = SetupWindow()
     private var window: NSWindow?
 
-    func show(assistant: Assistant) {
+    static let doneKey = "setupCompleted"
+    /// First run walks through everything; anyone who already had a settings.json is an existing user and goes straight to the app.
+    static var needsWalkthrough: Bool {
+        if UserDefaults.standard.bool(forKey: doneKey) { return false }
+        if FileManager.default.fileExists(atPath: Settings.defaultURL.path) { UserDefaults.standard.set(true, forKey: doneKey); return false }
+        return true
+    }
+
+    func show(assistant: Assistant, guided: Bool = false) {
         if let w = window { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
         assistant.refreshAvailability()
         let model = SetupModel(assistant: assistant)
+        if guided { model.pane = .welcome }
         let h = min(600, (NSScreen.main?.visibleFrame.height ?? 900) - 40)
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: SetupView.width, height: h), styleMask: [.titled, .closable, .fullSizeContentView],
                          backing: .buffered, defer: false)
@@ -476,10 +581,10 @@ final class SetupWindow {
         w.titlebarAppearsTransparent = true; w.titleVisibility = .hidden
         w.isMovableByWindowBackground = true; w.isReleasedWhenClosed = false
         w.backgroundColor = .black
-        w.contentView = NSHostingView(rootView: SetupView(m: model, height: h) { [weak self] in self?.window?.close() })
+        w.contentView = NSHostingView(rootView: SetupView(m: model, height: h, guided: guided) { [weak self] in self?.window?.close() })
         w.center()
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.window = nil }
+            MainActor.assumeIsolated { self?.window = nil; if guided { UserDefaults.standard.set(true, forKey: SetupWindow.doneKey) } }       // closed early: don't ask again, Settings is in the menu
         }
         window = w
         NSApp.activate(ignoringOtherApps: true); w.makeKeyAndOrderFront(nil)

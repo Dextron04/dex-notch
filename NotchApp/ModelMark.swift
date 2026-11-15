@@ -50,6 +50,11 @@ struct AddonMark: View {
     var size: CGFloat = 16      // width; Gmail's mark is 4:3
 
     var body: some View {
+        if addon == "phone" { Image(systemName: "iphone").font(.system(size: size * 0.9)).foregroundStyle(Ink.dim).frame(width: size, height: size * 0.75).accessibilityLabel("iPhone") }
+        else { gmailMark }
+    }
+
+    private var gmailMark: some View {
         ZStack {
             ForEach(Self.gmail.indices, id: \.self) { i in
                 GmailPiece(path: Self.gmail[i].1).fill(Self.gmail[i].0)

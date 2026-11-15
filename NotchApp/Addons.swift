@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 // Add-ons watch a service on your behalf (Gmail first). The shape is always the same:
 //   fetch new items  →  cheap deterministic filter  →  one model call that judges what is worth an interruption  →  queue  →  show at the notch.
@@ -48,6 +49,7 @@ struct AddonSettings: Equatable {
     var repliesOnConnect = true                         // ask Google for permission to draft and send when an account is connected (off: accounts stay read-only until you allow replies)
     var name = ""                                       // your name, for the sign-off on a drafted reply (optional)
     var importance = ""                                 // free text: what matters to you, appended to the triage rules
+    var phoneAlerts = false                             // show iPhone notifications that reach this Mac (iPhone Mirroring). Off until you turn it on: it reads Notification Center's database
 
     /// The Google client a release build carries (injected into Info.plist by CI). Nil in a plain checkout, where `$(…)` stays unresolved or empty.
     static func bundled(_ info: [String: Any]? = Bundle.main.infoDictionary) -> GmailConfig? {
@@ -72,6 +74,7 @@ struct AddonSettings: Equatable {
         s.importance = clip((a["importance"] as? String) ?? "", 600)
         s.name = clip((a["name"] as? String) ?? "", 80)
         if let r = a["replies_on_connect"] as? Bool { s.repliesOnConnect = r }
+        if let p = a["phone_alerts"] as? Bool { s.phoneAlerts = p }
         if let g = a["gmail"] as? [String: Any],
            let id = (g["client_id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty,
            let secret = (g["client_secret"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !secret.isEmpty {
@@ -113,6 +116,14 @@ struct AddonSettings: Equatable {
         }
     }
 
+    static func savePhoneAlerts(at url: URL, _ on: Bool) throws {
+        try Settings.mutate(at: url) { root in
+            var a = root["addons"] as? [String: Any] ?? [:]
+            a["phone_alerts"] = on
+            root["addons"] = a
+        }
+    }
+
     static func saveName(at url: URL, _ name: String) throws {
         try Settings.mutate(at: url) { root in
             var a = root["addons"] as? [String: Any] ?? [:]
@@ -147,6 +158,7 @@ struct AddonState: Codable, Equatable {
     var history: [AddonAlert] = []      // the last alerts that were shown, newest first, so nothing you dismissed by accident is gone
     var modelCalls: [Date] = []         // when the model last ran (kept for an hour): the ceiling on model use
     var accounts: [String] = []         // connected Gmail addresses; each one's sign-in token is in the Keychain under its address
+    var phoneCursor: Int64?             // newest Notification Center record already looked at; nil = start from now
     var lastTry: Date?
     var lastOK = false
 
@@ -327,4 +339,74 @@ enum Triage {
 private extension String {
     /// nil for empty or an unresolved "$(VAR)" placeholder
     var nonEmptyResolved: String? { isEmpty || hasPrefix("$(") ? nil : self }
+}
+
+/// iPhone notifications that reach this Mac through iPhone Mirroring land in Notification Center's database, like any other banner.
+/// Reading that file needs Full Disk Access, and Apple documents none of it: if a macOS update changes the layout, this fails to a message, never a crash.
+enum PhoneNotes {
+    struct Note: Equatable { var rec: Int64; var app: String; var title: String; var body: String; var date: Date }
+    enum Problem: LocalizedError, Equatable {
+        case denied, unreadable(String)
+        var errorDescription: String? {
+            switch self {
+            case .denied: return "Allow Dex Notch in System Settings → Privacy & Security → Full Disk Access, then switch this on again."
+            case .unreadable(let m): return "Couldn't read Notification Center (\(m)). macOS may have changed its layout."
+            }
+        }
+    }
+
+    static let dbURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Group Containers/group.com.apple.usernoted/db2/db")
+    static let privacyPane = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
+
+    /// A record's `data` blob is a binary plist: { app, req: { titl, subt, body, … } }. nil when there is nothing to say.
+    static func decode(_ blob: Data) -> (title: String, body: String)? {
+        guard let p = try? PropertyListSerialization.propertyList(from: blob, options: [], format: nil) as? [String: Any],
+              let req = p["req"] as? [String: Any] else { return nil }
+        let title = ["titl", "subt"].compactMap { req[$0] as? String }.filter { !$0.isEmpty }.joined(separator: " · ")
+        let body = (req["body"] as? String) ?? ""
+        return title.isEmpty && body.isEmpty ? nil : (title, body)
+    }
+
+    /// Mirrored iPhone apps carry their iPhone bundle id; a banner from an app that isn't installed on this Mac can only have come from the phone.
+    /// ponytail: heuristic. An iPhone app that also exists on the Mac is treated as the Mac's own (it notifies there anyway).
+    static func fromPhone(_ bundle: String, installed: (String) -> Bool) -> Bool { !bundle.isEmpty && !bundle.hasPrefix("com.apple.") && !installed(bundle) }
+
+    static func alert(_ n: Note) -> AddonAlert {
+        let app = n.app.split(separator: ".").last.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? "iPhone"
+        let title = Triage.clean(n.title, max: 90), body = Triage.clean(n.body, max: 200)
+        return AddonAlert(id: "phone|\(n.rec)", addon: "phone", sender: app, address: "phone:" + n.app,
+                          headline: title.isEmpty ? body : title, reason: title.isEmpty ? "" : body, url: "", score: 5, created: n.date, account: nil, kind: nil)
+    }
+
+    /// Records newer than `cursor`, oldest first.
+    static func rows(after cursor: Int64, at url: URL = dbURL) throws -> [Note] {
+        return try query("SELECT r.rec_id, a.identifier, r.data, COALESCE(r.delivered_date, r.request_date) FROM record r JOIN app a ON a.app_id = r.app_id WHERE r.rec_id > ? ORDER BY r.rec_id", cursor, at: url) { st in
+            guard let id = sqlite3_column_text(st, 1), let blob = sqlite3_column_blob(st, 2), let d = decode(Data(bytes: blob, count: Int(sqlite3_column_bytes(st, 2)))) else { return nil }
+            return Note(rec: sqlite3_column_int64(st, 0), app: String(cString: id), title: d.title, body: d.body, date: Date(timeIntervalSinceReferenceDate: sqlite3_column_double(st, 3)))
+        }
+    }
+
+    /// Can Notification Center's database be opened right now? (False until Full Disk Access is given.)
+    static func canRead(at url: URL = dbURL) -> Bool { (try? latestID(at: url)) != nil }
+
+    /// Newest record id, so turning this on shows what arrives from now, not the whole history.
+    static func latestID(at url: URL = dbURL) throws -> Int64 {
+        var id: Int64 = 0
+        _ = try query("SELECT COALESCE(MAX(rec_id), 0) FROM record", 0, at: url) { st in id = sqlite3_column_int64(st, 0); return nil }
+        return id
+    }
+
+    private static func query(_ sql: String, _ arg: Int64, at url: URL, _ row: (OpaquePointer) -> Note?) throws -> [Note] {
+        guard FileManager.default.isReadableFile(atPath: url.path) else { throw Problem.denied }
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else { sqlite3_close(db); throw Problem.denied }
+        defer { sqlite3_close(db) }
+        var st: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &st, nil) == SQLITE_OK, let st else { throw Problem.unreadable(String(cString: sqlite3_errmsg(db))) }
+        defer { sqlite3_finalize(st) }
+        sqlite3_bind_int64(st, 1, arg)          // out of range (ignored) for the query with no placeholder
+        var out: [Note] = []
+        while sqlite3_step(st) == SQLITE_ROW { if let n = row(st) { out.append(n) } }
+        return out
+    }
 }

@@ -48,8 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         assistant.connect()
         AddonCenter.shared.start(assistant: assistant)
         AppUpdater.shared.start()
-        if !FileManager.default.fileExists(atPath: Settings.defaultURL.path) {      // first launch: ask, don't make people hunt for a config file
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [assistant] in SetupWindow.shared.show(assistant: assistant) }
+        if SetupWindow.needsWalkthrough {      // first launch: walk through every permission and choice, don't make people hunt for a config file
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [assistant] in SetupWindow.shared.show(assistant: assistant, guided: true) }
         }
         // rebuild on display changes (plug/unplug, resolution)
         NotificationCenter.default.addObserver(

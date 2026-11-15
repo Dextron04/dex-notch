@@ -34,7 +34,7 @@ struct AlertView: View {
                 .clipShape(shape)
                 .allowsHitTesting(open)
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel("\(a.sender) on Gmail: \(a.headline). \(a.reason)")
+                .accessibilityLabel("\(a.sender) on \(a.addon == "phone" ? "iPhone" : "Gmail"): \(a.headline). \(a.reason)")
         }
     }
 
@@ -45,7 +45,7 @@ struct AlertView: View {
             HStack(spacing: 0) {
                 HStack(spacing: 7) {
                     AddonMark(addon: a.addon, size: 17)
-                    Text(c.accounts.count > 1 && a.kind == nil ? (a.account.map { String($0.split(separator: "@").first ?? "") } ?? "Gmail") : "Gmail")   // with several accounts, say which
+                    Text(a.addon == "phone" ? "iPhone" : c.accounts.count > 1 && a.kind == nil ? (a.account.map { String($0.split(separator: "@").first ?? "") } ?? "Gmail") : "Gmail")   // with several accounts, say which
                         .font(.system(size: 11, weight: .medium)).tracking(0.3).foregroundStyle(Ink.dim).lineLimit(1)
                     if c.queued > 0 { Text("+\(c.queued)").font(.system(size: 11, weight: .medium)).foregroundStyle(Ink.ember).help("\(c.queued) more waiting") }
                 }
@@ -78,7 +78,7 @@ struct AlertView: View {
     }
 
     private var actions: some View {
-        let reconnect = c.current?.kind == "reconnect"
+        let reconnect = c.current?.kind == "reconnect", phone = c.current?.addon == "phone"
         return HStack(spacing: 22) {
             if reconnect {
                 Button { c.open() } label: {
@@ -90,16 +90,16 @@ struct AlertView: View {
                 Spacer(minLength: 8)
             } else {
             Button { c.open() } label: {
-                HStack(spacing: 6) { Text("Open").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
+                HStack(spacing: 6) { Text(phone ? "Done" : "Open").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
             }
-            Button { c.startReply() } label: {
+            if !phone { Button { c.startReply() } label: {
                 HStack(spacing: 6) { Text("Reply").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(Ink.text.opacity(0.9)); key("⌥R") }.contentShape(Rectangle())
             }
-            .help("Draft a reply with an AI agent, or ask about this email")
+            .help("Draft a reply with an AI agent, or ask about this email") }
             Button { c.notImportant() } label: {
                 HStack(spacing: 6) { Text("Not important").font(.system(size: 14, design: .serif)).foregroundStyle(Ink.dim); key("⌥⌫") }.contentShape(Rectangle())
             }
-            .help("Never show mail from this sender  ⌥⌫")
+            .help(phone ? "Never show notifications from this app  ⌥⌫" : "Never show mail from this sender  ⌥⌫")
             Spacer(minLength: 8)
             key("⌥esc")
             }
