@@ -12,20 +12,24 @@ struct AlertView: View {
     @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var loaded = false
 
-    static let width: CGFloat = 448
+    static let width: CGFloat = 480
+    static let replyWidth: CGFloat = 600
+    static func replyHeight(_ notch: CGSize) -> CGFloat { notch.height + 6 + 38 + ReplyPanel.bodyH + 22 + 44 + 54 + 8 }
     private static let bodyH: CGFloat = 64, actionsH: CGFloat = 40
     static func height(_ notch: CGSize) -> CGFloat { notch.height + 6 + bodyH + actionsH + 8 }
 
     var body: some View {
         if let a = c.current {
-            let open = c.presenting
+            let open = c.presenting, reply = c.replyOpen
+            let w = reply ? Self.replyWidth : Self.width, h = reply ? Self.replyHeight(notch) : Self.height(notch)
+            let mode = open ? (reply ? 2 : 1) : 0            // the animation is picked by where it is going: opening, growing into the reply, or folding away
             let shape = UnevenRoundedRectangle(bottomLeadingRadius: open ? 26 : 10, bottomTrailingRadius: open ? 26 : 10)
             shape.fill(.black)
-                .frame(width: open ? Self.width : notch.width)
-                .animation(reduce ? .easeOut(duration: 0.2) : open ? .spring(duration: 0.55, bounce: 0.28) : .smooth(duration: 0.4).delay(0.08), value: open)      // opens wide first; closes narrow last
-                .frame(height: open ? Self.height(notch) : notch.height)
-                .animation(reduce ? .easeOut(duration: 0.2) : open ? .spring(duration: 0.6, bounce: 0.2).delay(0.07) : .smooth(duration: 0.4), value: open)         // opens tall second; folds up first, with no bounce
-                .overlay(alignment: .top) { content(a) }
+                .frame(width: open ? w : notch.width)
+                .animation(reduce ? .easeOut(duration: 0.2) : open ? .spring(duration: 0.55, bounce: reply ? 0.12 : 0.28) : .smooth(duration: 0.4).delay(0.08), value: mode)      // opens wide first; closes narrow last
+                .frame(height: open ? h : notch.height)
+                .animation(reduce ? .easeOut(duration: 0.2) : open ? .spring(duration: 0.6, bounce: reply ? 0.1 : 0.2).delay(reply ? 0 : 0.07) : .smooth(duration: 0.4), value: mode)         // opens tall second; folds up first, with no bounce
+                .overlay(alignment: .top) { if reply, let s = c.session { ReplyPanel(c: c, s: s, notch: notch) } else { content(a) } }
                 .overlay { rimTimer }
                 .clipShape(shape)
                 .allowsHitTesting(open)
@@ -41,8 +45,9 @@ struct AlertView: View {
             HStack(spacing: 0) {
                 HStack(spacing: 7) {
                     AddonMark(addon: a.addon, size: 17)
-                    Text(c.accounts.count > 1 ? (a.account.map { String($0.split(separator: "@").first ?? "") } ?? "Gmail") : "Gmail")   // with several accounts, say which
+                    Text(c.accounts.count > 1 && a.kind == nil ? (a.account.map { String($0.split(separator: "@").first ?? "") } ?? "Gmail") : "Gmail")   // with several accounts, say which
                         .font(.system(size: 11, weight: .medium)).tracking(0.3).foregroundStyle(Ink.dim).lineLimit(1)
+                    if c.queued > 0 { Text("+\(c.queued)").font(.system(size: 11, weight: .medium)).foregroundStyle(Ink.ember).help("\(c.queued) more waiting") }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 26)
                 Color.clear.frame(width: notch.width)
@@ -73,17 +78,31 @@ struct AlertView: View {
     }
 
     private var actions: some View {
-        HStack(spacing: 22) {
+        let reconnect = c.current?.kind == "reconnect"
+        return HStack(spacing: 22) {
+            if reconnect {
+                Button { c.open() } label: {
+                    HStack(spacing: 6) { Text("Reconnect").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
+                }
+                Button { c.dismiss() } label: {
+                    HStack(spacing: 6) { Text("Later").font(.system(size: 14, design: .serif)).foregroundStyle(Ink.dim); key("⌥esc") }.contentShape(Rectangle())
+                }
+                Spacer(minLength: 8)
+            } else {
             Button { c.open() } label: {
                 HStack(spacing: 6) { Text("Open").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
             }
+            Button { c.startReply() } label: {
+                HStack(spacing: 6) { Text("Reply").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(Ink.text.opacity(0.9)); key("⌥R") }.contentShape(Rectangle())
+            }
+            .help("Draft a reply with an AI agent, or ask about this email")
             Button { c.notImportant() } label: {
                 HStack(spacing: 6) { Text("Not important").font(.system(size: 14, design: .serif)).foregroundStyle(Ink.dim); key("⌥⌫") }.contentShape(Rectangle())
             }
             .help("Never show mail from this sender  ⌥⌫")
             Spacer(minLength: 8)
             key("⌥esc")
-            if c.queued > 0 { Text("+\(c.queued) more").font(.system(size: 12, design: .serif)).italic().foregroundStyle(Ink.dim) }
+            }
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 28)
@@ -93,6 +112,8 @@ struct AlertView: View {
 
     /// The rim is the timer. The comet "loads" it (the lit line follows the comet round the pill), then it drains from the start
     /// back toward the end over `dwell`. A dim track stays behind so you can see what is left. Brighter while held.
+    private var sealed: Bool { c.session?.outcome == .sent || c.session?.outcome == .saved }
+
     private var rimTimer: some View {
         ZStack {
             RimShape(from: 0, to: 1).stroke(Ink.ember.opacity(0.10), style: StrokeStyle(lineWidth: 1.25, lineCap: .round))
@@ -100,6 +121,13 @@ struct AlertView: View {
                 .stroke(Ink.ember.opacity(c.hovering ? 0.9 : 0.55), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                 .animation(reduce ? .easeOut(duration: 0.2) : .timingCurve(0.33, 1, 0.68, 1, duration: 1.25), value: loaded)   // same ease as the comet
                 .animation(.easeOut(duration: 0.2), value: c.hovering)
+        }
+        .overlay {
+            // a reply has gone: the rim lights up behind the comet that runs it, the same ease as the arrival
+            RimShape(from: 0, to: sealed ? 1 : 0)
+                .stroke(Ink.ember.opacity(0.9), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .shadow(color: Ink.ember.opacity(sealed ? 0.5 : 0), radius: 5)
+                .animation(reduce ? .easeOut(duration: 0.2) : .timingCurve(0.33, 1, 0.68, 1, duration: 1.1), value: sealed)
         }
         .opacity(c.shown ? 1 : 0).animation(.easeOut(duration: 0.3), value: c.shown)
         .onChange(of: c.streakTick) { loaded = true }
@@ -115,7 +143,7 @@ private struct RimShape: Shape {
     func path(in r: CGRect) -> Path {
         let lo = min(max(from, 0), 1), hi = min(max(to, 0), 1)
         guard hi > lo else { return Path() }
-        return NotchStreak.rim(r.insetBy(dx: 1, dy: 1)).trimmedPath(from: lo, to: hi)
+        return Comet.rim(r.insetBy(dx: 1, dy: 1)).trimmedPath(from: lo, to: hi)
     }
 }
 
@@ -129,17 +157,11 @@ private struct Reveal: ViewModifier {
 }
 private extension View { func reveal(_ on: Bool, _ delay: Double, _ reduce: Bool) -> some View { modifier(Reveal(on: on, delay: delay, reduce: reduce)) } }
 
-/// The arrival: once the shell has opened, a single comet of light travels its whole rim (down the left side, along the bottom, up the
-/// right) with a tapering tail, then is gone; only the faint lit edge stays. Drawn on the pill's final outline, so it starts as the words resolve.
-struct NotchStreak: View {
-    let tick: Int
-    let notch: CGSize
-    @Environment(\.accessibilityReduceMotion) private var reduce
-
-    private nonisolated static let tail = 0.34          // comet length as a fraction of the rim
-    private nonisolated static let slices = 36          // the tail is this many strokes, each dimmer and thinner than the last
-
-    private struct Frame { var p = 0.0 }    // 0 → 1 progress, mapped to head position by an ease-out
+/// The comet: a bright head with a tapering tail, drawn along the card's rim (down the left side, along the bottom, up the right).
+/// One drawing routine for every use of it, so the arrival, the "sending" orbit and the "sent" seal are visibly the same light.
+enum Comet {
+    nonisolated static let tail = 0.34           // comet length as a fraction of the rim
+    nonisolated static let slices = 36           // the tail is this many strokes, each dimmer and thinner than the last
 
     /// The rim as one open path, so trimming it gives constant speed: top-left, down, round the corner, along the bottom, round, up to top-right.
     nonisolated static func rim(_ r: CGRect, radius: CGFloat = 26) -> Path {
@@ -153,35 +175,69 @@ struct NotchStreak: View {
         return p
     }
 
-    /// white-hot at the head → ember → deep ember at the tip of the tail
-    private nonisolated static func color(_ f: Double) -> Color {
-        f < 0.18 ? Color(red: 1.0, green: 0.95, blue: 0.85)
-                 : f < 0.55 ? Ink.ember : Ink.emberDeep
+    /// white-hot at the head, ember, then deep ember at the tip of the tail
+    nonisolated static func color(_ f: Double) -> Color {
+        f < 0.18 ? Color(red: 1.0, green: 0.95, blue: 0.85) : f < 0.55 ? Ink.ember : Ink.emberDeep
     }
+
+    /// `head` runs from 0 (not yet on the rim) to 1 + tail (fully gone); `fade` dims the whole comet.
+    nonisolated static func draw(_ ctx: inout GraphicsContext, size: CGSize, head: Double, fade: Double = 1) {
+        let path = rim(CGRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1))
+        func strokes(_ c: inout GraphicsContext, width: CGFloat, opacity: Double) {
+            for k in 0..<slices {
+                let f0 = Double(k) / Double(slices), f1 = Double(k + 1) / Double(slices)
+                let hi = min(head - tail * f0, 1), lo = max(head - tail * f1, 0)
+                guard hi > lo else { continue }
+                c.stroke(path.trimmedPath(from: lo, to: hi), with: .color(color(f0).opacity(pow(1 - f0, 2.2) * opacity * fade)),
+                         style: StrokeStyle(lineWidth: width * (1 - 0.55 * f0), lineCap: .round))
+            }
+        }
+        ctx.drawLayer { l in l.addFilter(.blur(radius: 4)); strokes(&l, width: 4, opacity: 0.55) }      // light bleeding off the edge
+        strokes(&ctx, width: 1.8, opacity: 1)                                                            // the crisp line
+    }
+}
+
+/// One lap of the comet each time `tick` changes: the arrival of a card, and the seal when a reply has gone. Sized to the pill it runs round.
+struct NotchStreak: View {
+    let tick: Int
+    let size: CGSize
+    var lap: Double = 1.25
+    @Environment(\.accessibilityReduceMotion) private var reduce
+
+    private struct Frame { var p = 0.0 }    // 0 → 1 progress, mapped to the head position by an ease-out
 
     var body: some View {
         KeyframeAnimator(initialValue: Frame(), trigger: tick) { v in
-            Canvas { ctx, size in
+            Canvas { ctx, sz in
                 guard v.p > 0, v.p < 1 else { return }
-                let path = Self.rim(CGRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1))
-                let head = (1 - pow(1 - v.p, 3)) * (1 + Self.tail)          // fast out of the corner, settling as it leaves
-                let fade = min(v.p / 0.08, 1) * min((1 - v.p) / 0.12, 1)     // no pop at either end
-                func strokes(_ c: inout GraphicsContext, width: CGFloat, opacity: Double) {
-                    for k in 0..<Self.slices {
-                        let f0 = Double(k) / Double(Self.slices), f1 = Double(k + 1) / Double(Self.slices)
-                        let hi = min(head - Self.tail * f0, 1), lo = max(head - Self.tail * f1, 0)
-                        guard hi > lo else { continue }
-                        c.stroke(path.trimmedPath(from: lo, to: hi), with: .color(Self.color(f0).opacity(pow(1 - f0, 2.2) * opacity * fade)),
-                                 style: StrokeStyle(lineWidth: width * (1 - 0.55 * f0), lineCap: .round))
-                    }
-                }
-                ctx.drawLayer { l in l.addFilter(.blur(radius: 4)); strokes(&l, width: 4, opacity: 0.55) }   // light bleeding off the edge
-                strokes(&ctx, width: 1.8, opacity: 1)                                                         // the crisp line
+                let head = (1 - pow(1 - v.p, 3)) * (1 + Comet.tail)                       // fast out of the corner, settling as it leaves
+                Comet.draw(&ctx, size: sz, head: head, fade: min(v.p / 0.08, 1) * min((1 - v.p) / 0.12, 1))     // no pop at either end
             }
         } keyframes: { _ in
-            KeyframeTrack(\.p) { LinearKeyframe(0, duration: 0.001); LinearKeyframe(1, duration: reduce ? 0.001 : 1.25) }
+            KeyframeTrack(\.p) { LinearKeyframe(0, duration: 0.001); LinearKeyframe(1, duration: reduce ? 0.001 : lap) }
         }
-        .frame(width: AlertView.width, height: AlertView.height(notch))
+        .frame(width: size.width, height: size.height)
+        .allowsHitTesting(false)
+    }
+}
+
+/// While a reply is on its way out the comet keeps circling, so the rim says "working" until Gmail answers.
+struct RimOrbit: View {
+    let size: CGSize
+    let active: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduce
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !active || reduce)) { tl in
+            Canvas { ctx, sz in
+                guard active, !reduce else { return }
+                let p = (tl.date.timeIntervalSinceReferenceDate / 1.15).truncatingRemainder(dividingBy: 1)
+                let eased = p < 0.5 ? 2 * p * p : 1 - pow(-2 * p + 2, 2) / 2                      // each lap accelerates round the corners and eases at the top
+                Comet.draw(&ctx, size: sz, head: eased * (1 + Comet.tail))
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .opacity(active ? 1 : 0).animation(.easeOut(duration: 0.2), value: active)
         .allowsHitTesting(false)
     }
 }

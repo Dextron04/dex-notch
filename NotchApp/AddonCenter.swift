@@ -22,17 +22,29 @@ final class AddonCenter {
     private(set) var status = "Not connected."
     private(set) var checking = false
     var accounts: [String] { state.accounts }
+    /// Bump when a new release asks for more permission: every account then has to sign in again.
+    static let consentVersion = 2
+    var needsReconnect: [String] { state.stale }
     var connected: Bool { !state.accounts.isEmpty }
     private(set) var settings = AddonSettings()
 
     /// The window listens so it can let clicks through everywhere except the card.
     var onPresenting: ((Bool) -> Void)?
+    /// The reply panel needs the keyboard: the window listens so it can take focus while it is open and let go after.
+    var onReply: ((Bool) -> Void)?
+
+    // replying
+    private(set) var session: ReplySession?
+    private(set) var replyOpen = false
+    private(set) var sealTick = 0          // bumps once when a reply has gone: the seal lap of light round the panel
+    private var resumeRequested = false
+    private var sendTask: Task<Void, Never>?
 
     private var state = AddonState()
     private var assistant: Assistant?
     private var clients: [String: GmailClient] = [:]
     private var locked = false
-    private var asleep = false
+    private var forceDemo = false          // the demo ignores "are you at the keyboard"
     private var retiring = false
     private var cardKeys: [Hotkey] = []     // ⌥↩ ⌥⌫ ⌥esc, registered only while a card is up
     private var timer: Timer?
@@ -43,16 +55,22 @@ final class AddonCenter {
     func start(assistant: Assistant) {
         self.assistant = assistant
         state = AddonState.load(from: stateURL)
+        state.applyConsent(current: Self.consentVersion); state.save(to: stateURL)
         reload()
+        queueReconnectCard()
         migrateLegacyAccount()
         let dn = DistributedNotificationCenter.default(), ws = NSWorkspace.shared.notificationCenter
         dn.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.locked = true } }
         dn.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.locked = false; self?.welcomeBack() } }
-        ws.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.asleep = true } }
-        ws.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.asleep = false; self?.welcomeBack() } }
+        ws.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.welcomeBack() } }
+        ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.welcomeBack() } }
+        // lid closed onto an external display, or a display plugged in: the notch moves, and the queue follows it
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.welcomeBack() } }
+        // alerts wait for you: this is what shows them the moment you are back at the keyboard
+        Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.presentIfPossible() } }
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.tick(); self?.presentIfPossible() }
-        if ProcessInfo.processInfo.environment["NOTCH_ALERT_DEMO"] != nil { demo() }
+        if ProcessInfo.processInfo.environment["NOTCH_ALERT_DEMO"] != nil { forceDemo = true; demo() }
     }
 
     func reload() {
@@ -85,6 +103,9 @@ final class AddonCenter {
     func removeAccount(_ email: String) {
         GmailClient.forget(email)
         state.accounts.removeAll { $0 == email }
+        state.replyAccounts.removeAll { $0 == email }
+        state.stale.removeAll { $0 == email }
+        if session?.alert.account == email { session = nil }
         state.pending.removeAll { $0.account == email }
         state.save(to: stateURL); reload()
         status = "Removed \(email)."
@@ -92,8 +113,42 @@ final class AddonCenter {
 
     // MARK: schedule
 
+    /// The notch asks you to reconnect, and asks again each day until you have.
+    private func queueReconnectCard() {
+        guard state.reconnectCardDue(now: Date()), let first = state.stale.first else { return }
+        let n = state.stale.count
+        state.pending.append(AddonAlert(id: "reconnect|\(first)|\(Int(Date().timeIntervalSince1970))", addon: "gmail", sender: "Dex Notch", address: "",
+            headline: "Reconnect Gmail to keep your alerts going",
+            reason: n == 1 ? "One new permission lets you reply from the notch. It takes about a minute." : "\(n) accounts need one new permission, so you can reply from the notch.",
+            url: "", score: 10, created: Date(), account: first, kind: "reconnect"))
+        state.reconnectNudged = Date(); state.save(to: stateURL)
+    }
+
+    /// Signs the stale accounts in again, one after another. The new permission is always requested here, whatever the Allow replies switch says.
+    func reconnectAll() {
+        guard let cfg = settings.gmail, let first = state.stale.first else { return }
+        status = "Reconnect \(first) in your browser…"
+        Task {
+            var next: String? = first
+            while let email = next {
+                do {
+                    let r = try await GmailClient.connect(cfg, replies: true, loginHint: email)
+                    if r.canReply, !state.replyAccounts.contains(r.email) { state.replyAccounts.append(r.email) }
+                    if !state.accounts.contains(r.email) { state.accounts.append(r.email) }
+                    state.reconnected(email); state.reconnected(r.email)
+                    state.pending.removeAll { $0.kind == "reconnect" }
+                    state.save(to: stateURL); reload()
+                    next = state.stale.first
+                    status = next.map { "\(r.email) is back. Now \($0)…" } ?? "All set. Alerts have resumed."
+                } catch { status = error.localizedDescription; return }
+            }
+            state.lastTry = nil; checkNow()
+        }
+    }
+
     private func tick() {
-        guard !asleep, settings.gmail != nil, connected, state.isDue(now: Date(), minutes: settings.checkMinutes) else { return }
+        queueReconnectCard()
+        guard settings.gmail != nil, connected, state.isDue(now: Date(), minutes: settings.checkMinutes) else { return }
         checkNow(manual: false)
     }
 
@@ -102,7 +157,8 @@ final class AddonCenter {
     func checkNow(manual: Bool = true) {
         guard !checking, !clients.isEmpty, let assistant else { return }
         checking = true; status = "Checking mail…"
-        let accounts = state.accounts
+        let accounts = state.accounts.filter { !state.stale.contains($0) }          // accounts that must sign in again are left alone
+        if accounts.isEmpty { checking = false; status = state.stale.isEmpty ? status : "Reconnect your Gmail accounts to resume alerts."; return }
         Task {
             defer { checking = false }
             state.lastTry = Date()
@@ -189,26 +245,235 @@ final class AddonCenter {
         status = "Finish signing in in your browser…"
         Task {
             do {
-                let email = try await GmailClient.connect(cfg)
+                let r = try await GmailClient.connect(cfg, replies: settings.repliesOnConnect)       // read, and (unless you turned it off) drafts and sending
+                let email = r.email
                 let isNew = !state.accounts.contains(email)
+                if r.canReply, !state.replyAccounts.contains(email) { state.replyAccounts.append(email) }
+                state.reconnected(email)
                 addAccount(email)
-                status = isNew ? "Added \(email)." : "\(email) signed in again."
+                status = (isNew ? "Added \(email)." : "\(email) signed in again.") + (r.canReply ? " Replies are on." : " Read-only: use Allow replies to draft and send.")
                 try? await Task.sleep(for: .milliseconds(300)); state.lastTry = nil; checkNow()
             } catch { status = error.localizedDescription }
         }
     }
 
+    // MARK: replying
+
+    /// Which agent writes first: the first in your order that is actually available.
+    private var firstAgent: Backend { settings.order.first { assistant?.choices.contains($0) ?? false } ?? .claude }
+    var agents: [Backend] { settings.order.filter { assistant?.choices.contains($0) ?? false } }
+
+    /// "Reply" on the card (⌥R). The card grows into the reply panel; if this account can only read, it first asks for the permission.
+    func startReply() {
+        guard let alert = current else { return }
+        let acct = alert.account ?? state.accounts.first ?? ""
+        if session?.alert.id != alert.id { session = ReplySession(alert: alert, stage: canReply(acct) ? .loading : .needsPermission, backend: firstAgent) }
+        countdown?.cancel(); cardKeys = []
+        withAnimation(.spring(duration: 0.5, bounce: 0.18)) { replyOpen = true }
+        onReply?(true)
+        if session?.stage == .loading, session?.context == nil { loadContext() }
+    }
+
+    /// The panel closed without sending or saving (esc, a click elsewhere): the draft is kept, and the alert waits in the queue.
+    func collapseReply() {
+        guard let c = current, replyOpen, let s = session else { return }
+        if s.stage == .needsPermission && s.note != nil { return }           // Google's page is in front for a moment: that is not "closed"
+        if case .undo = s.outcome { undoSend() }                              // leaving mid-countdown is an Undo, never a send
+        retire(c.id, keep: true)
+    }
+    /// Menu: Resume reply.
+    func resumeReply() { guard session != nil, current == nil else { return }; resumeRequested = true; presentIfPossible(force: true) }
+    var resumable: String? { current == nil && !replyOpen ? session?.alert.sender : nil }
+
+    /// Throws the reply away. The alert counts as dealt with.
+    func discardReply() { sendTask?.cancel(); let c = current; session = nil; if let c { retire(c.id) } }
+
+    private func finishReply() { sendTask?.cancel(); let c = current; session = nil; if let c { retire(c.id) } }
+
+    func allowReplies() {
+        guard let s = session, let cfg = settings.gmail else { return }
+        let acct = s.alert.account ?? state.accounts.first ?? ""
+        s.note = "Finish in your browser…"
+        Task {
+            do {
+                let r = try await GmailClient.connect(cfg, replies: true, loginHint: acct)
+                guard r.canReply else { throw GmailError("Google didn't allow drafts and sending. Try again and tick the box for writing email.") }
+                if !state.replyAccounts.contains(r.email) { state.replyAccounts.append(r.email) }
+                if !state.accounts.contains(r.email) { state.accounts.append(r.email) }
+                state.reconnected(r.email)
+                state.save(to: stateURL); reload()
+                s.note = nil; s.stage = .loading; loadContext()
+            } catch { s.note = error.localizedDescription }
+        }
+    }
+
+    /// From Settings: let one account draft and send.
+    func allowReplies(for email: String) {
+        guard let cfg = settings.gmail else { return }
+        status = "Finish in your browser…"
+        Task {
+            do {
+                let r = try await GmailClient.connect(cfg, replies: true, loginHint: email)
+                guard r.canReply else { throw GmailError("Google didn't allow drafts and sending. Try again and tick the box for writing email.") }
+                if !state.replyAccounts.contains(r.email) { state.replyAccounts.append(r.email) }
+                state.reconnected(r.email)
+                state.save(to: stateURL); reload(); status = "\(r.email) can now draft and send replies."
+            } catch { status = error.localizedDescription }
+        }
+    }
+
+    private func loadContext() {
+        guard let s = session else { return }
+        let acct = s.alert.account ?? state.accounts.first ?? ""
+        Task {
+            do {
+                guard forceDemo || clients[acct] != nil else { throw GmailError("\(acct) isn't connected.") }
+                let ctx = forceDemo ? Self.demoMail : try await clients[acct]!.fullMessage(id: s.alert.messageID)
+                s.context = ctx; s.stage = .ready
+                await writeDraft(s)
+            } catch is ReplyPermissionNeeded { s.stage = .needsPermission }
+            catch { s.stage = .failed(error.localizedDescription) }
+        }
+    }
+
+    /// Tries your chosen agent first, then the others in your order, so one being out of messages doesn't stop a reply.
+    private func generate(_ system: String, _ user: String, preferred: Backend) async throws -> (text: String, by: Backend) {
+        let order = [preferred] + agents.filter { $0 != preferred }
+        for b in order {
+            if let t = try? await ask(b, system, user), !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return (t, b) }
+        }
+        throw GmailError(agents.isEmpty ? "No AI agent is set up. Add one in Settings → Models." : "No agent could answer just now. Try again in a moment.")
+    }
+
+    private func writeDraft(_ s: ReplySession, instruction: String = "") async {
+        guard let ctx = s.context else { return }
+        s.drafting = true; s.note = nil; defer { s.drafting = false }
+        let p = MailReply.draftPrompt(ctx, name: settings.name, importance: settings.importance, previous: instruction.isEmpty ? "" : s.draft, instruction: instruction)
+        do {
+            let r = try await generate(p.system, p.user, preferred: s.backend)
+            s.draft = MailReply.cleanDraft(r.text); s.backend = r.by
+            s.note = "Written by \(r.by.displayName). Read it, change it, then send."
+        } catch { s.note = error.localizedDescription }
+    }
+
+    /// The input under the draft: on the Draft tab it is a change you want, on the Ask tab a question about the email.
+    func submitInput() {
+        guard let s = session, s.stage == .ready, !s.busy else { return }
+        let text = s.input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        s.input = ""
+        if s.tab == .draft { Task { await writeDraft(s, instruction: text) } }
+        else {
+            guard let ctx = s.context else { return }
+            s.asking = true
+            let ex = ReplySession.Exchange(question: text, answer: "")
+            s.exchanges.append(ex)
+            let p = MailReply.askPrompt(ctx, history: s.exchanges.dropLast().map { ($0.question, $0.answer) }, question: text)
+            Task {
+                defer { s.asking = false }
+                let answer: String
+                do { answer = try await generate(p.system, p.user, preferred: s.backend).text.trimmingCharacters(in: .whitespacesAndNewlines) }
+                catch { answer = error.localizedDescription }
+                if let i = s.exchanges.firstIndex(where: { $0.id == ex.id }) { s.exchanges[i].answer = answer }
+            }
+        }
+    }
+
+    /// Another agent writes it again from the same email.
+    func useAgent(_ b: Backend) {
+        guard let s = session, !s.busy, s.backend != b else { return }
+        s.backend = b
+        if s.tab == .draft, s.stage == .ready { Task { await writeDraft(s) } }
+    }
+
+    /// Send, with a few seconds to change your mind. Nothing leaves before they run out.
+    func beginSend() {
+        guard let s = session, s.canSend, let ctx = s.context, let raw = MailReply.raw(ctx, body: s.draft) else {
+            session?.note = session?.context.flatMap { MailReply.recipient($0) } == nil ? "This sender has no address to reply to." : session?.note
+            return
+        }
+        let acct = ctx.account
+        sendTask?.cancel()
+        sendTask = Task {
+            // the lit rim is the Undo clock: full when you press Send, gone when it goes
+            progress = 1
+            let steps = Self.undoSeconds * 30
+            for i in 0..<steps {
+                progress = 1 - Double(i) / Double(steps)
+                s.outcome = .undo(Int((progress * Double(Self.undoSeconds)).rounded(.up)))
+                try? await Task.sleep(for: .milliseconds(33))
+                if Task.isCancelled { return }
+            }
+            progress = 0
+            s.outcome = .sending
+            do {
+                if forceDemo { try? await Task.sleep(for: .milliseconds(500)) }
+                else {
+                    guard let client = clients[acct] else { throw GmailError("\(acct) isn't connected.") }
+                    try await client.send(raw: raw, threadId: ctx.threadId)
+                }
+                s.outcome = .sent; sealTick += 1
+                try? await Task.sleep(for: .milliseconds(2300))          // long enough to see the check drawn and the comet land
+                finishReply()
+            } catch is ReplyPermissionNeeded { s.outcome = .none; s.stage = .needsPermission }
+            catch { s.outcome = .failed(error.localizedDescription) }
+        }
+    }
+    static let undoSeconds = 5
+    func undoSend() { sendTask?.cancel(); session?.outcome = .none; withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.4)) { progress = 1 } }       // the rim fills back: nothing was sent
+
+    /// Saves it as a draft in Gmail, in the same thread, and closes. Nothing is sent.
+    func saveDraft() {
+        guard let s = session, s.canSend, let ctx = s.context, let raw = MailReply.raw(ctx, body: s.draft) else { return }
+        let acct = ctx.account
+        s.outcome = .sending
+        Task {
+            do {
+                if forceDemo { try? await Task.sleep(for: .milliseconds(500)) }
+                else {
+                    guard let client = clients[acct] else { throw GmailError("\(acct) isn't connected.") }
+                    _ = try await client.createDraft(raw: raw, threadId: ctx.threadId)
+                }
+                s.outcome = .saved; sealTick += 1
+                try? await Task.sleep(for: .milliseconds(2300))
+                finishReply()
+            } catch is ReplyPermissionNeeded { s.outcome = .none; s.stage = .needsPermission }
+            catch { s.outcome = .failed(error.localizedDescription) }
+        }
+    }
+
     // MARK: arriving at the notch
 
-    private var canPresent: Bool { !locked && !asleep && current == nil && !(assistant?.isOpen ?? false) }
+    /// How long without a key or a mouse movement before we decide you are away. An alert shown to an empty chair is an alert lost.
+    static let awayAfter: Double = 120
+    private var idleSeconds: Double { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!) }
+    /// The display the notch is on is awake. With the lid shut and a monitor attached that is the monitor, so the alert appears there.
+    private var displayAwake: Bool {
+        guard let s = NotchWindow.targetScreen(), let id = s.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else { return false }
+        return CGDisplayIsAsleep(id) == 0
+    }
+    private func canPresent(force: Bool) -> Bool {
+        !locked && displayAwake && current == nil && !(assistant?.isOpen ?? false) && (force || forceDemo || idleSeconds < Self.awayAfter)
+    }
+    /// Alerts waiting for you (not counting the one on screen).
+    var waiting: Int { current == nil ? state.pending.count : max(state.pending.count - 1, 0) }
+    var history: [AddonAlert] { state.history }
+    func canReply(_ account: String) -> Bool { forceDemo || state.replyAccounts.contains(account) }
+    /// The demo has no Gmail behind it: a canned email, and a send that goes nowhere.
+    private static let demoMail = MailContext(account: "alex@example.com", id: "demo", threadId: "abc123", from: "Priya Nair <priya@example.com>", replyTo: "", subject: "Interview: moving to Thursday 3pm?",
+        messageID: "<demo@example.com>", references: "", date: Date(timeIntervalSinceNow: -3600),
+        body: "Hi Alex,\n\nThe panel can only do Thursday at 3pm now. Does that still work for you? Could you confirm by tomorrow morning?\n\nAlso, please bring a short portfolio sample, ideally the checkout redesign.\n\nThanks,\nPriya")
+    /// Menu: Show waiting alerts. Same queue, same order, but without waiting for you to be at the keyboard.
+    func showWaiting() { presentIfPossible(force: true) }
 
     /// You just woke or unlocked the Mac: give the desktop a moment to settle, then bring the news.
     private func welcomeBack() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { [weak self] in self?.tick(); self?.presentIfPossible() }
     }
 
-    func presentIfPossible() {
-        guard canPresent, let next = state.pending.first else { return }
+    func presentIfPossible(force: Bool = false) {
+        let resume = resumeRequested ? session?.alert : nil
+        guard !state.pending.isEmpty, canPresent(force: force), let next = resume ?? AddonState.next(from: state.pending) else { return }
         current = next; retiring = false; progress = 1; hovering = false
         Task {
             presenting = true; onPresenting?(true)              // the shell opens first…
@@ -219,8 +484,9 @@ final class AddonCenter {
                 Hotkey(id: 10, keyCode: kVK_Return, modifiers: optionKey) { [weak self] in self?.open() },
                 Hotkey(id: 11, keyCode: kVK_Delete, modifiers: optionKey) { [weak self] in self?.notImportant() },
                 Hotkey(id: 12, keyCode: kVK_Escape, modifiers: optionKey) { [weak self] in self?.dismiss() },
+                Hotkey(id: 13, keyCode: kVK_ANSI_R, modifiers: optionKey) { [weak self] in self?.startReply() },
             ]
-            runCountdown(for: next.id)
+            if resumeRequested { resumeRequested = false; startReply() } else { runCountdown(for: next.id) }
         }
     }
 
@@ -231,16 +497,18 @@ final class AddonCenter {
                 try? await Task.sleep(for: .milliseconds(33))
                 if !hovering { progress = max(progress - 0.033 / Self.dwell, 0) }
             }
-            if !Task.isCancelled { retire(id) }
+            if !Task.isCancelled { retire(id, keep: idleSeconds > Self.awayAfter && !forceDemo) }       // you walked off while it was up: it stays in the queue
         }
     }
 
     /// The notch opened for something else: step aside, keep nothing on screen.
-    func assistantOpened() { if let c = current { retire(c.id) } }
+    func assistantOpened() { if let c = current { retire(c.id, keep: true) } }       // it goes back in the queue, not in the bin
     func assistantClosed() { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in self?.presentIfPossible() } }
 
     func open() {
-        guard let c = current, let u = URL(string: c.url) else { return }
+        guard let c = current else { return }
+        if c.kind == "reconnect" { retire(c.id); reconnectAll(); return }                 // this card's "Open" is "Reconnect"
+        guard let u = URL(string: c.url) else { return }
         NSWorkspace.shared.open(u); retire(c.id)
     }
     func dismiss() { if let c = current { retire(c.id) } }
@@ -251,17 +519,19 @@ final class AddonCenter {
         retire(c.id, alsoDropFrom: c.address)       // their other queued alerts go once the card has closed, so "+N more" doesn't jump while it is still showing
     }
 
-    private func retire(_ id: String, alsoDropFrom address: String? = nil) {
-        guard current?.id == id, !retiring else { return }
+    private func retire(_ id: String, alsoDropFrom address: String? = nil, keep: Bool = false) {
+        guard let alert = current, alert.id == id, !retiring else { return }
         retiring = true; countdown?.cancel(); cardKeys = []      // the keys go back to whatever you were typing in
+        if replyOpen { onReply?(false) }
         Task {
             withAnimation(.easeIn(duration: 0.22)) { shown = false }
             try? await Task.sleep(for: .milliseconds(140))      // the words start to leave, and the shell begins folding back into the hardware under them
             withAnimation(.smooth(duration: 0.5)) { presenting = false }     // explicit, so nothing downstream can swallow it
             onPresenting?(false)
             try? await Task.sleep(for: .milliseconds(850))      // longer than the fold (about 0.5s) so the card is never removed mid-motion
-            state.pending.removeAll { $0.id == id || ($0.address == address) }; state.save(to: stateURL)
-            current = nil; retiring = false
+            if !keep { state.pending.removeAll { $0.id == id || ($0.address == address && !address!.isEmpty) }; if alert.kind == nil { state.recordShown(alert) } }
+            state.save(to: stateURL)
+            current = nil; retiring = false; replyOpen = false
             try? await Task.sleep(for: .milliseconds(500))
             presentIfPossible()
         }

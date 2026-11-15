@@ -3,11 +3,16 @@ import CryptoKit
 import Network
 import AppKit
 
+/// The account was connected read-only; replying needs one more permission from Google.
+struct ReplyPermissionNeeded: LocalizedError { var errorDescription: String? { "This account can only read mail. Allow replies first." } }
+
 struct GmailError: LocalizedError { let msg: String; init(_ m: String) { msg = m }; var errorDescription: String? { msg } }
 
 /// Google's "installed app" sign-in: PKCE, with a one-shot listener on 127.0.0.1 to catch the redirect. Read-only mail scope.
 enum GoogleOAuth {
     static let scope = "https://www.googleapis.com/auth/gmail.readonly"
+    /// Drafts and sending. Asked for only when you first reply from an account, not when you connect it.
+    static let composeScope = "https://www.googleapis.com/auth/gmail.compose"
 
     private static func b64url(_ d: some DataProtocol) -> String {
         Data(d).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
@@ -15,11 +20,13 @@ enum GoogleOAuth {
     static func verifier() -> String { b64url((0..<48).map { _ in UInt8.random(in: 0...255) }) }
     static func challenge(_ verifier: String) -> String { b64url(Data(SHA256.hash(data: Data(verifier.utf8)))) }
 
-    static func authURL(clientID: String, redirect: String, challenge: String, state: String) -> URL {
+    static func authURL(clientID: String, redirect: String, challenge: String, state: String, replies: Bool = false, loginHint: String? = nil) -> URL {
         var c = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")!
-        c.queryItems = [("client_id", clientID), ("redirect_uri", redirect), ("response_type", "code"), ("scope", scope),
-                        ("code_challenge", challenge), ("code_challenge_method", "S256"), ("state", state),
-                        ("access_type", "offline"), ("prompt", "select_account consent")].map { URLQueryItem(name: $0.0, value: $0.1) }
+        var q = [("client_id", clientID), ("redirect_uri", redirect), ("response_type", "code"), ("scope", replies ? scope + " " + composeScope : scope),
+                 ("code_challenge", challenge), ("code_challenge_method", "S256"), ("state", state),
+                 ("access_type", "offline"), ("include_granted_scopes", "true"), ("prompt", "select_account consent")]
+        if let h = loginHint, !h.isEmpty { q.append(("login_hint", h)) }       // upgrading an account: open Google already on that account
+        c.queryItems = q.map { URLQueryItem(name: $0.0, value: $0.1) }
         return c.url!
     }
 
@@ -121,6 +128,12 @@ enum GmailAPI {
         }
     }
 
+    /// A 403 that means "this sign-in wasn't given that permission", as opposed to a limit or an outage.
+    static func lacksPermission(_ body: Data) -> Bool {
+        let s = String(decoding: body, as: UTF8.self).lowercased()
+        return s.contains("insufficient") || s.contains("scope_insufficient") || s.contains("insufficientpermissions")
+    }
+
     static func decodeEntities(_ s: String) -> String {
         s.replacingOccurrences(of: "&#39;", with: "'").replacingOccurrences(of: "&quot;", with: "\"").replacingOccurrences(of: "&lt;", with: "<")
             .replacingOccurrences(of: "&gt;", with: ">").replacingOccurrences(of: "&amp;", with: "&")
@@ -152,12 +165,12 @@ actor GmailClient {
 
     /// Opens the browser, waits for you to approve, and stores the refresh token under the address Google says you signed in as.
     /// Returns that address. Signing in again with the same address just refreshes its token.
-    static func connect(_ cfg: GmailConfig) async throws -> String {
+    static func connect(_ cfg: GmailConfig, replies: Bool = false, loginHint: String? = nil) async throws -> (email: String, canReply: Bool) {
         let server = try LoopbackListener()
         let port = try await server.start()
         let redirect = "http://127.0.0.1:\(port)"
         let verifier = GoogleOAuth.verifier(), state = GoogleOAuth.verifier()
-        let url = GoogleOAuth.authURL(clientID: cfg.clientID, redirect: redirect, challenge: GoogleOAuth.challenge(verifier), state: state)
+        let url = GoogleOAuth.authURL(clientID: cfg.clientID, redirect: redirect, challenge: GoogleOAuth.challenge(verifier), state: state, replies: replies, loginHint: loginHint)
         _ = await MainActor.run { NSWorkspace.shared.open(url) }
         let head: String
         do { head = try await timeout(240) { try await server.nextRequest() } } catch { server.close(); throw GmailError("Sign-in didn't finish. Choose Add account to try again.") }
@@ -169,7 +182,7 @@ actor GmailClient {
         guard let refresh = tok.refresh else { throw GmailError("Google didn't return a long-lived sign-in. Remove Dex Notch at myaccount.google.com/permissions and add the account again.") }
         let email = try await profileEmail(access: tok.access)
         guard KeychainStore.set(token: refresh, service: service, account: email) else { throw GmailError("Couldn't save the sign-in to your Keychain.") }
-        return email
+        return (email, tok.scope.contains("gmail.compose"))        // what Google actually granted, not what we asked for
     }
 
     /// One-time move of the old single-account token to the per-address layout. nil if there was nothing to move or it no longer works.
@@ -192,7 +205,7 @@ actor GmailClient {
         return e.lowercased()
     }
 
-    private static func token(_ cfg: GmailConfig, _ extra: [(String, String)]) async throws -> (access: String, expires: Date, refresh: String?) {
+    private static func token(_ cfg: GmailConfig, _ extra: [(String, String)]) async throws -> (access: String, expires: Date, refresh: String?, scope: String) {
         var r = URLRequest(url: URL(string: "https://oauth2.googleapis.com/token")!)
         r.httpMethod = "POST"; r.timeoutInterval = 20
         r.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -203,7 +216,7 @@ actor GmailClient {
             let why = (j["error"] as? String) ?? "no reply"
             throw GmailError(why == "invalid_grant" ? "Gmail sign-in expired. Add the account again in Settings." : why == "invalid_client" ? "Google rejected the client ID or secret." : "Google sign-in failed (\(why)).")
         }
-        return (a, Date().addingTimeInterval((j["expires_in"] as? Double) ?? 3000), j["refresh_token"] as? String)
+        return (a, Date().addingTimeInterval((j["expires_in"] as? Double) ?? 3000), j["refresh_token"] as? String, (j["scope"] as? String) ?? "")
     }
 
     private func bearer() async throws -> String {
@@ -215,23 +228,51 @@ actor GmailClient {
     }
 
     /// One request, retried with a growing pause when Gmail says slow down.
-    private func get(_ path: String, _ query: [URLQueryItem]) async throws -> Data {
+    private func get(_ path: String, _ query: [URLQueryItem]) async throws -> Data { try await request("GET", path, query, nil) }
+
+    /// One request, retried with a growing pause when Gmail says slow down. A write that the account has no permission for says so by name.
+    private func request(_ method: String, _ path: String, _ query: [URLQueryItem], _ body: Data?) async throws -> Data {
         var c = URLComponents(string: "https://gmail.googleapis.com/gmail/v1/users/me/" + path)!
-        c.queryItems = query
+        if !query.isEmpty { c.queryItems = query }
         for attempt in 0..<4 {
-            var r = URLRequest(url: c.url!); r.timeoutInterval = 20
+            var r = URLRequest(url: c.url!); r.timeoutInterval = 30; r.httpMethod = method
             r.setValue("Bearer \(try await bearer())", forHTTPHeaderField: "Authorization")
+            if let body { r.httpBody = body; r.setValue("application/json", forHTTPHeaderField: "Content-Type") }
             let (d, resp) = try await URLSession.shared.data(for: r)
             let http = resp as? HTTPURLResponse, code = http?.statusCode ?? 0
-            if code == 200 { return d }
+            if (200..<300).contains(code) { return d }
             if code == 401 { access = nil }
+            if method != "GET", code == 403, GmailAPI.lacksPermission(d) { throw ReplyPermissionNeeded() }
             let why = GmailAPI.explain(code: code, body: d)
-            guard why.retry, attempt < 3 else { throw GmailError(why.message) }
+            guard why.retry, attempt < 3, method == "GET" else { throw GmailError(why.message) }      // a send is never repeated on its own: it could go out twice
             let wait = http?.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init) ?? pow(2, Double(attempt)) * 1.5
             try await Task.sleep(for: .seconds(min(wait, 20)))
         }
         throw GmailError("Gmail kept refusing. It will try again later.")
     }
+
+    // MARK: replying (only when you ask)
+
+    /// One whole email, read because you want to reply to it or ask about it.
+    func fullMessage(id: String) async throws -> MailContext {
+        let d = try await get("messages/" + id, [URLQueryItem(name: "format", value: "full")])
+        guard let c = MailReply.parse(Self.obj(d), account: email) else { throw GmailError("Couldn't read that email.") }
+        return c
+    }
+
+    /// Saves the reply as a draft in the thread, for you to finish in Gmail. Returns the draft's id.
+    func createDraft(raw: String, threadId: String) async throws -> String {
+        let body = try JSONSerialization.data(withJSONObject: ["message": ["raw": raw, "threadId": threadId]])
+        let d = try await request("POST", "drafts", [], body)
+        return (Self.obj(d)["id"] as? String) ?? ""
+    }
+
+    /// Sends the reply. Only ever called after you pressed Send and the undo time ran out.
+    func send(raw: String, threadId: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["raw": raw, "threadId": threadId])
+        _ = try await request("POST", "messages/send", [], body)
+    }
+
     private static func obj(_ d: Data) -> [String: Any] { (try? JSONSerialization.jsonObject(with: d) as? [String: Any]) ?? [:] }
 
     /// Unread mail we haven't judged yet: list the ids (cheap), drop the ones already seen, then read headers and the snippet for at most

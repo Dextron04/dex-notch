@@ -135,7 +135,8 @@ enum AgentStream {
 
     /// Background triage over untrusted mail: no tools at all, nothing written to the CLI's session log (so mail never reaches the shared vault).
     static func lockedClaudeArgs(prompt: String) -> [String] {
-        ["-p", "--output-format", "stream-json", "--verbose", "--tools", "", "--strict-mcp-config", "--no-session-persistence", "--", prompt]
+        ["-p", "--output-format", "stream-json", "--verbose", "--tools", "", "--strict-mcp-config", "--no-session-persistence",
+         "--setting-sources", "project", "--", prompt]      // project only: your personal hooks and plugins must not colour what is written about your mail
     }
     static func lockedCodexArgs(prompt: String) -> [String] {
         ["exec", "--json", "--skip-git-repo-check", "--ephemeral", "--sandbox", "read-only", prompt]

@@ -30,6 +30,9 @@ struct AddonAlert: Codable, Equatable, Identifiable, Sendable {
     var score: Int
     var created: Date
     var account: String?    // which connected account (nil on alerts saved before accounts existed)
+    var kind: String?       // nil for mail; "reconnect" for the card that asks you to sign in again
+    /// Gmail's own id for the message (the alert id is "account|id", because ids are only unique within an account).
+    var messageID: String { id.split(separator: "|", maxSplits: 1).last.map(String.init) ?? id }
 }
 
 struct GmailConfig: Equatable { var clientID: String; var clientSecret: String }
@@ -42,6 +45,8 @@ struct AddonSettings: Equatable {
     var order: [Backend] = [.claude, .codex, .gemma]   // who triages, first to last: the next one runs when a model is rate-limited or down
     var checkMinutes: Double = 5                        // how often to look for new mail while the Mac is awake (a look is cheap; the model only runs for new mail)
     var maxModelCallsPerHour = 8                        // a ceiling on model use, so a flood of mail can't eat your Claude or Codex limits
+    var repliesOnConnect = true                         // ask Google for permission to draft and send when an account is connected (off: accounts stay read-only until you allow replies)
+    var name = ""                                       // your name, for the sign-off on a drafted reply (optional)
     var importance = ""                                 // free text: what matters to you, appended to the triage rules
 
     /// The Google client a release build carries (injected into Info.plist by CI). Nil in a plain checkout, where `$(…)` stays unresolved or empty.
@@ -65,6 +70,8 @@ struct AddonSettings: Equatable {
         if let m = a["check_minutes"] as? Double { s.checkMinutes = min(max(m, 2), 1440) }
         if let n = a["max_model_calls_per_hour"] as? Int { s.maxModelCallsPerHour = min(max(n, 1), 60) }
         s.importance = clip((a["importance"] as? String) ?? "", 600)
+        s.name = clip((a["name"] as? String) ?? "", 80)
+        if let r = a["replies_on_connect"] as? Bool { s.repliesOnConnect = r }
         if let g = a["gmail"] as? [String: Any],
            let id = (g["client_id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty,
            let secret = (g["client_secret"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !secret.isEmpty {
@@ -98,6 +105,23 @@ struct AddonSettings: Equatable {
         }
     }
 
+    static func saveRepliesOnConnect(at url: URL, _ on: Bool) throws {
+        try Settings.mutate(at: url) { root in
+            var a = root["addons"] as? [String: Any] ?? [:]
+            a["replies_on_connect"] = on
+            root["addons"] = a
+        }
+    }
+
+    static func saveName(at url: URL, _ name: String) throws {
+        try Settings.mutate(at: url) { root in
+            var a = root["addons"] as? [String: Any] ?? [:]
+            let t = clip(name, 80)
+            if t.isEmpty { a.removeValue(forKey: "name") } else { a["name"] = t }
+            root["addons"] = a
+        }
+    }
+
     /// What matters to you, saved from the Settings window.
     static func saveImportance(at url: URL, _ text: String) throws {
         try Settings.mutate(at: url) { root in
@@ -116,6 +140,11 @@ struct AddonState: Codable, Equatable {
     var pending: [AddonAlert] = []
     var seen: [String] = []
     var muted: [String] = []
+    var consent = 0                     // which version of the permissions the sign-ins were given for; bumped when the app needs more
+    var stale: [String] = []            // accounts that must sign in again before the app reads them
+    var reconnectNudged: Date?          // when the "reconnect" card was last queued
+    var replyAccounts: [String] = []    // accounts that have allowed drafts and sending (the rest are read-only)
+    var history: [AddonAlert] = []      // the last alerts that were shown, newest first, so nothing you dismissed by accident is gone
     var modelCalls: [Date] = []         // when the model last ran (kept for an hour): the ceiling on model use
     var accounts: [String] = []         // connected Gmail addresses; each one's sign-in token is in the Keychain under its address
     var lastTry: Date?
@@ -130,6 +159,11 @@ struct AddonState: Codable, Equatable {
         muted = try c.decodeIfPresent([String].self, forKey: .muted) ?? []
         accounts = try c.decodeIfPresent([String].self, forKey: .accounts) ?? []
         modelCalls = try c.decodeIfPresent([Date].self, forKey: .modelCalls) ?? []
+        history = try c.decodeIfPresent([AddonAlert].self, forKey: .history) ?? []
+        replyAccounts = try c.decodeIfPresent([String].self, forKey: .replyAccounts) ?? []
+        consent = try c.decodeIfPresent(Int.self, forKey: .consent) ?? 0
+        stale = try c.decodeIfPresent([String].self, forKey: .stale) ?? []
+        reconnectNudged = try c.decodeIfPresent(Date.self, forKey: .reconnectNudged)
         lastTry = try c.decodeIfPresent(Date.self, forKey: .lastTry)
         lastOK = try c.decodeIfPresent(Bool.self, forKey: .lastOK) ?? false
     }
@@ -146,6 +180,29 @@ struct AddonState: Codable, Equatable {
     func isDue(now: Date, minutes: Double) -> Bool {
         guard let t = lastTry else { return true }
         return now.timeIntervalSince(t) >= (lastOK ? minutes * 60 : max(minutes * 60, 900))
+    }
+
+    /// When the app starts needing a new permission, every account that signed in under the old one must sign in again.
+    /// Nothing is deleted: the old sign-in simply isn't used until the new one replaces it. A fresh install has nothing to redo.
+    mutating func applyConsent(current: Int) {
+        if accounts.isEmpty { consent = current }
+        else if consent < current { stale = accounts; consent = current; reconnectNudged = nil }
+    }
+    mutating func reconnected(_ email: String) { stale.removeAll { $0 == email } }
+    /// Time to put the "reconnect" card in the queue: there are accounts to redo, none is already waiting, and it has been a day since the last one.
+    func reconnectCardDue(now: Date) -> Bool {
+        !stale.isEmpty && !pending.contains { $0.kind == "reconnect" } && (reconnectNudged.map { now.timeIntervalSince($0) > 86_400 } ?? true)
+    }
+
+    /// The queue is first come, first served: the alert whose email arrived first goes next (the better score wins a tie).
+    static func next(from pending: [AddonAlert]) -> AddonAlert? {
+        pending.min { ($0.created, -$0.score) < ($1.created, -$1.score) }
+    }
+
+    mutating func recordShown(_ a: AddonAlert, keep: Int = 30) {
+        history.removeAll { $0.id == a.id }
+        history.insert(a, at: 0)
+        if history.count > keep { history.removeLast(history.count - keep) }
     }
 
     func canCallModel(now: Date, limit: Int) -> Bool { modelCalls.filter { now.timeIntervalSince($0) < 3600 }.count < limit }

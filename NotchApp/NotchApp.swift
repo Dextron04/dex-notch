@@ -5,12 +5,16 @@ import Carbon.HIToolbox
 struct NotchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     private var updater: AppUpdater { AppUpdater.shared }
+    private var center: AddonCenter { AddonCenter.shared }
 
     var body: some Scene {
         MenuBarExtra {
             Button("Ask…  ⌥Space") { delegate.assistant.toggle() }
             Button("Recall…  ⌥⇧Space") { delegate.assistant.toggleRecall() }
+            if !center.needsReconnect.isEmpty { Button("Reconnect Gmail (\(center.needsReconnect.count))…") { center.reconnectAll() } }
             if let v = updater.readyVersion { Button("Restart to update to \(v)") { updater.restartNow() } }
+            if let who = center.resumable { Button("Resume reply to \(who)") { center.resumeReply() } }
+            if center.waiting > 0 { Button("Show \(center.waiting) waiting alert\(center.waiting == 1 ? "" : "s")") { center.showWaiting() } }
             Button("Check for Updates…") { updater.checkNow() }.disabled(!updater.running)
             Divider()
             Button("Check mail now") { AddonCenter.shared.checkNow() }
@@ -22,7 +26,7 @@ struct NotchApp: App {
         } label: {
             HStack(spacing: 3) {
                 Image("MenuBarMark")
-                if updater.readyVersion != nil { Image(systemName: "circle.fill").font(.system(size: 5)) }       // an update is waiting for you to restart
+                if updater.readyVersion != nil || !center.needsReconnect.isEmpty { Image(systemName: "circle.fill").font(.system(size: 5)) }       // an update is waiting for you to restart
             }
         }
     }

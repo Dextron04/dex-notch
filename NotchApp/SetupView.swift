@@ -18,6 +18,8 @@ final class SetupModel {
     var gmailSecret = ""
     var ownClientOpen = false
     var importance = ""
+    var myName = ""
+    var repliesOnConnect = true
     var checkMinutes = 5.0
     var pane: SetupPane = .models
     var message: String?
@@ -35,7 +37,7 @@ final class SetupModel {
         folders = a.folders ?? AgentStream.folderChoices(configured: nil, defaultFolder: nil, home: FileManager.default.homeDirectoryForCurrentUser)
             .compactMap { Settings.normalizeFolder($0, home: FileManager.default.homeDirectoryForCurrentUser, exists: { p in var d: ObjCBool = false; return FileManager.default.fileExists(atPath: p, isDirectory: &d) && d.boolValue }) }
         let ad = AddonSettings.load(from: url)
-        importance = ad.importance; checkMinutes = ad.checkMinutes
+        importance = ad.importance; myName = ad.name; repliesOnConnect = ad.repliesOnConnect; checkMinutes = ad.checkMinutes
         if ad.gmailIsOwn, let g = ad.gmail { gmailID = g.clientID; gmailSecret = g.clientSecret; ownClientOpen = true }
         else if ad.gmail == nil { ownClientOpen = true }
         if let g = a.gemma { host = g.host; model = g.model; keychainService = g.keychainService; keychainAccount = g.keychainAccount; localOpen = true }
@@ -80,7 +82,7 @@ final class SetupModel {
         if let g = gemma, !t.isEmpty, !KeychainStore.set(token: t, service: g.keychainService, account: g.keychainAccount) {
             message = "Saved, but the token couldn't be stored. Tokens must be plain letters, digits and symbols, with no line breaks."; return false
         }
-        do { try AddonSettings.saveImportance(at: url, importance); try AddonSettings.saveCheckMinutes(at: url, checkMinutes) } catch { message = "Couldn't save settings.json: \(error.localizedDescription)"; return false }
+        do { try AddonSettings.saveImportance(at: url, importance); try AddonSettings.saveName(at: url, myName); try AddonSettings.saveRepliesOnConnect(at: url, repliesOnConnect); try AddonSettings.saveCheckMinutes(at: url, checkMinutes) } catch { message = "Couldn't save settings.json: \(error.localizedDescription)"; return false }
         AddonCenter.shared.reload()      // the new check frequency and importance apply right away
         assistant.connect()      // re-reads settings, looks for the CLIs again, checks the local model
         return true
@@ -308,16 +310,30 @@ struct SetupView: View {
         let accounts = center.accounts
         let builtIn = AddonSettings.bundled() != nil
         return VStack(alignment: .leading, spacing: 0) {
-            header("Mail", "Read-only. New mail is judged as it arrives, and only the few emails that need you reach the notch.")
+            header("Mail", "New mail is judged as it arrives, and only the few emails that need you reach the notch. Dex Notch only reads mail until you allow replies.")
+            if !center.needsReconnect.isEmpty {
+                row(title: "Reconnect needed", detail: "This update asks Google for one new permission, so you can reply from the notch. Alerts for these accounts are paused until you sign in again.",
+                    lead: { Image(systemName: "exclamationmark.arrow.triangle.2.circlepath").font(.system(size: 16)).foregroundStyle(Ink.emberDeep) },
+                    trail: { link("Reconnect") { center.reconnectAll() } })
+            }
             VStack(spacing: 0) {
                 if accounts.isEmpty {
                     row(title: "No account connected", muted: true, lead: { AddonMark(addon: "gmail", size: 24).opacity(0.45) }, trail: { EmptyView() })
                 }
                 ForEach(accounts, id: \.self) { e in
-                    row(title: e, detail: "Gmail", lead: { AddonMark(addon: "gmail", size: 24) },
-                        trail: { link("Remove", dim: true) { center.removeAccount(e) } })
+                    row(title: e, detail: center.needsReconnect.contains(e) ? "Reconnect needed" : center.canReply(e) ? "Gmail, can draft and send replies" : "Gmail, read-only", lead: { AddonMark(addon: "gmail", size: 24) },
+                        trail: {
+                            HStack(spacing: 16) {
+                                if center.needsReconnect.contains(e) { link("Reconnect") { center.reconnectAll() } }
+                                else if !center.canReply(e) { link("Allow replies") { center.allowReplies(for: e) }.help("Let Dex Notch create drafts and send mail from this account when you ask it to") }
+                                link("Remove", dim: true) { center.removeAccount(e) }
+                            }
+                        })
                 }
             }
+            row(title: "Allow replies", detail: m.repliesOnConnect ? "New accounts also let Dex Notch draft and send replies, only when you press Send or Save draft." : "New accounts stay read-only. Use Allow replies on an account later if you want to reply.",
+                lead: { Image(systemName: "arrowshape.turn.up.left").font(.system(size: 16)).foregroundStyle(Ink.dim) },
+                trail: { Toggle("", isOn: $m.repliesOnConnect).labelsHidden().toggleStyle(.switch) })
             HStack(spacing: 20) {
                 link(accounts.isEmpty ? "Connect Gmail" : "Add another account") { center.connectGmail(clientID: m.gmailID, clientSecret: m.gmailSecret) }
                 if center.connected { link("Check now", dim: true) { center.checkNow() } }
@@ -339,9 +355,23 @@ struct SetupView: View {
             .tint(Ink.dim).padding(.top, builtIn ? 32 : 22)
             }
 
+            if !center.history.isEmpty {
+                subhead("Recent alerts")
+                ForEach(center.history.prefix(4)) { a in
+                    row(title: a.headline, detail: a.sender + (a.account.map { " · " + $0 } ?? ""), pad: 12,
+                        lead: { AddonMark(addon: a.addon, size: 22) },
+                        trail: { link("Open") { if let u = URL(string: a.url) { NSWorkspace.shared.open(u) } } })
+                }
+            }
+
             subhead("How often to look")
             Text("A look is light and free. The AI only reads mail that is new.").font(.system(size: 13, design: .serif)).foregroundStyle(Ink.dim).padding(.bottom, 12)
             frequencyPicker
+
+            subhead("Your name")
+            Text("Used to sign the replies the AI drafts. Leave it blank and they end with a short thanks.").font(.system(size: 13, design: .serif)).foregroundStyle(Ink.dim).padding(.bottom, 10)
+            TextField("", text: $m.myName, prompt: Text("Alex").foregroundStyle(Ink.dim)).textFieldStyle(.plain).font(.system(size: 15, design: .serif)).foregroundStyle(Ink.text)
+            Rectangle().fill(Ink.text.opacity(0.18)).frame(height: 1).padding(.top, 6)
 
             subhead("What matters to you")
             Text("Added to the rules that decide what interrupts you.").font(.system(size: 13, design: .serif)).foregroundStyle(Ink.dim).padding(.bottom, 10)

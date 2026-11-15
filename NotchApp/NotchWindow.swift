@@ -20,6 +20,13 @@ final class NotchWindow {
 
     init(assistant: Assistant) { self.assistant = assistant }
 
+    /// The screen the notch lives on: the built-in display with the real notch, or (lid closed, or no notch) the main display with a drawn one.
+    /// NOTCH_FAKE_NOTCH=1 picks a display without a notch, to see how that looks.
+    static func targetScreen() -> NSScreen? {
+        if ProcessInfo.processInfo.environment["NOTCH_FAKE_NOTCH"] != nil, let s = NSScreen.screens.first(where: { $0.safeAreaInsets.top == 0 }) { return s }
+        return NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main
+    }
+
     /// Notch rect size on the built-in display. Falls back to a fake notch on non-notch Macs.
     static func notchSize(for screen: NSScreen) -> CGSize {
         let h = screen.safeAreaInsets.top
@@ -31,8 +38,7 @@ final class NotchWindow {
     func show() {
         panel?.close()
         if let o = resignObserver { NotificationCenter.default.removeObserver(o) }
-        guard let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main
-        else { return }
+        guard let screen = Self.targetScreen() else { return }
 
         let notch = Self.notchSize(for: screen)
         let size = CGSize(width: Self.panelWidth, height: notch.height + Self.maxBody + 250)
@@ -109,6 +115,15 @@ final class NotchWindow {
                 }
             }
         }
+        // Writing a reply needs the keyboard: take focus for as long as the reply panel is open, then give the screen back.
+        AddonCenter.shared.onReply = { [weak self, weak p] on in
+            guard let p else { return }
+            if on {
+                self?.hoverTimer?.invalidate(); self?.hoverTimer = nil
+                p.ignoresMouseEvents = false
+                NSApp.activate(ignoringOtherApps: true); p.makeKeyAndOrderFront(nil)
+            } else { p.ignoresMouseEvents = !(self?.assistant.isOpen ?? false) }
+        }
         assistant.onOpenChange = { [weak p] open in
             guard let p else { return }
             p.ignoresMouseEvents = !open
@@ -117,6 +132,6 @@ final class NotchWindow {
         // click anywhere else → panel loses key → collapse
         resignObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didResignKeyNotification, object: p, queue: .main
-        ) { [assistant] _ in MainActor.assumeIsolated { assistant.close() } }
+        ) { [assistant] _ in MainActor.assumeIsolated { assistant.close(); AddonCenter.shared.collapseReply() } }
     }
 }

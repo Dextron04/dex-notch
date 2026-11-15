@@ -41,10 +41,15 @@ struct NotchView: View {
 
             pill
             if !a.isOpen { AlertView(c: center, notch: notch) }
-            if !a.isOpen { NotchStreak(tick: center.streakTick, notch: notch) }
+            if !a.isOpen {
+                NotchStreak(tick: center.streakTick, size: CGSize(width: AlertView.width, height: AlertView.height(notch)))      // a card arrives
+                let reply = CGSize(width: AlertView.replyWidth, height: AlertView.replyHeight(notch))
+                RimOrbit(size: reply, active: center.replyOpen && center.session?.outcome == .sending)                           // a reply is leaving
+                NotchStreak(tick: center.sealTick, size: reply, lap: 1.1)                                                        // …and it has gone
+            }
         }
         .frame(width: panel.width, height: panel.height, alignment: .top)
-        .onKeyPress(.escape) { a.close(); return .handled }
+        .onKeyPress(.escape) { if center.replyOpen { center.collapseReply() } else { a.close() }; return .handled }
         .onChange(of: a.isOpen) { if a.isOpen { center.assistantOpened() } else { center.assistantClosed() } }
         .onChange(of: a.backend) { focused = true } // a click on the dial must not strand the caret
         .onChange(of: a.busy) { if !a.busy && a.isOpen { focused = true } } // field is disabled while answering
