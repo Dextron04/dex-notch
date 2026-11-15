@@ -20,6 +20,7 @@
 		3DAB1EE2139C1FD0BE520C84 /* JournalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 930E261BCB82A59819B0A2A3 /* JournalTests.swift */; };
 		4589E5F5759E858CC57E6466 /* Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582019F4D21E660A42477FFC /* Journal.swift */; };
 		50C799904FBE799B42C449D1 /* SVGPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99408511A3D90560197E556F /* SVGPath.swift */; };
+		514A700D4DB27AF92C2B20C0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 72DD816D131CAE9B673110C5 /* Assets.xcassets */; };
 		54586C4F2DAA8DE93B04E8E4 /* Gmail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */; };
 		5CD049CB380D1303583E2661 /* Assistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218A6628EE36C2AEDB045329 /* Assistant.swift */; };
 		5D77FCCB6F6B59832FB84838 /* AgentStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CADAB3DBF5CC60D578B0C3 /* AgentStream.swift */; };
@@ -65,6 +66,7 @@
 		582019F4D21E660A42477FFC /* Journal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Journal.swift; sourceTree = "<group>"; };
 		5B960B471D39685753DB2451 /* NotchAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NotchAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		72682E91183BD251F579ACB6 /* OfficialMarks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialMarks.swift; sourceTree = "<group>"; };
+		72DD816D131CAE9B673110C5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		794A0159731A8951203F5BD8 /* ModelMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelMark.swift; sourceTree = "<group>"; };
 		7E9B5AA03F38C0E8CEEF866E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		837603D3A7FE79211CF92BE4 /* AddonsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddonsTests.swift; sourceTree = "<group>"; };
@@ -104,6 +106,7 @@
 				A5CADAB3DBF5CC60D578B0C3 /* AgentStream.swift */,
 				E76E22DDB3A2D28B85B7C092 /* AlertView.swift */,
 				CE562AE9C74255701B08F531 /* AnswerBody.swift */,
+				72DD816D131CAE9B673110C5 /* Assets.xcassets */,
 				218A6628EE36C2AEDB045329 /* Assistant.swift */,
 				9F216985AFA23BC8E9805806 /* ConversationStore.swift */,
 				2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */,
@@ -174,6 +177,7 @@
 			buildConfigurationList = 2056D40C71F64145F9D1535D /* Build configuration list for PBXNativeTarget "NotchApp" */;
 			buildPhases = (
 				7AD512718444DB917FE95810 /* Sources */,
+				A249338EB4A300EC4440BCA9 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -222,6 +226,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A249338EB4A300EC4440BCA9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				514A700D4DB27AF92C2B20C0 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		6DAD31D031BEF19B5B6A6D7A /* Sources */ = {

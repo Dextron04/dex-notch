@@ -29,6 +29,16 @@ enum KeychainStore {
         return p.terminationStatus == 0 && get(service: service, account: account) == token
     }
 
+    @discardableResult
+    static func delete(service: String, account: String) -> Bool {
+        let p = Process()
+        p.executableURL = tool; p.arguments = ["delete-generic-password", "-s", service, "-a", account]
+        p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return false }
+        p.waitUntilExit()
+        return p.terminationStatus == 0
+    }
+
     static func get(service: String, account: String) -> String? {
         let p = Process(), out = Pipe()
         p.executableURL = tool; p.arguments = ["find-generic-password", "-s", service, "-a", account, "-w"]

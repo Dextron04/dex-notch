@@ -6,7 +6,7 @@ struct NotchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
     var body: some Scene {
-        MenuBarExtra("NotchApp", systemImage: "capsule.fill") {
+        MenuBarExtra {
             Button("Ask…  ⌥Space") { delegate.assistant.toggle() }
             Button("Recall…  ⌥⇧Space") { delegate.assistant.toggleRecall() }
             Button("Check mail now") { AddonCenter.shared.checkNow() }
@@ -15,6 +15,8 @@ struct NotchApp: App {
             Button("Check connection") { delegate.assistant.connect() }
             Divider()
             Button("Quit") { NSApp.terminate(nil) }.keyboardShortcut("q")
+        } label: {
+            Image("MenuBarMark")
         }
     }
 }

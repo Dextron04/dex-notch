@@ -96,15 +96,25 @@ final class AddonsTests: XCTestCase {
     func testStateScheduleAndSeenCap() {
         var s = AddonState()
         let now = Date(timeIntervalSince1970: 100_000)
-        XCTAssertTrue(s.isDue(now: now, hours: 4))
-        s.lastTry = now.addingTimeInterval(-3 * 3600); s.lastOK = true
-        XCTAssertFalse(s.isDue(now: now, hours: 4))
-        s.lastTry = now.addingTimeInterval(-3601 * 4); XCTAssertTrue(s.isDue(now: now, hours: 4))
-        s.lastTry = now.addingTimeInterval(-31 * 60); s.lastOK = false; XCTAssertTrue(s.isDue(now: now, hours: 4))     // failed: retry in 30 min
-        s.lastTry = now.addingTimeInterval(-10 * 60); XCTAssertFalse(s.isDue(now: now, hours: 4))
+        XCTAssertTrue(s.isDue(now: now, minutes: 5))
+        s.lastTry = now.addingTimeInterval(-3 * 60); s.lastOK = true
+        XCTAssertFalse(s.isDue(now: now, minutes: 5))
+        s.lastTry = now.addingTimeInterval(-5 * 60 - 1); XCTAssertTrue(s.isDue(now: now, minutes: 5))
+        s.lastOK = false; XCTAssertFalse(s.isDue(now: now, minutes: 5))                                   // failed: wait at least 15 minutes, not 5
+        s.lastTry = now.addingTimeInterval(-16 * 60); XCTAssertTrue(s.isDue(now: now, minutes: 5))
+        s.lastTry = now.addingTimeInterval(-3 * 3600); s.lastOK = true; XCTAssertFalse(s.isDue(now: now, minutes: 240))
+        s.lastTry = now.addingTimeInterval(-241 * 60); XCTAssertTrue(s.isDue(now: now, minutes: 240))
         s.markSeen((0..<(AddonState.maxSeen + 50)).map(String.init))
         XCTAssertEqual(s.seen.count, AddonState.maxSeen); XCTAssertEqual(s.seen.last, "\(AddonState.maxSeen + 49)"); XCTAssertEqual(s.seen.first, "50")   // oldest fall off
         s.markSeen(["100"]); XCTAssertEqual(s.seen.count, AddonState.maxSeen)                                                                       // known ids aren't added twice
+    }
+    func testModelCallsAreCappedPerHour() {
+        var s = AddonState(); let now = Date(timeIntervalSince1970: 500_000)
+        for i in 0..<3 { s.noteModelCall(now: now.addingTimeInterval(Double(-i) * 60)) }
+        XCTAssertFalse(s.canCallModel(now: now, limit: 3)); XCTAssertTrue(s.canCallModel(now: now, limit: 4))
+        XCTAssertTrue(s.canCallModel(now: now.addingTimeInterval(3600), limit: 3))        // an hour later the oldest calls have aged out
+        s.noteModelCall(now: now.addingTimeInterval(7200)); XCTAssertEqual(s.modelCalls.count, 1)   // old ones are dropped when a new one is noted
+        var cfg = AddonSettings.load(from: URL(fileURLWithPath: "/x")); cfg.maxModelCallsPerHour = 8; XCTAssertEqual(cfg.maxModelCallsPerHour, 8)
     }
     func testStateRoundTripsOnDisk() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("addons-\(UUID().uuidString).json")
@@ -122,16 +132,63 @@ final class AddonsTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
         try Data(#"{"default":"claude","addons":{"order":["gemma","claude","gemma","bogus"],"interval_hours":0.1,"importance":"  rent  ","gmail":{"client_id":" id ","client_secret":"sec"}}}"#.utf8).write(to: url)
         let s = AddonSettings.load(from: url)
-        XCTAssertEqual(s.order, [.gemma, .claude]); XCTAssertEqual(s.intervalHours, 0.5); XCTAssertEqual(s.importance, "rent")
+        XCTAssertEqual(s.order, [.gemma, .claude]); XCTAssertEqual(s.checkMinutes, 6); XCTAssertEqual(s.importance, "rent")      // interval_hours 0.1 → 6 min
         XCTAssertEqual(s.gmail, GmailConfig(clientID: "id", clientSecret: "sec"))
         try AddonSettings.saveGmail(at: url, GmailConfig(clientID: "new", clientSecret: "n2"))
         XCTAssertEqual(AddonSettings.load(from: url).gmail?.clientID, "new")
         XCTAssertEqual(AddonSettings.load(from: url).order, [.gemma, .claude])                       // untouched
         XCTAssertEqual((try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])?["default"] as? String, "claude")
     }
+    func testBundledClientIsUsedUnlessYouSupplyYourOwn() throws {
+        XCTAssertEqual(AddonSettings.bundled(["GoogleClientID": "id", "GoogleClientSecret": "sec"]), GmailConfig(clientID: "id", clientSecret: "sec"))
+        XCTAssertNil(AddonSettings.bundled(["GoogleClientID": "$(GOOGLE_CLIENT_ID)", "GoogleClientSecret": "$(GOOGLE_CLIENT_SECRET)"]))   // plain checkout
+        XCTAssertNil(AddonSettings.bundled(["GoogleClientID": "id", "GoogleClientSecret": ""])); XCTAssertNil(AddonSettings.bundled([:])); XCTAssertNil(AddonSettings.bundled(nil))
+        let b = GmailConfig(clientID: "built", clientSecret: "in")
+        let none = AddonSettings.load(from: URL(fileURLWithPath: "/nonexistent/x.json"), bundled: b)
+        XCTAssertEqual(none.gmail, b); XCTAssertFalse(none.gmailIsOwn)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("s-\(UUID().uuidString).json"); defer { try? FileManager.default.removeItem(at: url) }
+        try Data(#"{"addons":{"importance":"x"}}"#.utf8).write(to: url)
+        XCTAssertEqual(AddonSettings.load(from: url, bundled: b).gmail, b)                                                        // addons block without a client: still the built-in
+        try Data(#"{"addons":{"gmail":{"client_id":"mine","client_secret":"s"}}}"#.utf8).write(to: url)
+        let own = AddonSettings.load(from: url, bundled: b)
+        XCTAssertEqual(own.gmail?.clientID, "mine"); XCTAssertTrue(own.gmailIsOwn)
+    }
+    func testSeveralAccountsAreTaggedAndLinkedToTheRightInbox() {
+        var a = mail("1"); a.account = "me@work.com"; var b = mail("2"); b.account = "me@home.com"
+        let alerts = Triage.parse(#"[{"id":"1","score":9,"headline":"h","reason":"r"},{"id":"2","score":8,"headline":"h","reason":"r"}]"#, items: [a, b])
+        XCTAssertEqual(alerts?.map(\.account), ["me@work.com", "me@home.com"])
+        XCTAssertEqual(alerts?.first?.url, "https://mail.google.com/mail/u/me@work.com/#inbox/abc1231")
+        XCTAssertEqual(AddonSettings.mailURL(account: "", thread: "ab12"), "https://mail.google.com/mail/u/0/#inbox/ab12")
+        XCTAssertEqual(AddonSettings.mailURL(account: "a+b@x.com", thread: "ab12").contains("a+b@x.com"), true)
+        XCTAssertTrue(Triage.prompt(items: [a], importance: "").user.contains("\"account\":\"me@work.com\""))
+        XCTAssertFalse(Triage.prompt(items: [mail("3")], importance: "").user.contains("\"account\""))
+    }
+    func testOlderStateFilesStillLoad() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("old-\(UUID().uuidString).json"); defer { try? FileManager.default.removeItem(at: url) }
+        try Data(#"{"seen":["a|1"],"muted":["x@y.com"],"lastOK":true,"pending":[{"id":"1","addon":"gmail","sender":"S","address":"a@b.com","headline":"h","reason":"r","url":"u","score":8,"created":"2026-11-14T10:00:00Z"}]}"#.utf8).write(to: url)
+        let s = AddonState.load(from: url)
+        XCTAssertEqual(s.seen, ["a|1"]); XCTAssertEqual(s.accounts, []); XCTAssertEqual(s.pending.first?.account, nil); XCTAssertTrue(s.lastOK)
+    }
+    func testImportanceIsSavedAndClearedWithoutTouchingOtherKeys() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("imp-\(UUID().uuidString).json"); defer { try? FileManager.default.removeItem(at: url) }
+        try Data(#"{"default":"codex","addons":{"interval_hours":6}}"#.utf8).write(to: url)
+        try AddonSettings.saveImportance(at: url, "  my landlord  ")
+        XCTAssertEqual(AddonSettings.load(from: url).importance, "my landlord"); XCTAssertEqual(AddonSettings.load(from: url).checkMinutes, 360)
+        try AddonSettings.saveImportance(at: url, "")
+        XCTAssertEqual(AddonSettings.load(from: url).importance, "")
+        XCTAssertEqual((try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])?["default"] as? String, "codex")
+    }
+    func testCheckFrequencyIsSavedClampedAndReplacesTheOldSpelling() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("freq-\(UUID().uuidString).json"); defer { try? FileManager.default.removeItem(at: url) }
+        try Data(#"{"addons":{"interval_hours":4,"importance":"x"}}"#.utf8).write(to: url)
+        try AddonSettings.saveCheckMinutes(at: url, 15)
+        XCTAssertEqual(AddonSettings.load(from: url).checkMinutes, 15); XCTAssertEqual(AddonSettings.load(from: url).importance, "x")
+        try AddonSettings.saveCheckMinutes(at: url, 0); XCTAssertEqual(AddonSettings.load(from: url).checkMinutes, 2)
+        try AddonSettings.saveCheckMinutes(at: url, 99_999); XCTAssertEqual(AddonSettings.load(from: url).checkMinutes, 1440)
+    }
     func testNoAddonsSectionMeansDefaults() {
         let s = AddonSettings.load(from: URL(fileURLWithPath: "/nonexistent/x.json"))
-        XCTAssertNil(s.gmail); XCTAssertEqual(s.order, [.claude, .codex, .gemma]); XCTAssertEqual(s.intervalHours, 4)
+        XCTAssertNil(s.gmail); XCTAssertEqual(s.order, [.claude, .codex, .gemma]); XCTAssertEqual(s.checkMinutes, 5); XCTAssertEqual(s.maxModelCallsPerHour, 8)
     }
 
     // MARK: Gmail + OAuth
@@ -143,6 +200,17 @@ final class AddonsTests: XCTestCase {
         XCTAssertEqual(m?.from, "A <a@b.com>"); XCTAssertEqual(m?.subject, "Hello"); XCTAssertEqual(m?.snippet, "Tom & Jerry's")
         XCTAssertEqual(m?.bulk, true); XCTAssertEqual(m?.date, Date(timeIntervalSince1970: 1_700_000_000)); XCTAssertEqual(m?.labels, ["INBOX", "UNREAD"])
         XCTAssertNil(GmailAPI.parse(["threadId": "t"]))
+    }
+    func testGmailErrorsExplainThemselves() {
+        func body(_ reason: String, _ msg: String = "m") -> Data { Data(#"{"error":{"code":403,"message":"\#(msg)","errors":[{"reason":"\#(reason)"}]}}"#.utf8) }
+        XCTAssertTrue(GmailAPI.explain(code: 403, body: body("userRateLimitExceeded")).retry)
+        XCTAssertTrue(GmailAPI.explain(code: 429, body: Data()).retry); XCTAssertTrue(GmailAPI.explain(code: 503, body: Data()).retry)
+        let off = GmailAPI.explain(code: 403, body: body("accessNotConfigured"))          // a 403 is not always a rate limit
+        XCTAssertFalse(off.retry); XCTAssertTrue(off.message.contains("isn't enabled"))
+        XCTAssertTrue(GmailAPI.explain(code: 403, body: body("insufficientPermissions")).message.contains("read-only"))
+        XCTAssertTrue(GmailAPI.explain(code: 401, body: Data()).message.contains("Add the account again"))
+        XCTAssertTrue(GmailAPI.explain(code: 400, body: body("badRequest", "Invalid query")).message.contains("Invalid query"))
+        XCTAssertTrue(GmailAPI.query.contains("newer_than:3d"))
     }
     func testPKCEMatchesRFC7636Vector() {
         XCTAssertEqual(GoogleOAuth.challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")

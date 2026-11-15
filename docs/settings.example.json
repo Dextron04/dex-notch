@@ -10,7 +10,8 @@
   },
   "addons": {
     "order": ["claude", "codex", "gemma"],
-    "interval_hours": 4,
+    "check_minutes": 5,
+    "max_model_calls_per_hour": 8,
     "importance": "Recruiters and interview scheduling, anything from my landlord, payment problems.",
     "gmail": {
       "client_id": "1234-abc.apps.googleusercontent.com",

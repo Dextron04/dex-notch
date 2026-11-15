@@ -21,7 +21,8 @@ final class AddonCenter {
     // what Settings shows
     private(set) var status = "Not connected."
     private(set) var checking = false
-    private(set) var connected = false
+    var accounts: [String] { state.accounts }
+    var connected: Bool { !state.accounts.isEmpty }
     private(set) var settings = AddonSettings()
 
     /// The window listens so it can let clicks through everywhere except the card.
@@ -29,7 +30,7 @@ final class AddonCenter {
 
     private var state = AddonState()
     private var assistant: Assistant?
-    private var gmail: GmailClient?
+    private var clients: [String: GmailClient] = [:]
     private var locked = false
     private var asleep = false
     private var retiring = false
@@ -43,61 +44,114 @@ final class AddonCenter {
         self.assistant = assistant
         state = AddonState.load(from: stateURL)
         reload()
+        migrateLegacyAccount()
         let dn = DistributedNotificationCenter.default(), ws = NSWorkspace.shared.notificationCenter
         dn.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.locked = true } }
         dn.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.locked = false; self?.welcomeBack() } }
         ws.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.asleep = true } }
         ws.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.asleep = false; self?.welcomeBack() } }
-        timer = Timer.scheduledTimer(withTimeInterval: 600, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
+        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.tick(); self?.presentIfPossible() }
         if ProcessInfo.processInfo.environment["NOTCH_ALERT_DEMO"] != nil { demo() }
     }
 
     func reload() {
         settings = AddonSettings.load(from: settingsURL)
-        gmail = settings.gmail.map(GmailClient.init)
-        let configured = settings.gmail != nil
-        Task { let has = await Task.detached { GmailClient.isConnected() }.value
-               connected = configured && has
-               if status == "Not connected." || status.hasPrefix("Add ") { status = connected ? "Connected. Checks every \(Int(settings.intervalHours)) hours." : (settings.gmail == nil ? "Add a Google client ID to begin." : "Not connected.") } }
+        clients = [:]
+        if let cfg = settings.gmail { for e in state.accounts { clients[e] = GmailClient(cfg, email: e) } }
+        if status == "Not connected." || status.hasPrefix("Add a Google") || status.hasPrefix("Connected") { status = idleStatus }
+    }
+    private var idleStatus: String {
+        settings.gmail == nil ? "Add a Google client ID to begin."
+            : accounts.isEmpty ? "No account connected yet."
+            : "Looks for new mail every \(settings.checkMinutes < 60 ? "\(Int(settings.checkMinutes)) minutes" : "\(Int(settings.checkMinutes / 60)) hours")."
+    }
+
+    /// Earlier versions kept one token under a fixed name. Find out whose it is and file it under that address.
+    private func migrateLegacyAccount() {
+        guard state.accounts.isEmpty, let cfg = settings.gmail else { return }
+        Task {
+            guard let email = await GmailClient.migrateLegacy(cfg) else { return }
+            addAccount(email); status = "Moved your Gmail sign-in to \(email)."
+        }
+    }
+
+    private func addAccount(_ email: String) {
+        if !state.accounts.contains(email) { state.accounts.append(email) }
+        state.save(to: stateURL); reload()
+    }
+
+    /// Settings → Remove: forget the sign-in, and drop anything of theirs still waiting to be shown.
+    func removeAccount(_ email: String) {
+        GmailClient.forget(email)
+        state.accounts.removeAll { $0 == email }
+        state.pending.removeAll { $0.account == email }
+        state.save(to: stateURL); reload()
+        status = "Removed \(email)."
     }
 
     // MARK: schedule
 
     private func tick() {
-        guard settings.gmail != nil, connected, state.isDue(now: Date(), hours: settings.intervalHours) else { return }
-        checkNow()
+        guard !asleep, settings.gmail != nil, connected, state.isDue(now: Date(), minutes: settings.checkMinutes) else { return }
+        checkNow(manual: false)
     }
 
-    /// Menu → Check mail now, and the scheduled run.
-    func checkNow() {
-        guard !checking, let gmail, let assistant else { return }
+    /// Menu → Check mail now (`manual`), and the scheduled look. A look is cheap (a list request per account); the model only runs when
+    /// there is new mail that got past the free filters. Every connected account is read; one failing doesn't hide the others.
+    func checkNow(manual: Bool = true) {
+        guard !checking, !clients.isEmpty, let assistant else { return }
         checking = true; status = "Checking mail…"
+        let accounts = state.accounts
         Task {
             defer { checking = false }
             state.lastTry = Date()
-            do {
-                let items = try await gmail.fetchUnread()
-                let fresh = Triage.prefilter(items, seen: Set(state.seen), muted: Set(state.muted))
-                var found: [AddonAlert] = [], via = ""
-                if !fresh.isEmpty {
-                    let order = settings.order.filter { assistant.choices.contains($0) }
-                    guard let r = await Triage.run(items: fresh, importance: settings.importance, order: order, ask: { [self] b, s, u in try await ask(b, s, u) }) else {
-                        state.lastOK = false; state.save(to: stateURL)
-                        status = order.isEmpty ? "No model is set up to read your mail." : "No model could answer. Trying again in 30 minutes."
-                        return
-                    }
-                    let have = Set(state.pending.map(\.id))
-                    found = r.alerts.filter { !have.contains($0.id) }; via = " with " + r.backend.displayName
+            var failed: [String] = [], why = ""
+            @MainActor func readAll() async -> [MailItem] {
+                var out: [MailItem] = []; failed = []
+                for e in accounts {
+                    guard let c = clients[e] else { continue }
+                    do { out += try await c.fetchUnread(skipping: Set(state.seen)) }
+                    catch { failed.append(e); why = error.localizedDescription }
                 }
-                state.markSeen(items.map(\.id)); state.pending += found
-                state.lastOK = true; state.save(to: stateURL)
-                status = "Checked \(Date().formatted(date: .omitted, time: .shortened))\(via). " + (found.isEmpty ? "Nothing needs you." : "\(found.count) worth your attention.")
-                presentIfPossible()
-            } catch {
-                state.lastOK = false; state.save(to: stateURL)
-                status = error.localizedDescription
+                return out
             }
+            var items = await readAll()
+            if failed.count == accounts.count {                                  // nothing could be read at all
+                state.lastOK = false; state.save(to: stateURL)
+                status = accounts.count == 1 ? why : "Couldn't reach any account. \(why)"
+                return
+            }
+            var fresh = Triage.prefilter(items, seen: Set(state.seen), muted: Set(state.muted))
+            if !manual, fresh.contains(where: { Date().timeIntervalSince($0.date) < 90 }) {
+                status = "New mail. Reading it in a minute…"                     // mail that just landed: wait a moment, so a burst becomes one model call
+                try? await Task.sleep(for: .seconds(60))
+                items = await readAll()
+                if failed.count == accounts.count { state.lastOK = false; state.save(to: stateURL); status = why; return }
+                fresh = Triage.prefilter(items, seen: Set(state.seen), muted: Set(state.muted))
+            }
+            var found: [AddonAlert] = [], via = ""
+            if !fresh.isEmpty {
+                if !manual, !state.canCallModel(now: Date(), limit: settings.maxModelCallsPerHour) {
+                    state.lastOK = true; state.save(to: stateURL)               // nothing is marked read: the next look picks it up
+                    status = "A lot of new mail. Pacing model use; it will be read shortly."
+                    return
+                }
+                let order = settings.order.filter { assistant.choices.contains($0) }
+                state.noteModelCall(now: Date())
+                guard let r = await Triage.run(items: fresh, importance: settings.importance, order: order, ask: { [self] b, s, u in try await ask(b, s, u) }) else {
+                    state.lastOK = false; state.save(to: stateURL)
+                    status = order.isEmpty ? "No model is set up to read your mail." : "No model could answer. Trying again soon."
+                    return
+                }
+                let have = Set(state.pending.map(\.id))
+                found = r.alerts.filter { !have.contains($0.id) }; via = " with " + r.backend.displayName
+            }
+            state.markSeen(items.map(\.id)); state.pending += found
+            state.lastOK = failed.isEmpty; state.save(to: stateURL)               // a failed account makes the next try come later, not sooner
+            let note = failed.isEmpty ? "" : " Couldn't read \(failed.joined(separator: ", "))."
+            status = "Checked \(Date().formatted(date: .omitted, time: .shortened))\(via). " + (found.isEmpty ? "Nothing needs you." : "\(found.count) worth your attention.") + note
+            presentIfPossible()
         }
     }
 
@@ -122,15 +176,23 @@ final class AddonCenter {
 
     // MARK: Gmail connection
 
+    /// Adds an account (or refreshes one already there). Empty fields use the built-in Google client; filled ones are your own, and are kept.
     func connectGmail(clientID: String, clientSecret: String) {
-        let cfg = GmailConfig(clientID: clientID.trimmingCharacters(in: .whitespacesAndNewlines), clientSecret: clientSecret.trimmingCharacters(in: .whitespacesAndNewlines))
-        guard !cfg.clientID.isEmpty, !cfg.clientSecret.isEmpty else { status = "Add the client ID and secret first."; return }
-        do { try AddonSettings.saveGmail(at: settingsURL, cfg) } catch { status = "Couldn't save settings.json: \(error.localizedDescription)"; return }
+        let own = GmailConfig(clientID: clientID.trimmingCharacters(in: .whitespacesAndNewlines), clientSecret: clientSecret.trimmingCharacters(in: .whitespacesAndNewlines))
+        let cfg: GmailConfig
+        if !own.clientID.isEmpty || !own.clientSecret.isEmpty {
+            guard !own.clientID.isEmpty, !own.clientSecret.isEmpty else { status = "Add both the client ID and the secret, or clear both to use the built-in sign-in."; return }
+            do { try AddonSettings.saveGmail(at: settingsURL, own) } catch { status = "Couldn't save settings.json: \(error.localizedDescription)"; return }
+            cfg = own
+        } else if let b = AddonSettings.bundled() { cfg = b }
+        else { status = "This build has no Google sign-in built in. Add your own client under Advanced."; return }
         status = "Finish signing in in your browser…"
         Task {
             do {
-                try await GmailClient.connect(cfg)
-                reload(); status = "Connected."
+                let email = try await GmailClient.connect(cfg)
+                let isNew = !state.accounts.contains(email)
+                addAccount(email)
+                status = isNew ? "Added \(email)." : "\(email) signed in again."
                 try? await Task.sleep(for: .milliseconds(300)); state.lastTry = nil; checkNow()
             } catch { status = error.localizedDescription }
         }
@@ -186,19 +248,19 @@ final class AddonCenter {
     func notImportant() {
         guard let c = current else { return }
         if !state.muted.contains(c.address) { state.muted.append(c.address) }
-        state.pending.removeAll { $0.address == c.address }     // and anything else already queued from them
-        retire(c.id)
+        retire(c.id, alsoDropFrom: c.address)       // their other queued alerts go once the card has closed, so "+N more" doesn't jump while it is still showing
     }
 
-    private func retire(_ id: String) {
+    private func retire(_ id: String, alsoDropFrom address: String? = nil) {
         guard current?.id == id, !retiring else { return }
         retiring = true; countdown?.cancel(); cardKeys = []      // the keys go back to whatever you were typing in
         Task {
-            shown = false
-            try? await Task.sleep(for: .milliseconds(200))      // words leave first, then the shell folds back into the hardware
-            presenting = false; onPresenting?(false)
-            try? await Task.sleep(for: .milliseconds(650))
-            state.pending.removeAll { $0.id == id }; state.save(to: stateURL)
+            withAnimation(.easeIn(duration: 0.22)) { shown = false }
+            try? await Task.sleep(for: .milliseconds(140))      // the words start to leave, and the shell begins folding back into the hardware under them
+            withAnimation(.smooth(duration: 0.5)) { presenting = false }     // explicit, so nothing downstream can swallow it
+            onPresenting?(false)
+            try? await Task.sleep(for: .milliseconds(850))      // longer than the fold (about 0.5s) so the card is never removed mid-motion
+            state.pending.removeAll { $0.id == id || ($0.address == address) }; state.save(to: stateURL)
             current = nil; retiring = false
             try? await Task.sleep(for: .milliseconds(500))
             presentIfPossible()

@@ -1,0 +1,23 @@
+{
+  "images": [
+    {
+      "idiom": "universal",
+      "scale": "1x",
+      "filename": "mark_128.png"
+    },
+    {
+      "idiom": "universal",
+      "scale": "2x",
+      "filename": "mark_256.png"
+    },
+    {
+      "idiom": "universal",
+      "scale": "3x",
+      "filename": "mark_512.png"
+    }
+  ],
+  "info": {
+    "version": 1,
+    "author": "xcode"
+  }
+}

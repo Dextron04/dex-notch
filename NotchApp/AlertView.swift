@@ -22,9 +22,9 @@ struct AlertView: View {
             let shape = UnevenRoundedRectangle(bottomLeadingRadius: open ? 26 : 10, bottomTrailingRadius: open ? 26 : 10)
             shape.fill(.black)
                 .frame(width: open ? Self.width : notch.width)
-                .animation(reduce ? .easeOut(duration: 0.2) : .spring(duration: 0.55, bounce: 0.28), value: open)      // wide first…
+                .animation(reduce ? .easeOut(duration: 0.2) : open ? .spring(duration: 0.55, bounce: 0.28) : .smooth(duration: 0.4).delay(0.08), value: open)      // opens wide first; closes narrow last
                 .frame(height: open ? Self.height(notch) : notch.height)
-                .animation(reduce ? .easeOut(duration: 0.2) : .spring(duration: 0.6, bounce: 0.2).delay(0.07), value: open)   // …then tall
+                .animation(reduce ? .easeOut(duration: 0.2) : open ? .spring(duration: 0.6, bounce: 0.2).delay(0.07) : .smooth(duration: 0.4), value: open)         // opens tall second; folds up first, with no bounce
                 .overlay(alignment: .top) { content(a) }
                 .overlay { rimTimer }
                 .clipShape(shape)
@@ -41,7 +41,8 @@ struct AlertView: View {
             HStack(spacing: 0) {
                 HStack(spacing: 7) {
                     AddonMark(addon: a.addon, size: 17)
-                    Text("Gmail").font(.system(size: 11, weight: .medium)).tracking(0.3).foregroundStyle(Ink.dim)
+                    Text(c.accounts.count > 1 ? (a.account.map { String($0.split(separator: "@").first ?? "") } ?? "Gmail") : "Gmail")   // with several accounts, say which
+                        .font(.system(size: 11, weight: .medium)).tracking(0.3).foregroundStyle(Ink.dim).lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 26)
                 Color.clear.frame(width: notch.width)
@@ -123,7 +124,7 @@ private struct Reveal: ViewModifier {
     let on: Bool, delay: Double, reduce: Bool
     func body(content: Content) -> some View {
         content.opacity(on ? 1 : 0).blur(radius: on || reduce ? 0 : 7).offset(y: on || reduce ? 0 : 5)
-            .animation(reduce ? .easeOut(duration: 0.15) : on ? .easeOut(duration: 0.45).delay(delay) : .easeIn(duration: 0.14), value: on)
+            .animation(reduce ? .easeOut(duration: 0.15) : on ? .easeOut(duration: 0.45).delay(delay) : .easeIn(duration: 0.2).delay(0.12 - min(delay, 0.12) / 2), value: on)
     }
 }
 private extension View { func reveal(_ on: Bool, _ delay: Double, _ reduce: Bool) -> some View { modifier(Reveal(on: on, delay: delay, reduce: reduce)) } }

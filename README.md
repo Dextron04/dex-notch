@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="docs/assets/hero.svg" alt="dex-notch: the Mac notch, wired to every AI you use" width="100%">
+  <img src="docs/assets/dex-notch-logo.svg" alt="Dex Notch" width="420">
+</p>
+
+<p align="center">
+  <img src="docs/assets/hero.svg" alt="Dex Notch: the Mac notch, wired to every AI you use" width="100%">
 </p>
 
 <p align="center">
@@ -23,7 +27,7 @@
 
 ## No API keys. Your regular subscriptions.
 
-dex-notch never asks for an OpenAI or Anthropic API key and never bills you per token.
+Dex Notch never asks for an OpenAI or Anthropic API key and never bills you per token.
 
 | Model | What runs it | What it uses |
 |---|---|---|
@@ -37,8 +41,8 @@ The app does not read, copy or reuse your login tokens. It starts the same CLIs 
 
 ## Get started in two minutes
 
-1. **Download** the latest `dex-notch-*.dmg` from [Releases](https://github.com/Dextron04/dex-notch/releases/latest) and drag **dex-notch** into Applications.
-2. **Open it once and allow it.** The build is not notarized (that needs a paid Apple Developer ID), so macOS says it can't verify the app. On macOS 15 and later, go to **System Settings → Privacy & Security** and click **Open Anyway** next to dex-notch (on macOS 14, right-click → Open). From Terminal, on any version: `xattr -dr com.apple.quarantine /Applications/dex-notch.app`.
+1. **Download** the latest `dex-notch-*.dmg` from [Releases](https://github.com/Dextron04/dex-notch/releases/latest) and drag **Dex Notch** into Applications.
+2. **Open it once and allow it.** The build is not notarized (that needs a paid Apple Developer ID), so macOS says it can't verify the app. On macOS 15 and later, go to **System Settings → Privacy & Security** and click **Open Anyway** next to Dex Notch (on macOS 14, right-click → Open). From Terminal, on any version: `xattr -dr com.apple.quarantine "/Applications/Dex Notch.app"`.
 3. **Answer three questions** in the setup window that opens by itself: which model, where it may work, and (optionally) a model on your own server.
 4. **Press `⌥ Space`.**
 
@@ -116,7 +120,7 @@ Press `⌥⇧ Space` to see what you and your agents have been doing.
 
 ## The problems this solves
 
-| The problem | What dex-notch does about it |
+| The problem | What Dex Notch does about it |
 |---|---|
 | **Every AI is an island.** What you decided with Claude Code is invisible to Codex, Gemini and ChatGPT. | A recorder turns every session into a redacted markdown note in one Obsidian vault. Every agent can search it. |
 | **Setup that takes an afternoon.** | A DMG and one window. It finds your CLIs, tells you the install command for what's missing, and asks where edit runs may write. |
@@ -222,10 +226,10 @@ Without it everything else works, and the dial simply has two models.
 
 ## Add-ons: Gmail
 
-dex-notch can watch your inbox and tell you at the notch about the few emails that actually need you. Most mail never reaches you.
+Dex Notch can watch your inbox and tell you at the notch about the few emails that actually need you. Most mail never reaches you.
 
-1. **Connect once.** Settings → *Mail*. Create a free Google OAuth client of type *Desktop app* (Gmail API on), paste its ID and secret, press **Connect Gmail**. It asks for read-only access; the sign-in token goes in your Keychain.
-2. **It checks every 4 hours** (`addons.interval_hours`). Only headers and the short snippet are read, never message bodies.
+1. **Connect once.** Add as many Gmail accounts as you like. Settings → *Mail* → **Connect Gmail**. It asks Google for read-only access; the sign-in token goes in your Keychain. Release builds carry their own Google sign-in. Building from source, or want your own? Under *Advanced*, paste an OAuth client of type *Desktop app* (Gmail API on). See [PRIVACY.md](PRIVACY.md).
+2. **It looks for new mail every 5 minutes** while the Mac is awake (`addons.check_minutes`). A look is a single light request per account; only headers and the short snippet are read, never message bodies. The model runs only when there is new mail that got past the free filters, waits a minute so a burst of mail becomes one call, and is capped at 8 calls an hour (`addons.max_model_calls_per_hour`) so it can't use up your Claude or Codex limits.
 3. **Three filters.** Spam, promotions, social and forum mail are dropped first. A model then scores what is left against strict rules (a real person waiting on you, a deadline, a meeting change, a failed payment, a delivery today) and only a 7 out of 10 or better gets through, at most three per check. A third filter is you: **Not important** mutes that sender for good.
 4. **Claude first, then Codex, then your local model** (`addons.order`). If one is rate-limited, logged out or offline, the next takes over. Add a line of your own under `addons.importance` ("recruiters and my landlord") to tune what counts.
 5. **It waits for you.** Nothing pops up while the Mac is asleep or locked. When you wake or unlock it, the notch opens with two lines: what it is and why it matters. `⌥↩` opens the thread, `⌥⌫` mutes the sender, `⌥esc` dismisses. Those keys exist only while a card is on screen.
@@ -314,7 +318,7 @@ Releases are built by GitHub Actions: push a tag (`git tag v0.1.0 && git push --
 
 ```bash
 python3 scripts/demo_vault.py /tmp/demo-vault
-NOTCH_VAULT=/tmp/demo-vault NOTCH_SETTINGS=/tmp/none.json NOTCH_CLIS=none open path/to/dex-notch.app
+NOTCH_VAULT=/tmp/demo-vault NOTCH_SETTINGS=/tmp/none.json NOTCH_CLIS=none open "path/to/Dex Notch.app"
 ```
 
 ### Project layout

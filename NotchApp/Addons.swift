@@ -14,6 +14,7 @@ struct MailItem: Codable, Equatable, Sendable {
     var date: Date
     var labels: [String]
     var bulk: Bool          // carries a List-Unsubscribe header: a mailing list or automated sender
+    var account = ""        // which connected Gmail account it arrived in
     var address: String { Triage.address(from) }
 }
 
@@ -28,6 +29,7 @@ struct AddonAlert: Codable, Equatable, Identifiable, Sendable {
     var url: String
     var score: Int
     var created: Date
+    var account: String?    // which connected account (nil on alerts saved before accounts existed)
 }
 
 struct GmailConfig: Equatable { var clientID: String; var clientSecret: String }
@@ -35,26 +37,38 @@ struct GmailConfig: Equatable { var clientID: String; var clientSecret: String }
 /// The "addons" section of settings.json:
 ///   { "addons": { "order": ["claude","codex","gemma"], "interval_hours": 4, "importance": "…", "gmail": { "client_id": "…", "client_secret": "…" } } }
 struct AddonSettings: Equatable {
-    var gmail: GmailConfig?
+    var gmail: GmailConfig?             // yours from settings.json if given, otherwise the one this build shipped with
+    var gmailIsOwn = false              // true when settings.json supplied it
     var order: [Backend] = [.claude, .codex, .gemma]   // who triages, first to last: the next one runs when a model is rate-limited or down
-    var intervalHours: Double = 4
+    var checkMinutes: Double = 5                        // how often to look for new mail while the Mac is awake (a look is cheap; the model only runs for new mail)
+    var maxModelCallsPerHour = 8                        // a ceiling on model use, so a flood of mail can't eat your Claude or Codex limits
     var importance = ""                                 // free text: what matters to you, appended to the triage rules
 
-    static func load(from url: URL) -> AddonSettings {
+    /// The Google client a release build carries (injected into Info.plist by CI). Nil in a plain checkout, where `$(…)` stays unresolved or empty.
+    static func bundled(_ info: [String: Any]? = Bundle.main.infoDictionary) -> GmailConfig? {
+        func v(_ k: String) -> String? { (info?[k] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmptyResolved }
+        guard let id = v("GoogleClientID"), let secret = v("GoogleClientSecret") else { return nil }
+        return GmailConfig(clientID: id, clientSecret: secret)
+    }
+
+    static func load(from url: URL, bundled: GmailConfig? = AddonSettings.bundled()) -> AddonSettings {
+        var base = AddonSettings(); base.gmail = bundled
         guard let d = try? Data(contentsOf: url), let root = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
-              let a = root["addons"] as? [String: Any] else { return AddonSettings() }
-        var s = AddonSettings()
+              let a = root["addons"] as? [String: Any] else { return base }
+        var s = base
         if let o = a["order"] as? [String] {
             var seen = Set<Backend>()
             let list = o.compactMap { Backend(rawValue: $0) }.filter { seen.insert($0).inserted }
             if !list.isEmpty { s.order = list }
         }
-        if let h = a["interval_hours"] as? Double { s.intervalHours = min(max(h, 0.5), 24) }
+        if let h = a["interval_hours"] as? Double { s.checkMinutes = min(max(h * 60, 2), 1440) }        // older files
+        if let m = a["check_minutes"] as? Double { s.checkMinutes = min(max(m, 2), 1440) }
+        if let n = a["max_model_calls_per_hour"] as? Int { s.maxModelCallsPerHour = min(max(n, 1), 60) }
         s.importance = clip((a["importance"] as? String) ?? "", 600)
         if let g = a["gmail"] as? [String: Any],
            let id = (g["client_id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty,
            let secret = (g["client_secret"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !secret.isEmpty {
-            s.gmail = GmailConfig(clientID: id, clientSecret: secret)
+            s.gmail = GmailConfig(clientID: id, clientSecret: secret); s.gmailIsOwn = true
         }
         return s
     }
@@ -68,6 +82,32 @@ struct AddonSettings: Equatable {
         }
     }
 
+    /// The thread in the right account's inbox (`/u/<address>/` picks the account by address, so it works with several signed in).
+    static func mailURL(account: String, thread: String) -> String {
+        let who = account.isEmpty ? "0" : (account.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@.-_+")) ?? "0")
+        return "https://mail.google.com/mail/u/\(who)/#inbox/" + thread.filter(\.isHexDigit)
+    }
+
+    /// How often to look for new mail, saved from the Settings window (kept between 2 minutes and a day).
+    static func saveCheckMinutes(at url: URL, _ minutes: Double) throws {
+        try Settings.mutate(at: url) { root in
+            var a = root["addons"] as? [String: Any] ?? [:]
+            a["check_minutes"] = min(max(minutes, 2), 1440)
+            a.removeValue(forKey: "interval_hours")          // the older spelling must not override the new one
+            root["addons"] = a
+        }
+    }
+
+    /// What matters to you, saved from the Settings window.
+    static func saveImportance(at url: URL, _ text: String) throws {
+        try Settings.mutate(at: url) { root in
+            var a = root["addons"] as? [String: Any] ?? [:]
+            let t = clip(text, 600)
+            if t.isEmpty { a.removeValue(forKey: "importance") } else { a["importance"] = t }
+            root["addons"] = a
+        }
+    }
+
     fileprivate static func clip(_ s: String, _ n: Int) -> String { String(s.trimmingCharacters(in: .whitespacesAndNewlines).prefix(n)) }
 }
 
@@ -76,8 +116,23 @@ struct AddonState: Codable, Equatable {
     var pending: [AddonAlert] = []
     var seen: [String] = []
     var muted: [String] = []
+    var modelCalls: [Date] = []         // when the model last ran (kept for an hour): the ceiling on model use
+    var accounts: [String] = []         // connected Gmail addresses; each one's sign-in token is in the Keychain under its address
     var lastTry: Date?
     var lastOK = false
+
+    init() {}
+    /// Files saved by older versions lack newer keys; missing keys fall back to empty instead of throwing the whole file away.
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        pending = try c.decodeIfPresent([AddonAlert].self, forKey: .pending) ?? []
+        seen = try c.decodeIfPresent([String].self, forKey: .seen) ?? []
+        muted = try c.decodeIfPresent([String].self, forKey: .muted) ?? []
+        accounts = try c.decodeIfPresent([String].self, forKey: .accounts) ?? []
+        modelCalls = try c.decodeIfPresent([Date].self, forKey: .modelCalls) ?? []
+        lastTry = try c.decodeIfPresent(Date.self, forKey: .lastTry)
+        lastOK = try c.decodeIfPresent(Bool.self, forKey: .lastOK) ?? false
+    }
 
     static let maxSeen = 3000
 
@@ -87,14 +142,19 @@ struct AddonState: Codable, Equatable {
         if seen.count > Self.maxSeen { seen.removeFirst(seen.count - Self.maxSeen) }
     }
 
-    /// Healthy: wait the full interval. After a failed run: try again in 30 minutes, not in 4 hours and not every tick.
-    func isDue(now: Date, hours: Double) -> Bool {
+    /// Healthy: look again after `minutes`. After a failed run: wait at least 15 minutes, so a rate limit or an outage isn't hammered.
+    func isDue(now: Date, minutes: Double) -> Bool {
         guard let t = lastTry else { return true }
-        return now.timeIntervalSince(t) >= (lastOK ? hours * 3600 : 1800)
+        return now.timeIntervalSince(t) >= (lastOK ? minutes * 60 : max(minutes * 60, 900))
     }
 
+    func canCallModel(now: Date, limit: Int) -> Bool { modelCalls.filter { now.timeIntervalSince($0) < 3600 }.count < limit }
+    mutating func noteModelCall(now: Date) { modelCalls = modelCalls.filter { now.timeIntervalSince($0) < 3600 } + [now] }
+
+    /// $NOTCH_ADDONS relocates it (demos, screenshots) without touching your real queue.
     static var defaultURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("NotchApp/addons.json")
+        if let p = ProcessInfo.processInfo.environment["NOTCH_ADDONS"], !p.isEmpty { return URL(fileURLWithPath: p) }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("NotchApp/addons.json")
     }
     static func load(from url: URL) -> AddonState {
         guard let d = try? Data(contentsOf: url) else { return AddonState() }
@@ -162,7 +222,8 @@ enum Triage {
 
     static func prompt(items: [MailItem], importance: String) -> (system: String, user: String) {
         let rows: [[String: Any]] = items.map { ["id": $0.id, "from": clean($0.from, max: 80), "subject": clean($0.subject, max: 120),
-                                                 "snippet": clean($0.snippet, max: 240), "mailing_list": $0.bulk] }
+                                                 "snippet": clean($0.snippet, max: 240), "mailing_list": $0.bulk]
+            .merging($0.account.isEmpty ? [:] : ["account": $0.account]) { a, _ in a } }
         let json = (try? JSONSerialization.data(withJSONObject: rows, options: [.sortedKeys])).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
         let extra = importance.isEmpty ? "" : "\n\nWhat matters to this person: " + importance
         return (rules + extra, "<mail>\n" + json + "\n</mail>")
@@ -183,7 +244,7 @@ enum Triage {
             let head = clean((o["headline"] as? String) ?? "", max: 80), why = clean((o["reason"] as? String) ?? "", max: 110)
             guard !head.isEmpty, !why.isEmpty else { continue }       // an alert without its reason is just noise
             out.append(AddonAlert(id: id, addon: "gmail", sender: clean(displayName(m.from), max: 40), address: m.address, headline: head, reason: why,
-                                  url: "https://mail.google.com/mail/u/0/#inbox/" + m.threadId.filter(\.isHexDigit), score: min(score, 10), created: now))
+                                  url: AddonSettings.mailURL(account: m.account, thread: m.threadId), score: min(score, 10), created: now, account: m.account.isEmpty ? nil : m.account))
         }
         return Array(out.sorted { $0.score > $1.score }.prefix(maxAlerts))
     }
@@ -204,4 +265,9 @@ enum Triage {
         }
         return nil
     }
+}
+
+private extension String {
+    /// nil for empty or an unresolved "$(VAR)" placeholder
+    var nonEmptyResolved: String? { isEmpty || hasPrefix("$(") ? nil : self }
 }

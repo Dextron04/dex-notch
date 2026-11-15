@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1450 400" role="img" aria-labelledby="title desc">
+  <title id="title">dex-notch</title>
+  <desc id="desc">Three conversation paths resolve into one amber aperture beside the dex-notch wordmark.</desc>
+  <image href="dex-notch-icon-v3.png" x="36" y="36" width="328" height="328"/>
+  <text x="432" y="253" fill="#f3ebdd" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="142" font-weight="600" letter-spacing="-4">dex</text>
+  <text x="648" y="253" fill="#ffb059" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="142" font-weight="400">-</text>
+  <text x="697" y="253" fill="#f3ebdd" font-family="'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif" font-size="142" font-weight="600" letter-spacing="-4">notch</text>
+</svg>
