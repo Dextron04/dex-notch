@@ -27,6 +27,15 @@ Works like Gmail, with Microsoft instead of Google:
 - **What is stored on your Mac:** a sign-in token in your login Keychain (`dex-notch.outlook`), and the same small file as for Gmail.
 - **Disconnecting:** remove Dex Notch at <https://account.live.com/consent/Manage> (personal accounts) or <https://myapps.microsoft.com> (work or school), and delete the Keychain item `dex-notch.outlook`.
 
+## iPhone notifications (optional, off by default)
+
+If you switch it on:
+
+- **What it reads:** Notification Center's own database on your Mac (`~/Library/Group Containers/group.com.apple.usernoted/db2/db`), read-only, to find new notifications that your iPhone sent to the Mac through iPhone Mirroring. macOS only allows that with **Full Disk Access**, which you grant yourself in System Settings. That permission is broad, so it is asked for only when you switch this on, and you can withdraw it at any time.
+- **What it keeps:** only a bookmark (the number of the newest notification already seen), and the few cards waiting to be shown, in `addons.json`. Old notifications are never shown, and the text of notifications is not kept after you dismiss a card, apart from the short recent-alerts list.
+- **Where it goes:** nowhere. There is no AI model and no network request involved. Notification text stays on your Mac.
+- **Turning it off:** the switch in Settings → iPhone. Remove Full Disk Access for Dex Notch in System Settings if you no longer want the permission at all.
+
 ## Updates
 
 Once a day Dex Notch asks `github.com` for the list of releases (a small file named `appcast.xml`) to see whether a newer version exists. That is an ordinary HTTPS request, so GitHub sees your IP address and the app's version like it would for any download. Nothing else is sent: no system profile, no account, no mail, no chats. A new version is only installed if it carries a signature that matches the key built into the app, and it only restarts the app after you say so. You can turn automatic checks off in Settings → Updates.

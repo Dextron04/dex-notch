@@ -20,7 +20,11 @@ struct NotchView: View {
 
     private let center = AddonCenter.shared
     @FocusState private var focused: Bool
-    @Namespace private var dialNS
+    @Environment(\.accessibilityReduceMotion) private var reduce
+    @State private var announced: Backend?        // the model the notch is naming right now (after a switch), then it goes away
+    @State private var announceTick = 0
+    @State private var announceTask: Task<Void, Never>?
+    private static let announceHold: Double = 1.6
     @State private var contentH: CGFloat = 0
 
     private let openW: CGFloat = 560
@@ -50,8 +54,9 @@ struct NotchView: View {
         }
         .frame(width: panel.width, height: panel.height, alignment: .top)
         .onKeyPress(.escape) { if center.replyOpen { center.collapseReply() } else { a.close() }; return .handled }
-        .onChange(of: a.isOpen) { if a.isOpen { center.assistantOpened() } else { center.assistantClosed() } }
-        .onChange(of: a.backend) { focused = true } // a click on the dial must not strand the caret
+        .onChange(of: a.isOpen) { if a.isOpen { center.assistantOpened() } else { center.assistantClosed(); announceTask?.cancel(); announced = nil } }
+        .onChange(of: a.backend) { focused = true; announce() }
+        .onChange(of: a.work) { announce() }
         .onChange(of: a.busy) { if !a.busy && a.isOpen { focused = true } } // field is disabled while answering
         .task(id: [a.isOpen ? 1 : 0, a.mode == .prompt ? 1 : 0]) { if a.isOpen && a.mode == .prompt { try? await Task.sleep(for: .milliseconds(120)); focused = true } } // also when switching recall → prompt while open
     }
@@ -184,7 +189,10 @@ struct NotchView: View {
                 }
                 .buttonStyle(.plain).help("New conversation  ⌘N").accessibilityLabel("New conversation")
             }
-            dial
+            if let b = announced {
+                ModelAnnounce(backend: b, work: a.work, hold: Self.announceHold, reduce: reduce).id(announceTick)
+                    .transition(reduce ? .opacity : .modifier(active: Slide(x: 12, opacity: 0, blur: 5), identity: Slide(x: 0, opacity: 1, blur: 0)))
+            }
             Image(systemName: "return")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(a.draft.isEmpty ? Ink.dim.opacity(0.5) : Ink.ember)
@@ -199,34 +207,16 @@ struct NotchView: View {
         .background(Button("") { copy() }.keyboardShortcut("c", modifiers: [.command, .shift]).opacity(0).allowsHitTesting(false))
     }
 
-    /// Three positions, one ember underline that slides to the active model. "+" = may edit files.
-    private var dial: some View {
-        HStack(spacing: 14) {
-            ForEach(a.choices, id: \.self) { b in
-                let on = b == a.backend
-                Button { a.setBackend(b) } label: {
-                    VStack(spacing: 3) {
-                        HStack(spacing: 2) {
-                            ModelMark(backend: b, size: 18, active: on)
-                            if on && a.work { Text("+").font(.system(size: 13, weight: .semibold)).foregroundStyle(Ink.emberDeep) }
-                        }
-                        .frame(minWidth: 40, minHeight: 20)
-                        ZStack {
-                            Color.clear.frame(height: 1)
-                            if on { Rectangle().fill(Ink.ember).frame(height: 1).matchedGeometryEffect(id: "underline", in: dialNS) }
-                        }
-                    }
-                    .padding(.vertical, 4).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(b.displayName)
-                .help("\(b.displayName)  ⌘\((a.choices.firstIndex(of: b) ?? 0) + 1)")
-                .accessibilityAddTraits(on ? .isSelected : [])
-            }
+    /// Names the model at the notch once, right after a switch (⇥ or ⌘1-3), then lets it go. The row stays empty the rest of the time.
+    private func announce() {
+        guard a.isOpen, a.mode == .prompt, !a.needsSetup else { return }
+        announceTask?.cancel(); announceTick += 1
+        withAnimation(reduce ? .easeOut(duration: 0.15) : .spring(duration: 0.45, bounce: 0.1)) { announced = a.backend }
+        announceTask = Task {
+            try? await Task.sleep(for: .seconds(Self.announceHold))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: reduce ? 0.15 : 0.22)) { announced = nil }          // leaves faster than it arrived
         }
-        .animation(.spring(response: 0.28, dampingFraction: 0.82), value: a.backend)
-        .animation(.easeOut(duration: 0.15), value: a.work)
-        .opacity(a.busy ? 0.4 : 1).allowsHitTesting(!a.busy)
     }
 
     /// First run with neither CLI installed: say exactly what to do. Gemma is deliberately an afterthought.
@@ -294,5 +284,38 @@ private struct EmberSweep: View {
             .frame(height: 2)
         }
         .allowsHitTesting(false)
+    }
+}
+
+/// A slide-and-sharpen for a transition: a short move (never far), opacity, and a blur that resolves as it lands.
+private struct Slide: ViewModifier {
+    let x: CGFloat, opacity: Double, blur: CGFloat
+    func body(content: Content) -> some View { content.offset(x: x).opacity(opacity).blur(radius: blur) }
+}
+
+/// The model's mark and name, with an ember hairline under it that drains over the time it stays: the same clock the alert cards use.
+private struct ModelAnnounce: View {
+    let backend: Backend
+    let work: Bool
+    let hold: Double
+    let reduce: Bool
+    @State private var left = 1.0
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            HStack(spacing: 7) {
+                ModelMark(backend: backend, size: 17, active: true)
+                Text(backend.displayName + (work ? " +" : ""))
+                    .font(.system(size: 12.5, weight: .medium)).tracking(0.2).foregroundStyle(Ink.text.opacity(0.9)).lineLimit(1).fixedSize()
+            }
+            ZStack(alignment: .trailing) {
+                Rectangle().fill(Ink.ember.opacity(0.14)).frame(height: 1)
+                Rectangle().fill(Ink.ember).frame(height: 1).scaleEffect(x: left, anchor: .trailing)
+            }
+        }
+        .fixedSize()
+        .onAppear { if !reduce { withAnimation(.linear(duration: hold)) { left = 0 } } else { left = 0 } }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Model: \(backend.displayName)\(work ? ", can edit files" : "")")
     }
 }

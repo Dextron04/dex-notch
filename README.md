@@ -16,15 +16,15 @@
 </p>
 
 <p align="center">
-  <b>Press a key. The notch opens. Ask Claude, Codex or a model on your own server, every conversation you have with any AI lands in one searchable memory they can all read, and when an email that actually needs you arrives, the notch tells you in two lines.</b>
+  <b>Press a key. The notch opens. Ask Claude, Codex or a model on your own server, every conversation you have with any AI lands in one searchable memory they can all read, and when an email that actually needs you arrives (Gmail or Outlook), or a notification from your iPhone, the notch tells you in two lines.</b>
 </p>
 
 <p align="center">
-  <a href="#get-started-in-two-minutes">Install</a> &nbsp;|&nbsp; <a href="CHANGELOG.md">What's new</a> &nbsp;|&nbsp; <a href="#add-ons-gmail">Mail alerts</a> &nbsp;|&nbsp; <a href="PRIVACY.md">Privacy</a>
+  <a href="#get-started-in-two-minutes">Install</a> &nbsp;|&nbsp; <a href="CHANGELOG.md">What's new</a> &nbsp;|&nbsp; <a href="#add-ons-mail-and-iphone">Mail and iPhone alerts</a> &nbsp;|&nbsp; <a href="PRIVACY.md">Privacy</a>
 </p>
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Typing a question, sliding the model dial between the three models, then paging through recall: last chats, activity heatmap, projects" width="800">
+  <img src="docs/assets/demo.gif" alt="Opening the notch, switching model with Tab (the notch names Codex, then Claude, once each), typing a question, turning on edit rights, then paging through recall: last chats, activity heatmap, projects" width="800">
 </p>
 
 ---
@@ -47,7 +47,7 @@ The app does not read, copy or reuse your login tokens. It starts the same CLIs 
 
 1. **Download** the latest `dex-notch-*.dmg` from [Releases](https://github.com/Dextron04/dex-notch/releases/latest) and drag **Dex Notch** into Applications.
 2. **Open it once and allow it.** The build is not notarized (that needs a paid Apple Developer ID), so macOS says it can't verify the app. On macOS 15 and later, go to **System Settings → Privacy & Security** and click **Open Anyway** next to Dex Notch (on macOS 14, right-click → Open). From Terminal, on any version: `xattr -dr com.apple.quarantine "/Applications/Dex Notch.app"`.
-3. **Look through the setup window** that opens by itself: pick your model, say where it may work, and (optionally) add a model on your own server or connect Gmail. Each has its own page.
+3. **Follow the short walk-through** that opens by itself, six steps with Back and Continue: pick your model, say where it may work, and (all optional) connect Gmail or Outlook and turn on iPhone notifications. Every step says in plain English why it asks for what it asks for, and every step can be skipped. Anything can be changed later in Settings.
 4. **Press `⌥ Space`.**
 
 <p align="center">
@@ -66,7 +66,8 @@ Don't have `claude` or `codex` yet? The notch tells you what to install and wait
 | **Just ask Claude or Codex from a hotkey** | nothing else. That is the DMG. |
 | **A shared memory across all your agents** | the recorder: `cd memory && sh install.sh` ([below](#shared-memory-the-recorder)) |
 | **A model on your own server** | Menu bar → **Settings…** → *Models* → *Local model*, or [edit `settings.json`](#settings) |
-| **Your important email at the notch** | Menu bar → **Settings…** → *Mail* → **Connect Gmail** ([below](#add-ons-gmail)) |
+| **Your important email at the notch** | Menu bar → **Settings…** → *Mail* → **Connect Gmail** or **Connect Outlook** ([below](#add-ons-mail-and-iphone)) |
+| **Your iPhone's notifications at the notch** | Menu bar → **Settings…** → *iPhone* → switch on, and allow Full Disk Access ([below](#iphone-notifications)) |
 | **ChatGPT and Claude.ai reading your memory** | the [remote connector](#for-chatgpt-and-claudeai) |
 
 ---
@@ -77,20 +78,18 @@ Don't have `claude` or `codex` yet? The notch tells you what to install and wait
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/assets/shot-idle.png" alt="The ask view with the model dial on Claude"></td>
-    <td width="50%"><img src="docs/assets/shot-claude.png" alt="Claude selected, a question typed, working in the Projects folder"></td>
+    <td width="50%"><img src="docs/assets/shot-idle.png" alt="The ask view: only the input and the send arrow, no row of logos"></td>
+    <td width="50%"><img src="docs/assets/shot-claude.png" alt="Claude selected with edit rights, a question typed, working in the Projects folder, with Claude + named at the right of the input"></td>
   </tr>
   <tr>
-    <td align="center"><sub><b>The dial.</b> Three logos, one amber underline. <code>⇥</code> or <code>⌘1</code> <code>⌘2</code> <code>⌘3</code> to switch, or click.</sub></td>
-    <td align="center"><sub><b>Typing.</b> The send arrow lights up. The left wing names the model and what it can do.</sub></td>
+    <td align="center"><sub><b>Quiet.</b> No row of logos. The top-left says which model is on and what it may do.</sub></td>
+    <td align="center"><sub><b>Switch and it says so.</b> <code>⇥</code> or <code>⌘1</code> <code>⌘2</code> <code>⌘3</code> and the notch names the model once, its logo and name with an ember line that runs out, then it is gone.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/assets/shot-codex.png" alt="Codex selected with edit rights, shown as a plus after the logo, working in the Projects folder"></td>
-    <td width="50%"><img src="docs/assets/shot-local.png" alt="The local model selected, showing the host in the left wing"></td>
+    <td colspan="2" align="center"><img src="docs/assets/shot-codex.png" alt="Codex selected with edit rights, shown as a plus after its name, working in the Projects folder" width="50%"></td>
   </tr>
   <tr>
-    <td align="center"><sub><b>Edit rights.</b> <code>⌘E</code> adds a <b>+</b>: it may edit files and run sandboxed commands. <code>⌘F</code> picks the folder.</sub></td>
-    <td align="center"><sub><b>Your own model.</b> The custom mark is the notch cut into a rounded square. The wing shows your host.</sub></td>
+    <td colspan="2" align="center"><sub><b>Edit rights.</b> <code>⌘E</code> adds a <b>+</b>: it may edit files and run sandboxed commands. <code>⌘F</code> picks the folder. A model on your own server gets its own mark, the notch cut into a rounded square, and the top-left shows your host.</sub></td>
   </tr>
 </table>
 
@@ -129,7 +128,7 @@ Press `⌥⇧ Space` to see what you and your agents have been doing.
 |---|---|
 | **Every AI is an island.** What you decided with Claude Code is invisible to Codex, Gemini and ChatGPT. | A recorder turns every session into a redacted markdown note in one Obsidian vault. Every agent can search it. |
 | **Setup that takes an afternoon.** | A DMG and one window. It finds your CLIs, tells you the install command for what's missing, and asks where edit runs may write. |
-| **Switching model means retyping `@names`.** | A three-logo dial: `⇥`, `⌘1/2/3`, or a click. Typing `@claude ` still works and snaps onto the dial. |
+| **Switching model means retyping `@names`.** | `⇥` or `⌘1/2/3`, and the notch names the model once, then clears. Typing `@claude ` still works and switches the model. |
 | **A local model that makes things up about your own work.** | Before each local-model answer the notch searches your vault, hands the model the best snippets, and names the notes it used. |
 | **"Can it run code?" without giving a model your machine.** | `+` turns on edit rights *and* a shell, inside an OS sandbox: no network, and writes only to a scratch folder plus the folders you chose. |
 | **Click away, lose the chat.** | The conversation survives closing the notch, quitting and restarting. It starts fresh after 30 idle minutes or on `⌘N`. |
@@ -163,7 +162,7 @@ Press `⌥⇧ Space` to see what you and your agents have been doing.
 |---|---|
 | `↩` | send |
 | `⇥` / `⇧⇥` | next / previous model |
-| `⌘1` `⌘2` `⌘3` | the 1st, 2nd, 3rd model on the dial |
+| `⌘1` `⌘2` `⌘3` | the 1st, 2nd, 3rd model you have |
 | `⌘E` | allow edits and sandboxed commands (Claude, Codex) |
 | `⌘F` | cycle the folder edit runs may write to (your scratch sandbox, then each folder you allowed) |
 | `⌘N` | new conversation |
@@ -228,6 +227,7 @@ The settings window writes `~/Library/Application Support/NotchApp/settings.json
 | `addons.max_model_calls_per_hour` | A ceiling on how often the AI reads mail. Default 8. |
 | `addons.order` | Which model reads your mail first, then the fallbacks. Default `claude`, `codex`, `gemma`. |
 | `addons.importance` | One or two lines on what matters to you. Added to the rules that decide what interrupts you. |
+| `addons.phone_alerts` | `true` shows iPhone notifications at the notch (see [iPhone notifications](#iphone-notifications)). Off by default. Also a switch in Settings → iPhone. |
 | `addons.microsoft` | `client_id` of your own Microsoft application for Outlook sign-in (see [Outlook](#outlook-and-microsoft-365)). Release builds carry their own. |
 | `addons.gmail` | `client_id` and `client_secret` of your own Google client. Only needed when building from source; release builds carry their own. |
 
@@ -239,9 +239,9 @@ Skip it on day one and add it whenever you like:
 
 1. Run [Ollama](https://ollama.com) somewhere you control and put it behind HTTPS with a bearer token (Caddy and a Cloudflare tunnel work well).
 2. Menu bar → **Settings…** → *Models* → **Set up** on *Local model*, fill in the host, the model name and the token, and **Save**. The token goes into your Keychain (through Apple's `security` tool, so updates never trigger a password prompt), never into `settings.json`.
-3. A third logo appears on the dial.
+3. It joins the models you can switch between with `⇥`.
 
-Without it everything else works, and the dial simply has two models.
+Without it everything else works, with two models to switch between.
 
 **How it uses your memory.** Every question to the local model carries a short briefing: what the vault is, to use a note only if it is clearly about the question, to name it, and to say so when nothing matches instead of guessing. Questions about time or about the vault itself ("what did I work on today?", "what's in my vault?") also get an overview built from the vault's own files (counts, today's sessions, the latest sessions), because similarity search can't tell what "today" means. The model's own earlier answers are never offered back to it as facts.
 
@@ -249,7 +249,7 @@ Without it everything else works, and the dial simply has two models.
 
 ---
 
-## Add-ons: Gmail
+## Add-ons: mail and iPhone
 
 Dex Notch can watch your inbox and tell you at the notch about the few emails that actually need you. Most mail never reaches you.
 
@@ -290,6 +290,16 @@ Sign-in needs an application ID from Microsoft. Release builds carry one; buildi
 5. Copy the **Application (client) ID** into Settings → Mail → *Use your own Microsoft application*, or put it in `settings.json` as `addons.microsoft.client_id`. A work or school tenant may need an admin to approve the permissions.
 
 IMAP and other mail providers are not supported yet.
+
+### iPhone notifications
+
+Notifications from your iPhone can show at the notch too, so you don't have to pick up your phone. They reach your Mac through **iPhone Mirroring**, and Dex Notch reads them from the file where macOS keeps notifications.
+
+1. **Set up iPhone Mirroring** on your Mac and iPhone, and in System Settings → Notifications allow notifications from your iPhone. Dex Notch can't do either for you.
+2. **Settings → iPhone** (or the walk-through): switch on **Show iPhone notifications**.
+3. **Allow Full Disk Access.** macOS keeps notifications in a private file that apps can't open unless you allow it. The page has an **Open System Settings** link and a live check that turns green the moment you allow it. Add Dex Notch with **+** if it isn't listed, and reopen the app if macOS asks.
+
+It only shows what arrives after you switch it on, never your old notifications. A card shows the iPhone, the app, and what it said. **Done** (`⌥↩`) closes it and **Not important** (`⌥⌫`) hides that app for good. There is no AI involved, and nothing leaves your Mac. A notification counts as the phone's when its app isn't installed on your Mac; an app that exists on both is treated as the Mac's own. See [PRIVACY.md](PRIVACY.md).
 
 ## Updates
 
@@ -364,6 +374,7 @@ REMOTE=host:agentvault/Vault sh install.sh   # keeps both vault copies in step
 - **ChatGPT and Claude.ai chats are not captured live.** Neither exposes chat history to apps, and MCP is pull-only. The connector lets them *read* your vault and *save* a chat when you ask. A full import from the official data export is not built yet.
 - **The local model is a chat model with retrieved snippets, not an agent.** It cannot open a note or run tools.
 - **The vault is plain text.** Redaction is pattern-based. Treat the vault like any other folder of your private conversations.
+- **iPhone notifications rely on an undocumented macOS file.** Apple does not document where Notification Center keeps notifications, so a macOS update could break it; Settings then says so instead of failing quietly. It needs Full Disk Access and iPhone Mirroring.
 - **Edit runs are powerful.** An edit run with Desktop allowed can rearrange it, with no confirmation prompt. Ask for a plan first if it matters.
 
 ---
@@ -393,11 +404,11 @@ NOTCH_VAULT=/tmp/demo-vault NOTCH_SETTINGS=/tmp/none.json NOTCH_CLIS=none open "
 ```
 NotchApp/                 SwiftUI + AppKit menu-bar agent
   NotchWindow.swift         the fixed-size panel and key handling
-  NotchView.swift           pill, wings, model dial, transcript, setup card
-  ModelMark.swift           the dial's marks: official Claude and Codex logos, plus the local-model mark
+  NotchView.swift           pill, wings, the model announcement, transcript, setup card
+  ModelMark.swift           the model marks: official Claude and Codex logos, plus the local-model mark
   SVGPath.swift             reads SVG path data so the real vector logos can be drawn (tested)
-  SetupView.swift           the settings window: a rail and one page at a time (Models, Folders, Mail)
-  Addons.swift              mail triage: filters, the model prompt, parsing, settings and state (pure, tested)
+  SetupView.swift           the settings window and the first-run walk-through: a rail and one page at a time (Models, Folders, Mail, iPhone, Updates)
+  Addons.swift              mail triage: filters, the model prompt, parsing, settings and state; also reads iPhone notifications from Notification Center (pure, tested)
   Gmail.swift               Google sign-in (PKCE), the Gmail client, one token per account (tested)
   Outlook.swift             Microsoft sign-in, the Outlook client (Microsoft Graph), and the mail-provider interface (tested)
   AddonCenter.swift         schedule, accounts, model fallback, and when a card may appear
