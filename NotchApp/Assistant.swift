@@ -73,6 +73,7 @@ final class Assistant {
     var summarizing = false
 
     private var closedAt: Date?
+    private var lastWarm: Date?
     private let storeURL: URL
     private let settingsURL: URL
     private var convID = UUID().uuidString
@@ -158,7 +159,7 @@ final class Assistant {
 
     // MARK: model dial
 
-    func setBackend(_ b: Backend) { guard !busy, choices.contains(b) else { return }; backend = b; if b == .gemma { work = false } }
+    func setBackend(_ b: Backend) { guard !busy, choices.contains(b) else { return }; backend = b; if b == .gemma { work = false; warmLocalModel() } }
     func cycleBackend(_ d: Int) { setBackend(AgentStream.cycle(backend, by: d, among: choices)) }
     /// ⌘1 ⌘2 ⌘3 pick the 1st, 2nd, 3rd model that is actually on the dial.
     func setBackendAt(_ i: Int) { if choices.indices.contains(i) { setBackend(choices[i]) } }
@@ -178,6 +179,7 @@ final class Assistant {
         isOpen = true
         onOpenChange?(true)
         if link != .ready { connect() }
+        if m == .prompt && backend == .gemma { warmLocalModel() }
     }
 
     func close() {
@@ -255,8 +257,7 @@ final class Assistant {
         req.timeoutInterval = 300 // first call may load the model into memory
         req.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject:
-            ["model": g.model, "messages": messages, "stream": true, "think": false] as [String: Any])
+        req.httpBody = try JSONSerialization.data(withJSONObject: AgentStream.gemmaChatBody(model: g.model, messages: messages))
         let (bytes, resp) = try await URLSession.shared.bytes(for: req)
         if let code = (resp as? HTTPURLResponse)?.statusCode, code != 200 {
             throw Failure(code == 401 ? "Gateway rejected the token. Re-store it in Keychain." : "Model returned HTTP \(code)")
@@ -406,6 +407,19 @@ final class Assistant {
         }
         token = t
         return t
+    }
+
+    /// Loads the model in the background while you type, so the first question isn't a minute-long cold start. Best effort.
+    func warmLocalModel() {
+        guard let g = gemma, AgentStream.shouldWarm(last: lastWarm, now: Date()), let tok = try? loadToken() else { return }
+        lastWarm = Date()
+        Task.detached {
+            var r = URLRequest(url: URL(string: g.base + "/api/generate")!)
+            r.httpMethod = "POST"; r.timeoutInterval = 150
+            r.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization"); r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            r.httpBody = try? JSONSerialization.data(withJSONObject: AgentStream.gemmaWarmBody(model: g.model))
+            _ = try? await URLSession.shared.data(for: r)
+        }
     }
 
     /// Checks gateway reachability + token validity; drives the status dot.

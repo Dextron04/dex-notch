@@ -214,6 +214,8 @@ Skip it on day one and add it whenever you like:
 
 Without it everything else works, and the dial simply has two models.
 
+**Keeping it fast.** A model that isn't in memory takes about a minute to load, which feels like the notch hanging. So the notch asks Ollama to keep the model for 30 minutes, loads it in the background the moment you open the notch on it, and caps every answer at 1,024 tokens so one runaway reply can't block the server. Ollama runs one request at a time by default; if several apps share the server, a long request from one will make the others wait.
+
 ---
 
 ## Safety model

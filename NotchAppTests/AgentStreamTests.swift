@@ -347,3 +347,33 @@ final class BackendAfterDetectionTests: XCTestCase {
         XCTAssertEqual(AgentStream.backendAfterDetection(current: .claude, firstDetection: true, hasConversation: false, choices: [], preferred: .codex), .claude)
     }
 }
+
+final class GemmaRequestTests: XCTestCase {
+    private let msgs: [[String: String]] = [["role": "user", "content": "hi"]]
+
+    func testChatBodyKeepsTheModelLoadedSoTheNextQuestionIsNotAColdStart() {
+        let b = AgentStream.gemmaChatBody(model: "m", messages: msgs)
+        XCTAssertEqual(b["keep_alive"] as? String, "30m")
+    }
+    func testChatBodyCapsTheLengthSoOneAnswerCannotHogTheServer() {
+        let o = AgentStream.gemmaChatBody(model: "m", messages: msgs)["options"] as? [String: Any]
+        XCTAssertEqual(o?["num_predict"] as? Int, 1024)
+    }
+    func testChatBodyKeepsWhatItAlwaysHad() {
+        let b = AgentStream.gemmaChatBody(model: "gemma3:12b", messages: msgs)
+        XCTAssertEqual(b["model"] as? String, "gemma3:12b"); XCTAssertEqual(b["stream"] as? Bool, true); XCTAssertEqual(b["think"] as? Bool, false)
+        XCTAssertEqual((b["messages"] as? [[String: String]])?.first?["content"], "hi")
+    }
+    func testWarmUpBodyJustLoadsTheModel() {
+        let b = AgentStream.gemmaWarmBody(model: "m")
+        XCTAssertEqual(b["model"] as? String, "m"); XCTAssertEqual(b["keep_alive"] as? String, "30m")
+        XCTAssertNil(b["prompt"]); XCTAssertNil(b["messages"])          // no prompt: Ollama only loads the model
+    }
+    func testWarmUpIsThrottledSoOpeningTheNotchRepeatedlyDoesNotHammerTheServer() {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        XCTAssertTrue(AgentStream.shouldWarm(last: nil, now: t0))
+        XCTAssertFalse(AgentStream.shouldWarm(last: t0, now: t0.addingTimeInterval(60)))
+        XCTAssertFalse(AgentStream.shouldWarm(last: t0, now: t0.addingTimeInterval(20 * 60)))   // still inside the 30-minute keep-alive
+        XCTAssertTrue(AgentStream.shouldWarm(last: t0, now: t0.addingTimeInterval(26 * 60)))    // refresh just before it would expire
+    }
+}

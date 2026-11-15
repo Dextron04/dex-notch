@@ -77,6 +77,24 @@ enum AgentStream {
         return Set(raw.split(separator: ",").compactMap { Backend(rawValue: $0.trimmingCharacters(in: .whitespaces).lowercased()) }.filter { $0 != .gemma })
     }
 
+    // MARK: local model requests
+
+    /// Ollama's `keep_alive`: how long the model stays in memory after a request. Without it the default (about 5 minutes) unloads
+    /// an 8 GB model, and the next question waits most of a minute for it to load again.
+    static let gemmaKeepAlive = "30m"
+    static let gemmaMaxTokens = 1024      // a runaway answer must not hold the server's single slot for minutes
+
+    static func gemmaChatBody(model: String, messages: [[String: String]]) -> [String: Any] {
+        ["model": model, "messages": messages, "stream": true, "think": false, "keep_alive": gemmaKeepAlive,
+         "options": ["num_predict": gemmaMaxTokens]]
+    }
+
+    /// POST /api/generate with a model and no prompt just loads it into memory.
+    static func gemmaWarmBody(model: String) -> [String: Any] { ["model": model, "keep_alive": gemmaKeepAlive, "stream": false] }
+
+    /// Refresh the loaded model shortly before its keep-alive would run out; never more often than that.
+    static func shouldWarm(last: Date?, now: Date) -> Bool { last.map { now.timeIntervalSince($0) > 25 * 60 } ?? true }
+
     static let order: [Backend] = [.gemma, .claude, .codex]
     static func cycle(_ b: Backend, by d: Int) -> Backend {
         let n = order.count
