@@ -19,7 +19,8 @@ xcodebuild -scheme NotchApp -configuration Release -destination 'generic/platfor
   GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}" GOOGLE_CLIENT_SECRET="${GOOGLE_CLIENT_SECRET:-}" \
   PRODUCT_NAME="Dex Notch" MARKETING_VERSION="$NUM" CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER:-1}" \
   CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" CODE_SIGNING_ALLOWED=YES \
-  build | tail -n 3
+  build > "$DD.log" 2>&1 || { grep -E "error:" "$DD.log" | sort -u | head -20 >&2; tail -n 5 "$DD.log" >&2; exit 1; }
+tail -n 3 "$DD.log"
 
 APP="$DD/Build/Products/Release/Dex Notch.app"; BIN="$APP/Contents/MacOS/Dex Notch"
 [ -d "$APP" ] || { echo "build did not produce $APP" >&2; exit 1; }
