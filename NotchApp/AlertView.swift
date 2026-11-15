@@ -136,13 +136,13 @@ struct NotchStreak: View {
     let notch: CGSize
     @Environment(\.accessibilityReduceMotion) private var reduce
 
-    private static let tail = 0.34          // comet length as a fraction of the rim
-    private static let slices = 36          // the tail is this many strokes, each dimmer and thinner than the last
+    private nonisolated static let tail = 0.34          // comet length as a fraction of the rim
+    private nonisolated static let slices = 36          // the tail is this many strokes, each dimmer and thinner than the last
 
     private struct Frame { var p = 0.0 }    // 0 → 1 progress, mapped to head position by an ease-out
 
     /// The rim as one open path, so trimming it gives constant speed: top-left, down, round the corner, along the bottom, round, up to top-right.
-    static func rim(_ r: CGRect, radius: CGFloat = 26) -> Path {
+    nonisolated static func rim(_ r: CGRect, radius: CGFloat = 26) -> Path {
         var p = Path()
         p.move(to: CGPoint(x: r.minX, y: r.minY))
         p.addLine(to: CGPoint(x: r.minX, y: r.maxY - radius))
@@ -154,7 +154,7 @@ struct NotchStreak: View {
     }
 
     /// white-hot at the head → ember → deep ember at the tip of the tail
-    private static func color(_ f: Double) -> Color {
+    private nonisolated static func color(_ f: Double) -> Color {
         f < 0.18 ? Color(red: 1.0, green: 0.95, blue: 0.85)
                  : f < 0.55 ? Ink.ember : Ink.emberDeep
     }
