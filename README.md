@@ -10,13 +10,13 @@
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="Universal app" src="https://img.shields.io/badge/Apple%20silicon%20%2B%20Intel-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
-  <img alt="295 tests" src="https://img.shields.io/badge/tests-295%20passing-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
+  <img alt="323 tests" src="https://img.shields.io/badge/tests-323%20passing-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="No API keys" src="https://img.shields.io/badge/API%20keys-none%20needed-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
 </p>
 
 <p align="center">
-  <b>Press a key. The notch opens. Ask Claude, Codex or a model on your own server, and every conversation you have with any AI lands in one searchable memory they can all read.</b>
+  <b>Press a key. The notch opens. Ask Claude, Codex or a model on your own server, every conversation you have with any AI lands in one searchable memory they can all read, and when an email that actually needs you arrives, the notch tells you in two lines.</b>
 </p>
 
 <p align="center">
@@ -43,11 +43,11 @@ The app does not read, copy or reuse your login tokens. It starts the same CLIs 
 
 1. **Download** the latest `dex-notch-*.dmg` from [Releases](https://github.com/Dextron04/dex-notch/releases/latest) and drag **Dex Notch** into Applications.
 2. **Open it once and allow it.** The build is not notarized (that needs a paid Apple Developer ID), so macOS says it can't verify the app. On macOS 15 and later, go to **System Settings → Privacy & Security** and click **Open Anyway** next to Dex Notch (on macOS 14, right-click → Open). From Terminal, on any version: `xattr -dr com.apple.quarantine "/Applications/Dex Notch.app"`.
-3. **Answer three questions** in the setup window that opens by itself: which model, where it may work, and (optionally) a model on your own server.
+3. **Look through the setup window** that opens by itself: pick your model, say where it may work, and (optionally) add a model on your own server or connect Gmail. Each has its own page.
 4. **Press `⌥ Space`.**
 
 <p align="center">
-  <img src="docs/assets/shot-settings.png" alt="The first-run setup window: pick your model, choose where it may work, optionally add a model from Ollama" width="62%">
+  <img src="docs/assets/shot-settings.png" alt="The settings window on its Models page: Claude and Codex found, a local model optional, with Models, Folders and Mail in a rail on the left" width="70%">
   <br><sub><b>First run.</b> It finds Claude and Codex for you and shows the exact install command for whatever is missing. Everything here is changeable later from the menu bar (<code>⌘ ,</code>).</sub>
 </p>
 
@@ -61,7 +61,8 @@ Don't have `claude` or `codex` yet? The notch tells you what to install and wait
 |---|---|
 | **Just ask Claude or Codex from a hotkey** | nothing else. That is the DMG. |
 | **A shared memory across all your agents** | the recorder: `cd memory && sh install.sh` ([below](#shared-memory-the-recorder)) |
-| **A model on your own server** | Menu bar → **Settings…** → *A model on your own server*, or [edit `settings.json`](#settings) |
+| **A model on your own server** | Menu bar → **Settings…** → *Models* → *Local model*, or [edit `settings.json`](#settings) |
+| **Your important email at the notch** | Menu bar → **Settings…** → *Mail* → **Connect Gmail** ([below](#add-ons-gmail)) |
 | **ChatGPT and Claude.ai reading your memory** | the [remote connector](#for-chatgpt-and-claudeai) |
 
 ---
@@ -175,13 +176,21 @@ Press `⌥⇧ Space` to see what you and your agents have been doing.
 | `⌘↩` | three-line summary from the model |
 | `/` | search titles, projects and agents |
 
-**Menu bar:** **Settings…** (`⌘ ,`), Recall, **Open settings.json**, Check connection, Quit.
+**Mail alert** (only while a card is showing; they are global keys that vanish when it does, so they never eat your typing)
+
+| Key | Action |
+|---|---|
+| `⌥↩` | open the email in the right Gmail inbox |
+| `⌥⌫` | **Not important**: never show mail from this sender |
+| `⌥esc` | dismiss |
+
+**Menu bar:** **Settings…** (`⌘ ,`), Recall, **Check mail now**, **Open settings.json**, Check connection, Quit.
 
 ---
 
 ## Settings
 
-The setup window writes `~/Library/Application Support/NotchApp/settings.json`. To edit the file by hand, use **Open settings.json** in the menu bar, or **Edit settings.json** in the setup window (`~/Library` is hidden in Finder, so these save you the hunt). Every key is optional, unknown keys are kept, and the file is re-read whenever you press `⌥ Space` or **Check connection**.
+The settings window writes `~/Library/Application Support/NotchApp/settings.json`. To edit the file by hand, use **Open settings.json** in the menu bar, or **Edit settings.json** in the settings window (`~/Library` is hidden in Finder, so these save you the hunt). Every key is optional, unknown keys are kept, and the file is re-read whenever you press `⌥ Space` or **Check connection**.
 
 ```json
 {
@@ -193,6 +202,12 @@ The setup window writes `~/Library/Application Support/NotchApp/settings.json`. 
   "gemma": {
     "host": "ai.example.com",
     "model": "gemma3:12b"
+  },
+  "addons": {
+    "check_minutes": 5,
+    "max_model_calls_per_hour": 8,
+    "order": ["claude", "codex", "gemma"],
+    "importance": "Recruiters, my landlord, anything about payments."
   }
 }
 ```
@@ -205,6 +220,11 @@ The setup window writes `~/Library/Application Support/NotchApp/settings.json`. 
 | `gemma.host` | Your Ollama server's hostname (HTTPS only). A pasted `https://…/` is tidied. |
 | `gemma.model` | The model name your server knows (`ollama list`). There is no default. |
 | `gemma.keychain_service` / `keychain_account` | Where the token lives in your Keychain. Default: the host, and `notchapp`. |
+| `addons.check_minutes` | How often to look for new mail while the Mac is awake. Default 5, from 2 to 1440. Also a choice in Settings → Mail. |
+| `addons.max_model_calls_per_hour` | A ceiling on how often the AI reads mail. Default 8. |
+| `addons.order` | Which model reads your mail first, then the fallbacks. Default `claude`, `codex`, `gemma`. |
+| `addons.importance` | One or two lines on what matters to you. Added to the rules that decide what interrupts you. |
+| `addons.gmail` | `client_id` and `client_secret` of your own Google client. Only needed when building from source; release builds carry their own. |
 
 **Folder rules.** A folder must exist, sit *inside* your home folder, and not be your home folder itself, a hidden top-level folder (`~/.ssh`, `~/.aws`, …) or `~/Library`. `..` and symlinks can't be used to escape. Rejected entries are reported and ignored; the rest still apply.
 
@@ -213,7 +233,7 @@ The setup window writes `~/Library/Application Support/NotchApp/settings.json`. 
 Skip it on day one and add it whenever you like:
 
 1. Run [Ollama](https://ollama.com) somewhere you control and put it behind HTTPS with a bearer token (Caddy and a Cloudflare tunnel work well).
-2. Menu bar → **Settings…** → open *A model on your own server*, fill in the host, the model name and the token, and **Save and start**. The token goes into your Keychain (through Apple's `security` tool, so updates never trigger a password prompt), never into `settings.json`.
+2. Menu bar → **Settings…** → *Models* → **Set up** on *Local model*, fill in the host, the model name and the token, and **Save**. The token goes into your Keychain (through Apple's `security` tool, so updates never trigger a password prompt), never into `settings.json`.
 3. A third logo appears on the dial.
 
 Without it everything else works, and the dial simply has two models.
@@ -228,11 +248,21 @@ Without it everything else works, and the dial simply has two models.
 
 Dex Notch can watch your inbox and tell you at the notch about the few emails that actually need you. Most mail never reaches you.
 
-1. **Connect once.** Add as many Gmail accounts as you like. Settings → *Mail* → **Connect Gmail**. It asks Google for read-only access; the sign-in token goes in your Keychain. Release builds carry their own Google sign-in. Building from source, or want your own? Under *Advanced*, paste an OAuth client of type *Desktop app* (Gmail API on). See [PRIVACY.md](PRIVACY.md).
-2. **It looks for new mail every 5 minutes** while the Mac is awake (`addons.check_minutes`). A look is a single light request per account; only headers and the short snippet are read, never message bodies. The model runs only when there is new mail that got past the free filters, waits a minute so a burst of mail becomes one call, and is capped at 8 calls an hour (`addons.max_model_calls_per_hour`) so it can't use up your Claude or Codex limits.
-3. **Three filters.** Spam, promotions, social and forum mail are dropped first. A model then scores what is left against strict rules (a real person waiting on you, a deadline, a meeting change, a failed payment, a delivery today) and only a 7 out of 10 or better gets through, at most three per check. A third filter is you: **Not important** mutes that sender for good.
-4. **Claude first, then Codex, then your local model** (`addons.order`). If one is rate-limited, logged out or offline, the next takes over. Add a line of your own under `addons.importance` ("recruiters and my landlord") to tune what counts.
-5. **It waits for you.** Nothing pops up while the Mac is asleep or locked. When you wake or unlock it, the notch opens with two lines: what it is and why it matters. `⌥↩` opens the thread, `⌥⌫` mutes the sender, `⌥esc` dismisses. Those keys exist only while a card is on screen.
+<p align="center">
+  <img src="docs/assets/alert.gif" alt="The notch opens, one comet of light runs round its edge, and a card appears: Interview moved to Thursday 3:00 PM, with the reason underneath and the keys to open, mute or dismiss it" width="62%">
+  <br><sub><b>One card, two lines.</b> What it is, and why it matters. The comet of light runs the edge of the card and fills it; that edge then drains over twelve seconds as the timer. Resting the pointer on the card holds it.</sub>
+</p>
+
+1. **Connect once.** Settings → *Mail* → **Connect Gmail**. It asks Google for read-only access; the sign-in token goes in your Keychain. **Add as many accounts as you like**: each is listed with a **Remove** link, and a card says which account the mail came to. Release builds carry their own Google sign-in. Building from source, or want your own? Under *Use your own Google client*, paste an OAuth client of type *Desktop app* (Gmail API on). See [PRIVACY.md](PRIVACY.md).
+2. **It looks for new mail every 5 minutes** while the Mac is awake, and you can change that (2 minutes to 4 hours) in Settings → Mail → *How often to look*. A look is a single light request per account; only the sender, subject and a short preview are read, never message bodies or attachments.
+3. **The AI only reads what is new.** Spam, promotions, social and forum mail are dropped first, for free, and so is anything already judged. A model then scores what is left against strict rules (a real person waiting on you, a deadline, a meeting change, a failed payment, a delivery today) and only a 7 out of 10 or better gets through, at most three per check. It waits a minute after mail lands so a burst becomes one call, and it is capped at 8 calls an hour so it can't eat your Claude or Codex limits. A third filter is you: **Not important** mutes that sender for good.
+4. **Claude first, then Codex, then your local model.** If one is rate-limited, logged out or offline, the next takes over. *What matters to you* in Settings adds a line of your own ("recruiters and my landlord") to the rules.
+5. **It waits for you.** Nothing pops up while the Mac is asleep or locked. When you wake or unlock it, the notch opens with the card. `⌥↩` opens the thread, `⌥⌫` mutes the sender, `⌥esc` dismisses. Those keys exist only while a card is on screen.
+
+<p align="center">
+  <img src="docs/assets/shot-mail.png" alt="Settings, Mail page: two Gmail accounts each with a Remove link, Add another account, how often to look (2 min, 5 min, 15 min, 30 min, 1 hour, 4 hours), and what matters to you" width="70%">
+  <br><sub><b>Mail settings.</b> Accounts, how often to look, and what matters to you. (Demo accounts.)</sub>
+</p>
 
 Mail is treated as untrusted. The models run with no tools and no saved session (so mail never reaches the shared memory), their answers are checked against the ids they were sent, and the link opened is built by the app, never taken from model text.
 
@@ -309,10 +339,10 @@ REMOTE=host:agentvault/Vault sh install.sh   # keeps both vault copies in step
 brew install xcodegen
 xcodegen generate
 xcodebuild -scheme NotchApp -configuration Debug build   # or open NotchApp.xcodeproj
-scripts/make-dmg.sh v0.1.0                               # a universal, ad-hoc signed DMG and zip in build/dist/
+scripts/make-dmg.sh v0.2.0                               # a universal, ad-hoc signed "Dex Notch.app" in a DMG and zip in build/dist/
 ```
 
-Releases are built by GitHub Actions: push a tag (`git tag v0.1.0 && git push --tags`) and a DMG is attached to a new release. CI runs every test on each push.
+Releases are built by GitHub Actions: push a tag (`git tag v0.2.0 && git push --tags`) and a DMG is attached to a new release. CI runs every test on each push. A release also carries the app's own Google sign-in, read from the `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` repository secrets.
 
 **Demo mode.** `NOTCH_VAULT`, `NOTCH_SETTINGS` and `NOTCH_CLIS` (for example `none`, or `claude,codex`) point the app at other data or pretend which CLIs are installed. That is how the screenshots here were made, and how to rehearse the first run:
 
@@ -329,7 +359,12 @@ NotchApp/                 SwiftUI + AppKit menu-bar agent
   NotchView.swift           pill, wings, model dial, transcript, setup card
   ModelMark.swift           the dial's marks: official Claude and Codex logos, plus the local-model mark
   SVGPath.swift             reads SVG path data so the real vector logos can be drawn (tested)
-  SetupView.swift           first-run and settings window
+  SetupView.swift           the settings window: a rail and one page at a time (Models, Folders, Mail)
+  Addons.swift              mail triage: filters, the model prompt, parsing, settings and state (pure, tested)
+  Gmail.swift               Google sign-in (PKCE), the Gmail client, one token per account (tested)
+  AddonCenter.swift         schedule, accounts, model fallback, and when a card may appear
+  AlertView.swift           the mail card and its arrival: the comet round the rim, the rim as a timer
+  Hotkey.swift              global hotkeys (the model hotkeys and the card keys)
   Assistant.swift           state, local-model streaming, vault recall, persistence
   AgentStream.swift         routing, CLI arguments, stream parsing (pure, tested)
   AgentRunner.swift         launches claude / codex headless
@@ -341,18 +376,18 @@ memory/
     remote/                 OAuth + MCP over HTTP for ChatGPT and Claude.ai
   hooks/                    Claude Code start-up digest
   tests/                    118 tests
-NotchAppTests/             177 tests
+NotchAppTests/             205 tests
 scripts/                   make-dmg.sh, demo_vault.py
 .github/workflows/         CI and release
 docs/                      specs, plans, example settings, assets
 ```
 
 ```bash
-xcodebuild test -scheme NotchApp -destination 'platform=macOS'   # 177 Swift tests
+xcodebuild test -scheme NotchApp -destination 'platform=macOS'   # 205 Swift tests
 cd memory && python3 -m unittest discover -s tests               # 118 Python tests
 ```
 
-Everything here was built test-first where it could be: the stream parsers, the sandbox arguments, the folder rules, the OAuth flow, the lockout, the redaction rules, the idempotent note writer.
+Everything here was built test-first where it could be: the stream parsers, the sandbox arguments, the folder rules, the OAuth flows, the mail filters, the lockout, the redaction rules, the idempotent note writer.
 
 ## License
 
