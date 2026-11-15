@@ -8,7 +8,7 @@ The newest version is at the top. Every release is on the [Releases page](https:
 
 ## v0.4.0: Your iPhone's notifications, at the notch
 
-*Unreleased*
+*14 November 2026*
 
 <p align="center">
   <img src="docs/assets/shot-phone.png" alt="A card at the notch: iPhone, Instagram, 'Ana sent you a message', with Done and Not important" width="62%">
