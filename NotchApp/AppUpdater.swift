@@ -10,6 +10,7 @@ final class AppUpdater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDeleg
     private(set) var readyVersion: String?       // downloaded and verified, waiting for you to restart
     private(set) var status = "Checks once a day."
     private(set) var running = false             // false in a build that has no update feed or key
+    private(set) var lastChecked: Date?          // when Sparkle last looked, by schedule or because you asked
     var autoUpdate = true { didSet { guard running, autoUpdate != oldValue else { return }; apply() } }
 
     private var install: (() -> Void)?
@@ -17,6 +18,13 @@ final class AppUpdater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDeleg
     private var inspect: Bool { ProcessInfo.processInfo.environment["NOTCH_UPDATES"] != nil }
 
     var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "" }
+    /// "Last checked 3:14 PM", or "Last checked yesterday at 3:14 PM"; nil before the first look.
+    var lastCheckedText: String? {
+        guard let d = lastChecked else { return nil }
+        return "Last checked " + (Calendar.current.isDateInToday(d) ? d.formatted(date: .omitted, time: .shortened) : d.formatted(.relative(presentation: .named)) + ", " + d.formatted(date: .omitted, time: .shortened))
+    }
+    /// The notes for the version you are running.
+    var notesURL: URL { URL(string: "https://github.com/Dextron04/dex-notch/releases/tag/v\(version)") ?? URL(string: "https://github.com/Dextron04/dex-notch/releases")! }
     var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "" }
 
     override init() {
@@ -33,6 +41,7 @@ final class AppUpdater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDeleg
         guard hasFeed, hasKey else { status = "This build has no update feed."; return }
         controller.startUpdater()
         running = true
+        lastChecked = controller.updater.lastUpdateCheckDate
         autoUpdate = controller.updater.automaticallyChecksForUpdates && controller.updater.automaticallyDownloadsUpdates
         if ProcessInfo.processInfo.environment["NOTCH_UPDATE_CHECK_ON_LAUNCH"] != nil { controller.updater.checkForUpdatesInBackground() }
     }
@@ -64,7 +73,11 @@ final class AppUpdater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDeleg
         return true
     }
     nonisolated func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
-        MainActor.assumeIsolated { if readyVersion == nil { status = "You're up to date." } }
+        MainActor.assumeIsolated { lastChecked = Date(); if readyVersion == nil { status = "You're up to date." } }
+    }
+    nonisolated func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: Error?) {
+        let d = updater.lastUpdateCheckDate ?? Date()       // read here: the updater itself must not cross into the main-actor block
+        MainActor.assumeIsolated { lastChecked = d }
     }
     nonisolated func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
         let v = item.displayVersionString

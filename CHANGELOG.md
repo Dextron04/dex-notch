@@ -6,6 +6,14 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.3.1: Updates tell you when they last looked
+
+*15 November 2026*
+
+- **Settings → Updates shows when Dex Notch last checked for a new version**, so you can see it is working without pressing anything.
+- **What's new** now opens the notes for the version you are running, not the list of every release.
+- This is the first version delivered by the new updater, which makes it the test of it.
+
 ## v0.3.0: Dex Notch updates itself
 
 *15 November 2026*

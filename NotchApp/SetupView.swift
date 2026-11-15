@@ -393,7 +393,7 @@ struct SetupView: View {
         let u = AppUpdater.shared
         return VStack(alignment: .leading, spacing: 0) {
             header("Updates", "Dex Notch looks for a new version once a day and downloads it in the background. It never restarts without asking.")
-            row(title: "Version \(u.version)", detail: u.status,
+            row(title: "Version \(u.version)", detail: [u.status, u.readyVersion == nil ? u.lastCheckedText : nil].compactMap { $0 }.joined(separator: " "),
                 lead: { Image("AppMark").resizable().frame(width: 26, height: 26) },
                 trail: {
                     if u.readyVersion != nil { link("Restart now") { u.restartNow() } }
@@ -402,7 +402,7 @@ struct SetupView: View {
             row(title: "Update automatically", detail: u.running ? "Turn this off to update only when you choose Check now." : "Not available in this build.",
                 lead: { Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 16)).foregroundStyle(Ink.dim) },
                 trail: { Toggle("", isOn: Binding(get: { u.autoUpdate }, set: { u.autoUpdate = $0 })).labelsHidden().toggleStyle(.switch).disabled(!u.running) })
-            link("What's new") { NSWorkspace.shared.open(URL(string: "https://github.com/Dextron04/dex-notch/releases")!) }.padding(.top, 18)
+            link("What's new in \(u.version)") { NSWorkspace.shared.open(u.notesURL) }.padding(.top, 18)
         }
     }
 
