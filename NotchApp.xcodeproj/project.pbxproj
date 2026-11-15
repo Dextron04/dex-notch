@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		07DDFEAAC32C48FC7609BA86 /* OfficialMarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72682E91183BD251F579ACB6 /* OfficialMarks.swift */; };
+		080441BECA232EC426BC9C0C /* AppUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5341F0FBE3246CF85E71F48C /* AppUpdater.swift */; };
 		0999A29BFF7BFEF67D4DB6DD /* Gmail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */; };
 		0B58A8F9C40C3BA0C3325358 /* AgentStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CADAB3DBF5CC60D578B0C3 /* AgentStream.swift */; };
 		0C7BDE62527D048383248291 /* AgentStreamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93222A27B250E3C8A8AE083F /* AgentStreamTests.swift */; };
@@ -36,6 +37,7 @@
 		9D7DA6C3F8755AD1BA023406 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F216985AFA23BC8E9805806 /* ConversationStore.swift */; };
 		A48F6F5CAD79AB60BD5BB30C /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04FED0FDAE6B5FC7FE0D0983 /* SetupView.swift */; };
 		AB5858CF9C6BCC0882589DB0 /* SVGPathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A408D4D4233E5DC1C8E2622A /* SVGPathTests.swift */; };
+		B099E16A32014D0B4AEB986E /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 51A7B2DD66A95BA97994F08A /* Sparkle */; };
 		B0E8F6D04051DF78F4E9C917 /* SVGPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99408511A3D90560197E556F /* SVGPath.swift */; };
 		BFF5DE6C28BCA61791F88A08 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */; };
 		C1E493FDAF1341459B05B3C3 /* Addons.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8544183AD3EF18DC864B247 /* Addons.swift */; };
@@ -63,6 +65,7 @@
 		34B56D0B5E24A59E4A23F196 /* RecallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecallView.swift; sourceTree = "<group>"; };
 		3B7D87E48BF594612257808A /* ConversationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStoreTests.swift; sourceTree = "<group>"; };
 		461189366EBDE3A440C7E728 /* AddonCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddonCenter.swift; sourceTree = "<group>"; };
+		5341F0FBE3246CF85E71F48C /* AppUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdater.swift; sourceTree = "<group>"; };
 		582019F4D21E660A42477FFC /* Journal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Journal.swift; sourceTree = "<group>"; };
 		5B960B471D39685753DB2451 /* NotchAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NotchAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		72682E91183BD251F579ACB6 /* OfficialMarks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialMarks.swift; sourceTree = "<group>"; };
@@ -87,6 +90,17 @@
 		F5DE5AEC6077BF0580C62802 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFrameworksBuildPhase section */
+		4D1810ADFAA32C48D7E8925D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B099E16A32014D0B4AEB986E /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
 /* Begin PBXGroup section */
 		8A705B224D3B85E25802D892 = {
 			isa = PBXGroup;
@@ -106,6 +120,7 @@
 				A5CADAB3DBF5CC60D578B0C3 /* AgentStream.swift */,
 				E76E22DDB3A2D28B85B7C092 /* AlertView.swift */,
 				CE562AE9C74255701B08F531 /* AnswerBody.swift */,
+				5341F0FBE3246CF85E71F48C /* AppUpdater.swift */,
 				72DD816D131CAE9B673110C5 /* Assets.xcassets */,
 				218A6628EE36C2AEDB045329 /* Assistant.swift */,
 				9F216985AFA23BC8E9805806 /* ConversationStore.swift */,
@@ -178,6 +193,7 @@
 			buildPhases = (
 				7AD512718444DB917FE95810 /* Sources */,
 				A249338EB4A300EC4440BCA9 /* Resources */,
+				4D1810ADFAA32C48D7E8925D /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -185,6 +201,7 @@
 			);
 			name = NotchApp;
 			packageProductDependencies = (
+				51A7B2DD66A95BA97994F08A /* Sparkle */,
 			);
 			productName = NotchApp;
 			productReference = B4CBD5204758A52DD991B3D4 /* NotchApp.app */;
@@ -216,6 +233,9 @@
 			);
 			mainGroup = 8A705B224D3B85E25802D892;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				D7FB68E54302A893583B7462 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = EF1E16669C484F071DA1FD60 /* Products */;
 			projectDirPath = "";
@@ -274,6 +294,7 @@
 				0B58A8F9C40C3BA0C3325358 /* AgentStream.swift in Sources */,
 				8503551F1B10B24D06E2FF0A /* AlertView.swift in Sources */,
 				C7D2A3408E46CB0BBFCAD224 /* AnswerBody.swift in Sources */,
+				080441BECA232EC426BC9C0C /* AppUpdater.swift in Sources */,
 				5CD049CB380D1303583E2661 /* Assistant.swift in Sources */,
 				9D7DA6C3F8755AD1BA023406 /* ConversationStore.swift in Sources */,
 				0999A29BFF7BFEF67D4DB6DD /* Gmail.swift in Sources */,
@@ -327,6 +348,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.tushin.NotchApp;
 				SDKROOT = macosx;
+				SPARKLE_FEED_URL = "https://github.com/Dextron04/dex-notch/releases/latest/download/appcast.xml";
+				SPARKLE_PUBLIC_KEY = "vDz5+exfnVj8RSEdxNhw+TcSbtMdef+GMs8x1lVXt3s=";
 			};
 			name = Debug;
 		};
@@ -467,6 +490,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.tushin.NotchApp;
 				SDKROOT = macosx;
+				SPARKLE_FEED_URL = "https://github.com/Dextron04/dex-notch/releases/latest/download/appcast.xml";
+				SPARKLE_PUBLIC_KEY = "vDz5+exfnVj8RSEdxNhw+TcSbtMdef+GMs8x1lVXt3s=";
 			};
 			name = Release;
 		};
@@ -518,6 +543,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		D7FB68E54302A893583B7462 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.8.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		51A7B2DD66A95BA97994F08A /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D7FB68E54302A893583B7462 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 97EBB62D50244A6D604C44E4 /* Project object */;
 }

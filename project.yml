@@ -8,6 +8,10 @@ settings:
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.8.1       # pinned: the newest releases target a newer Xcode than the CI runner's
 schemes:
   NotchApp:
     build:
@@ -43,9 +47,19 @@ targets:
         CFBundleName: "Dex Notch"
         GoogleClientID: "$(GOOGLE_CLIENT_ID)"          # injected by the release build from CI secrets; empty in a plain checkout
         GoogleClientSecret: "$(GOOGLE_CLIENT_SECRET)"
+        SUFeedURL: "$(SPARKLE_FEED_URL)"               # where updates are announced; a release attaches appcast.xml
+        SUPublicEDKey: "$(SPARKLE_PUBLIC_KEY)"          # updates must be signed by the matching private key (a CI secret)
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400
+        SUAutomaticallyUpdate: true                     # download in the background; the app asks before it restarts
+        SUVerifyUpdateBeforeExtraction: true
+    dependencies:
+      - package: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tushin.NotchApp
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SPARKLE_FEED_URL: https://github.com/Dextron04/dex-notch/releases/latest/download/appcast.xml
+        SPARKLE_PUBLIC_KEY: "vDz5+exfnVj8RSEdxNhw+TcSbtMdef+GMs8x1lVXt3s="      # public half; the private half is the SPARKLE_PRIVATE_KEY CI secret
         ENABLE_APP_SANDBOX: false # ponytail: unsandboxed for easy dev; sandbox before shipping
         CODE_SIGN_STYLE: Automatic

@@ -4,11 +4,15 @@ import Carbon.HIToolbox
 @main
 struct NotchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    private var updater: AppUpdater { AppUpdater.shared }
 
     var body: some Scene {
         MenuBarExtra {
             Button("Ask…  ⌥Space") { delegate.assistant.toggle() }
             Button("Recall…  ⌥⇧Space") { delegate.assistant.toggleRecall() }
+            if let v = updater.readyVersion { Button("Restart to update to \(v)") { updater.restartNow() } }
+            Button("Check for Updates…") { updater.checkNow() }.disabled(!updater.running)
+            Divider()
             Button("Check mail now") { AddonCenter.shared.checkNow() }
             Button("Settings…") { SetupWindow.shared.show(assistant: delegate.assistant) }.keyboardShortcut(",")
             Button("Open settings.json") { delegate.assistant.openSettings() }
@@ -16,7 +20,10 @@ struct NotchApp: App {
             Divider()
             Button("Quit") { NSApp.terminate(nil) }.keyboardShortcut("q")
         } label: {
-            Image("MenuBarMark")
+            HStack(spacing: 3) {
+                Image("MenuBarMark")
+                if updater.readyVersion != nil { Image(systemName: "circle.fill").font(.system(size: 5)) }       // an update is waiting for you to restart
+            }
         }
     }
 }
@@ -36,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ]
         assistant.connect()
         AddonCenter.shared.start(assistant: assistant)
+        AppUpdater.shared.start()
         if !FileManager.default.fileExists(atPath: Settings.defaultURL.path) {      // first launch: ask, don't make people hunt for a config file
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [assistant] in SetupWindow.shared.show(assistant: assistant) }
         }

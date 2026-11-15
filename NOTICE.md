@@ -14,6 +14,10 @@ company's current brand guidelines, or replace the marks (they live in `NotchApp
 
 The mark for the local (Ollama) model, and the app's own artwork, are original to this project.
 
+## Third-party code
+
+Updates use [Sparkle](https://github.com/sparkle-project/Sparkle) (MIT licence, Copyright © Andy Matuschak and the Sparkle Project contributors), included unmodified through Swift Package Manager.
+
 ## Where the vector artwork comes from
 
 | Mark | Source | Licence of that source |

@@ -20,6 +20,10 @@
 </p>
 
 <p align="center">
+  <a href="#get-started-in-two-minutes">Install</a> &nbsp;|&nbsp; <a href="CHANGELOG.md">What's new</a> &nbsp;|&nbsp; <a href="#add-ons-gmail">Mail alerts</a> &nbsp;|&nbsp; <a href="PRIVACY.md">Privacy</a>
+</p>
+
+<p align="center">
   <img src="docs/assets/demo.gif" alt="Typing a question, sliding the model dial between the three models, then paging through recall: last chats, activity heatmap, projects" width="800">
 </p>
 
@@ -266,6 +270,18 @@ Dex Notch can watch your inbox and tell you at the notch about the few emails th
 
 Mail is treated as untrusted. The models run with no tools and no saved session (so mail never reaches the shared memory), their answers are checked against the ids they were sent, and the link opened is built by the app, never taken from model text.
 
+## Updates
+
+Dex Notch updates itself, so nobody needs to come back to GitHub for a new DMG.
+
+- **Once a day** it looks for a newer release, and **downloads it quietly in the background**.
+- It checks the download against a signing key built into the app. A file that was changed, or that was not signed by this project, is refused.
+- It then **asks before it restarts**: a small dot appears next to the menu bar mark, and the menu offers *Restart to update to …*. Settings → *Updates* shows the same with **Restart now**. If you just quit instead, the update is installed on the way out.
+- Because the update comes from inside the app, macOS never asks you to allow it again: the *Open Anyway* step is only for the very first install.
+- **Settings → Updates** has *Check now* and a switch to turn automatic updates off. The menu bar has *Check for Updates…*.
+
+Updating is [Sparkle](https://sparkle-project.org) (MIT licence). A release attaches an `appcast.xml` that the app reads from `releases/latest/download/appcast.xml`; the release build signs each update with the `SPARKLE_PRIVATE_KEY` secret and the matching public key is in `project.yml`. Debug builds don't check for updates unless you set `NOTCH_UPDATES=1`.
+
 ## Safety model
 
 | | Local model | Claude (`@claude`) | Codex (`@codex`) |
@@ -365,6 +381,7 @@ NotchApp/                 SwiftUI + AppKit menu-bar agent
   AddonCenter.swift         schedule, accounts, model fallback, and when a card may appear
   AlertView.swift           the mail card and its arrival: the comet round the rim, the rim as a timer
   Hotkey.swift              global hotkeys (the model hotkeys and the card keys)
+  AppUpdater.swift          updates through Sparkle: check daily, download quietly, ask before restarting
   Assistant.swift           state, local-model streaming, vault recall, persistence
   AgentStream.swift         routing, CLI arguments, stream parsing (pure, tested)
   AgentRunner.swift         launches claude / codex headless
@@ -377,7 +394,7 @@ memory/
   hooks/                    Claude Code start-up digest
   tests/                    118 tests
 NotchAppTests/             205 tests
-scripts/                   make-dmg.sh, demo_vault.py
+scripts/                   make-dmg.sh, appcast.sh (the update feed), demo_vault.py
 .github/workflows/         CI and release
 docs/                      specs, plans, example settings, assets
 ```

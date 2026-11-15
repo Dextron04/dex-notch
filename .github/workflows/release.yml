@@ -16,6 +16,7 @@ jobs:
         env:    # the app's own Google sign-in client (a desktop client id/secret is not confidential, but it stays out of git)
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}      # signs the update; the matching public key is built into the app
         run: scripts/make-dmg.sh "${GITHUB_REF_NAME}"
       - uses: actions/upload-artifact@v4
         with:
@@ -26,4 +27,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env: { GH_TOKEN: '${{ github.token }}' }
         run: |
-          gh release create "$GITHUB_REF_NAME" build/dist/* --title "Dex Notch $GITHUB_REF_NAME" --generate-notes
+          # the release page is that version's section of CHANGELOG.md (with its screenshots) plus the install steps
+          if scripts/release-notes.sh "$GITHUB_REF_NAME" > build/notes.md; then NOTES=(--notes-file build/notes.md); else NOTES=(--generate-notes); fi
+          gh release create "$GITHUB_REF_NAME" build/dist/* --title "Dex Notch $GITHUB_REF_NAME" "${NOTES[@]}"
