@@ -8,13 +8,13 @@ The newest version is at the top. Every release is on the [Releases page](https:
 
 ## v0.3.0: Dex Notch updates itself
 
-*Not released yet.*
+*15 November 2026*
 
 - **No more trips to GitHub.** Once a day Dex Notch looks for a newer version and downloads it quietly in the background.
 - **It always asks before restarting.** A small dot appears beside the menu bar mark, the menu offers **Restart to update**, and **Settings → Updates** has a **Restart now** link. If you just quit, the update installs on the way out.
 - **It can't be tampered with.** Every update is signed, and the app refuses anything that was changed or not signed by this project.
 - **Easy to turn off.** Settings → Updates has a switch, and **Check for Updates…** is in the menu bar.
-- You install this version by hand one last time. After it, updates arrive on their own.
+- **Install this version by hand one last time.** Versions before it can't update themselves. From here on, updates arrive on their own.
 
 ## v0.2.1: Mail that comes to you
 
