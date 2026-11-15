@@ -60,7 +60,7 @@ struct RecallView: View {
             ForEach(Assistant.RecallPage.allCases, id: \.self) { p in
                 HStack(spacing: 6) {
                     Circle().fill(Ink.ember).frame(width: 4, height: 4).opacity(a.page == p ? 1 : 0)
-                    Text(p.label).font(.system(size: 13, weight: a.page == p ? .semibold : .regular, design: .serif))
+                    Text(p.label).font(.system(size: 13, weight: a.page == p ? .semibold : .regular))
                         .foregroundStyle(a.page == p ? Ink.text : Ink.dim)
                 }
                 .contentShape(Rectangle()).onTapGesture { a.setPage(p) }
@@ -85,18 +85,18 @@ struct RecallView: View {
         if a.searching {
             HStack(spacing: 10) {
                 TextField("", text: $a.recallQuery, prompt: Text("Search conversations").foregroundStyle(Ink.dim))
-                    .textFieldStyle(.plain).font(.system(size: 18, design: .serif)).italic(a.recallQuery.isEmpty)
+                    .textFieldStyle(.plain).font(.system(size: 18))
                     .foregroundStyle(Ink.text).tint(Ink.ember).focused($searchFocus)
                     .onSubmit { a.openSelectedNote() }
                 Text("\(a.recallRows.count)").font(.system(size: 11, weight: .medium)).monospacedDigit().foregroundStyle(Ink.dim)
             }.padding(.horizontal, 12)
         } else {
-            (Text("\(shown)").foregroundColor(Ink.ember).font(.system(size: 22, weight: .semibold, design: .serif))
+            (Text("\(shown)").foregroundColor(Ink.ember).font(.system(size: 22, weight: .semibold))
              + Text(" conversations across ").foregroundColor(Ink.dim)
              + Text("\(a.snapshot.agents.count)").foregroundColor(Ink.text)
              + Text(" agents").foregroundColor(Ink.dim)
              + Text(a.snapshot.todayCount > 0 ? "  ·  \(a.snapshot.todayCount) today" : "").foregroundColor(Ink.dim))
-                .font(.system(size: 14, design: .serif))
+                .font(.system(size: 14))
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12)
                 .contentTransition(.numericText())
         }
@@ -118,14 +118,14 @@ struct RecallView: View {
         VStack(spacing: 0) {
             activityHeader.frame(height: Self.headerH)
             if a.grid.agents.isEmpty {
-                Text("No activity in the last ten weeks.").font(.system(size: 15, design: .serif)).italic().foregroundStyle(Ink.dim)
+                Text("No activity in the last ten weeks.").font(.system(size: 15)).foregroundStyle(Ink.dim)
                     .frame(maxWidth: .infinity, minHeight: Self.heatRowH + 22, alignment: .leading).padding(.horizontal, 12)
             } else {
                 Heatmap(grid: a.grid, cursor: a.cursor, start: sweepStart, onPick: { a.setCursor($0) })
                     .frame(height: CGFloat(a.grid.agents.count) * Self.heatRowH + 22).padding(.horizontal, 12)
             }
             if a.daySessions.isEmpty {
-                Text("Nothing recorded that day.").font(.system(size: 14, design: .serif)).italic().foregroundStyle(Ink.dim)
+                Text("Nothing recorded that day.").font(.system(size: 14)).foregroundStyle(Ink.dim)
                     .frame(maxWidth: .infinity, minHeight: Self.dayRowH, alignment: .leading).padding(.horizontal, 12)
             } else {
                 list(Array(a.daySessions.prefix(Self.maxDayRows)), height: Self.dayRowH, selectable: true)
@@ -137,9 +137,9 @@ struct RecallView: View {
     private var activityHeader: some View {
         let day = a.grid.days.indices.contains(a.cursor) ? a.grid.days[a.cursor] : Date()
         let n = a.grid.total(onDay: a.cursor)
-        return (Text(Self.dayLabel(day)).foregroundColor(Ink.ember).font(.system(size: 20, weight: .semibold, design: .serif))
+        return (Text(Self.dayLabel(day)).foregroundColor(Ink.ember).font(.system(size: 20, weight: .semibold))
                 + Text(n == 0 ? "  ·  quiet" : "  ·  \(n) session\(n == 1 ? "" : "s")").foregroundColor(Ink.dim))
-            .font(.system(size: 14, design: .serif))
+            .font(.system(size: 14))
             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12)
     }
 
@@ -151,16 +151,16 @@ struct RecallView: View {
 
     private var projectsPage: some View {
         VStack(spacing: 0) {
-            (Text("\(a.projectStats.count)").foregroundColor(Ink.ember).font(.system(size: 22, weight: .semibold, design: .serif))
+            (Text("\(a.projectStats.count)").foregroundColor(Ink.ember).font(.system(size: 22, weight: .semibold))
              + Text(" busiest projects, by turns").foregroundColor(Ink.dim))
-                .font(.system(size: 14, design: .serif))
+                .font(.system(size: 14))
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).frame(height: Self.headerH)
             if a.projectStats.isEmpty { empty } else {
                 let top = max(a.projectStats.first?.turns ?? 1, 1)
                 ForEach(Array(a.projectStats.enumerated()), id: \.element.name) { i, p in
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(p.name).font(.system(size: 14, design: .serif)).foregroundStyle(Ink.text).lineLimit(1)
+                            Text(p.name).font(.system(size: 14)).foregroundStyle(Ink.text).lineLimit(1)
                             Text("\(p.sessions) session\(p.sessions == 1 ? "" : "s")").font(.system(size: 10.5)).foregroundStyle(Ink.dim)
                         }.frame(width: 150, alignment: .leading)
                         GeometryReader { g in
@@ -197,7 +197,7 @@ struct RecallView: View {
             Text(r.name).font(.system(size: 11, weight: .medium, design: .monospaced)).tracking(0.2)
                 .foregroundStyle(r.state == "ok" ? Ink.ember : Ink.dim).frame(width: 84, alignment: .leading).lineLimit(1)
             VStack(alignment: .leading, spacing: 1) {
-                Text(r.lastTitle).font(.system(size: 15, design: .serif)).foregroundStyle(selected ? Ink.text : Ink.text.opacity(0.82)).lineLimit(1)
+                Text(r.lastTitle).font(.system(size: 15)).foregroundStyle(selected ? Ink.text : Ink.text.opacity(0.82)).lineLimit(1)
                 Text(r.lastProject + (r.sessions > 1 ? "  ·  \(r.sessions) sessions" : "")).font(.system(size: 11)).foregroundStyle(Ink.dim).lineLimit(1)
             }
             Spacer(minLength: 8)
@@ -219,7 +219,7 @@ struct RecallView: View {
 
     private var empty: some View {
         Text(a.searching ? "No conversation matches." : "Nothing recorded yet. This fills in as you work with your agents.")
-            .font(.system(size: 15, design: .serif)).italic().foregroundStyle(Ink.dim)
+            .font(.system(size: 15)).foregroundStyle(Ink.dim)
             .frame(maxWidth: .infinity, minHeight: Self.rowH, alignment: .leading).padding(.horizontal, 12)
     }
 
@@ -227,7 +227,7 @@ struct RecallView: View {
         VStack(alignment: .leading, spacing: 0) {
             Rectangle().fill(Ink.text.opacity(0.08)).frame(height: 1).padding(.bottom, 9)
             Text(a.summary.isEmpty ? "summarising…" : a.summary)
-                .font(.system(size: 14, design: .serif)).lineSpacing(3).italic(a.summary.isEmpty)
+                .font(.system(size: 14)).lineSpacing(3)
                 .foregroundStyle(a.summary.isEmpty ? Ink.dim : Ink.text).lineLimit(4)
         }
         .padding(.horizontal, 12).padding(.top, 6).frame(height: Self.summaryH, alignment: .top).clipped()

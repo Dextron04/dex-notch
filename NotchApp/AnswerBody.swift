@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Renders a model answer: prose as serif text, fenced code as a lifted mono block with
+/// Renders a model answer: prose as text, fenced code as a lifted mono block with
 /// language label, copy button and light syntax colour. Handles a fence that is still streaming.
 struct AnswerBody: View {
     let text: String
@@ -13,7 +13,7 @@ struct AnswerBody: View {
                 switch b {
                 case .prose(let s):
                     Text(Self.prose(s))
-                        .font(.system(size: 16.5, design: .serif)).lineSpacing(4)
+                        .font(.system(size: 16.5)).lineSpacing(4)
                         .foregroundStyle(Ink.text).textSelection(.enabled)
                 case .code(let lang, let code):
                     CodeBlock(lang: lang, code: code)

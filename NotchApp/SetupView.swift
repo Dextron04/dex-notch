@@ -135,7 +135,7 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 11) {
                 Image("AppMark").resizable().frame(width: 32, height: 32).accessibilityHidden(true)
-                Text("Dex Notch").font(.system(size: 18, weight: .semibold, design: .serif)).foregroundStyle(Ink.text)
+                Text("Dex Notch").font(.system(size: 18, weight: .semibold)).foregroundStyle(Ink.text)
             }
             .padding(.top, 52).padding(.bottom, 36)
             ForEach(guided ? SetupPane.guided : SetupPane.settings) { p in
@@ -145,7 +145,7 @@ struct SetupView: View {
                         ZStack {
                             if on { Circle().fill(Ink.ember).matchedGeometryEffect(id: "dot", in: railNS) }
                         }.frame(width: 6, height: 6)
-                        Text(p.rawValue).font(.system(size: 16, weight: on ? .semibold : .regular, design: .serif)).foregroundStyle(on ? Ink.text : Ink.dim)
+                        Text(p.rawValue).font(.system(size: 16, weight: on ? .semibold : .regular)).foregroundStyle(on ? Ink.text : Ink.dim)
                         Spacer(minLength: 0)
                     }
                     .padding(.vertical, 9).contentShape(Rectangle())
@@ -153,7 +153,7 @@ struct SetupView: View {
                 .buttonStyle(.plain).accessibilityAddTraits(on ? .isSelected : [])
             }
             Spacer()
-            Text("Press ⌥ Space any time to ask.").font(.system(size: 12.5, design: .serif)).italic().foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
+            Text("Press ⌥ Space any time to ask.").font(.system(size: 12.5)).foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
                 .padding(.bottom, 22)
         }
         .padding(.horizontal, 28).frame(width: 214, alignment: .leading)
@@ -175,8 +175,8 @@ struct SetupView: View {
 
     private func header(_ title: String, _ lede: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.system(size: 30, weight: .semibold, design: .serif)).foregroundStyle(Ink.text)
-            Text(lede).font(.system(size: 15, design: .serif)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+            Text(title).font(.system(size: 30, weight: .semibold)).foregroundStyle(Ink.text)
+            Text(lede).font(.system(size: 15)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
         }
         .padding(.bottom, 22)
     }
@@ -187,14 +187,14 @@ struct SetupView: View {
             Rectangle().fill(Ink.ember.opacity(0.7)).frame(width: 2)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Why this is needed").font(.system(size: 12, weight: .semibold)).tracking(0.4).foregroundStyle(Ink.ember)
-                Text(text).font(.system(size: 14, design: .serif)).foregroundStyle(Ink.text.opacity(0.85)).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+                Text(text).font(.system(size: 14)).foregroundStyle(Ink.text.opacity(0.85)).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.bottom, 20)
     }
 
     private func subhead(_ t: String) -> some View {
-        Text(t).font(.system(size: 17, weight: .semibold, design: .serif)).foregroundStyle(Ink.text).padding(.top, 32).padding(.bottom, 4)
+        Text(t).font(.system(size: 17, weight: .semibold)).foregroundStyle(Ink.text).padding(.top, 32).padding(.bottom, 4)
     }
 
     /// One line of the list: mark, name and a detail line, actions on the right, a hairline under it.
@@ -204,9 +204,9 @@ struct SetupView: View {
             HStack(alignment: .center, spacing: 14) {
                 lead().frame(width: 26, height: 26)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(mono ? .system(size: 14, design: .monospaced) : muted ? .system(size: 15, design: .serif).italic() : .system(size: 16, weight: .semibold, design: .serif)).foregroundStyle(muted ? Ink.dim : Ink.text)
+                    Text(title).font(mono ? .system(size: 14, design: .monospaced) : muted ? .system(size: 15) : .system(size: 16, weight: .semibold)).foregroundStyle(muted ? Ink.dim : Ink.text)
                         .lineLimit(1).truncationMode(.middle)
-                    if let detail { Text(detail).font(.system(size: 13, design: .serif)).foregroundStyle(Ink.dim).lineLimit(2).fixedSize(horizontal: false, vertical: true) }
+                    if let detail { Text(detail).font(.system(size: 13)).foregroundStyle(Ink.dim).lineLimit(2).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer(minLength: 16)
                 trail()
@@ -221,12 +221,12 @@ struct SetupView: View {
     }
 
     private func link(_ title: String, dim: Bool = false, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) { Text(title).font(.system(size: 14, weight: .semibold, design: .serif)).foregroundStyle(dim ? Ink.dim : Ink.ember).contentShape(Rectangle()) }.buttonStyle(.plain)
+        Button(action: action) { Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(dim ? Ink.dim : Ink.ember).contentShape(Rectangle()) }.buttonStyle(.plain)
     }
 
     private func field(_ label: String, _ placeholder: String, text: Binding<String>, secure: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(label).font(.system(size: 13, design: .serif)).foregroundStyle(Ink.dim)
+            Text(label).font(.system(size: 13)).foregroundStyle(Ink.dim)
             Group {
                 if secure { SecureField("", text: text, prompt: Text(placeholder).foregroundStyle(Ink.dim)) }
                 else { TextField("", text: text, prompt: Text(placeholder).foregroundStyle(Ink.dim)).autocorrectionDisabled() }
@@ -264,7 +264,7 @@ struct SetupView: View {
                    lead: { ModelMark(backend: b, size: 24, active: found) },
                    trail: {
                        if found && a.cliFound.count > 1 {
-                           if m.start == b { Text("Starts here").font(.system(size: 13, weight: .semibold, design: .serif)).foregroundStyle(Ink.ember) }
+                           if m.start == b { Text("Starts here").font(.system(size: 13, weight: .semibold)).foregroundStyle(Ink.ember) }
                            else { link("Start here", dim: true) { m.start = b } }
                        }
                    },
@@ -275,7 +275,7 @@ struct SetupView: View {
                                    Text(cmd).font(.system(size: 12, design: .monospaced)).foregroundStyle(Ink.text.opacity(0.85)).textSelection(.enabled)
                                    copyButton(cmd)
                                }
-                               Text("Then run \(b.rawValue) once to sign in.").font(.system(size: 12.5, design: .serif)).foregroundStyle(Ink.dim)
+                               Text("Then run \(b.rawValue) once to sign in.").font(.system(size: 12.5)).foregroundStyle(Ink.dim)
                            }.padding(.leading, 40)
                        }
                    })
@@ -293,7 +293,7 @@ struct SetupView: View {
                                field("Model", "gemma3:12b", text: $m.model)
                                field("Access token", "paste once", text: $m.token, secure: true)
                                Text("The token goes in your Keychain, never in settings.json. Leave it blank to keep the saved one.")
-                                   .font(.system(size: 12.5, design: .serif)).italic().foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
+                                   .font(.system(size: 12.5)).foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
                            }.padding(.leading, 40).padding(.top, 6).padding(.bottom, 4).transition(.opacity)
                        }
                    })
@@ -316,7 +316,7 @@ struct SetupView: View {
                 extra: { if let p = m.projectsSuggestion { link("Use ~/Projects") { m.useProjects() }.help(p).padding(.leading, 40) } })
             subhead("Quick switch with ⌘F")
             if m.folders.isEmpty {
-                Text("None. Edit runs stay in the scratch folder.").font(.system(size: 14, design: .serif)).italic().foregroundStyle(Ink.dim).padding(.vertical, 12)
+                Text("None. Edit runs stay in the scratch folder.").font(.system(size: 14)).foregroundStyle(Ink.dim).padding(.vertical, 12)
             }
             ForEach(m.folders, id: \.self) { f in
                 row(title: (f as NSString).abbreviatingWithTildeInPath, mono: true, pad: 11,
@@ -363,17 +363,17 @@ struct SetupView: View {
                 link("Connect Outlook") { center.connectOutlook(clientID: m.msID) }.help("Outlook.com, Hotmail, or a work or school Microsoft 365 account")
                 if center.connected { link("Check now", dim: true) { center.checkNow() } }
             }.padding(.top, 18)
-            Text(center.status).font(.system(size: 13, design: .serif)).italic().foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true).padding(.top, 8)
+            Text(center.status).font(.system(size: 13)).foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true).padding(.top, 8)
 
             DisclosureGroup(isExpanded: $m.msOpen) {
                 VStack(alignment: .leading, spacing: 18) {
                     field("Application (client) ID", "00000000-0000-0000-0000-000000000000", text: $m.msID)
                     Text("A free app registration in Microsoft Entra (Azure), for any account type, with a Mobile and desktop redirect of http://localhost and the Mail.Read, Mail.ReadWrite and Mail.Send permissions. It stays on this Mac. Clear the field to use the built-in sign-in.")
-                        .font(.system(size: 12.5, design: .serif)).italic().foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
+                        .font(.system(size: 12.5)).foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
                 }.padding(.top, 14)
             } label: {
                 Text(AddonSettings.bundledMicrosoft() != nil ? "Use your own Microsoft application" : "Your Microsoft application (this build has none built in)")
-                    .font(.system(size: 14, design: .serif)).foregroundStyle(Ink.dim).contentShape(Rectangle())
+                    .font(.system(size: 14)).foregroundStyle(Ink.dim).contentShape(Rectangle())
             }
             .tint(Ink.dim).padding(.top, 22)
 
@@ -383,11 +383,11 @@ struct SetupView: View {
                     field("Google client ID", "1234-abc.apps.googleusercontent.com", text: $m.gmailID)
                     field("Client secret", "GOCSPX-…", text: $m.gmailSecret)
                     Text("A free OAuth client of type Desktop app, with the Gmail API enabled, from the Google Cloud console. It stays on this Mac. Clear both fields to use the built-in sign-in again.")
-                        .font(.system(size: 12.5, design: .serif)).italic().foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
+                        .font(.system(size: 12.5)).foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
                 }.padding(.top, 14)
             } label: {
                 Text(builtIn ? "Use your own Google client" : "Your Google client (this build has none built in)")
-                    .font(.system(size: 14, design: .serif)).foregroundStyle(Ink.dim).contentShape(Rectangle())
+                    .font(.system(size: 14)).foregroundStyle(Ink.dim).contentShape(Rectangle())
             }
             .tint(Ink.dim).padding(.top, builtIn ? 32 : 22)
             }
@@ -402,18 +402,18 @@ struct SetupView: View {
             }
 
             subhead("How often to look")
-            Text("A look is light and free. The AI only reads mail that is new.").font(.system(size: 13, design: .serif)).foregroundStyle(Ink.dim).padding(.bottom, 12)
+            Text("A look is light and free. The AI only reads mail that is new.").font(.system(size: 13)).foregroundStyle(Ink.dim).padding(.bottom, 12)
             frequencyPicker
 
             subhead("Your name")
-            Text("Used to sign the replies the AI drafts. Leave it blank and they end with a short thanks.").font(.system(size: 13, design: .serif)).foregroundStyle(Ink.dim).padding(.bottom, 10)
-            TextField("", text: $m.myName, prompt: Text("Alex").foregroundStyle(Ink.dim)).textFieldStyle(.plain).font(.system(size: 15, design: .serif)).foregroundStyle(Ink.text)
+            Text("Used to sign the replies the AI drafts. Leave it blank and they end with a short thanks.").font(.system(size: 13)).foregroundStyle(Ink.dim).padding(.bottom, 10)
+            TextField("", text: $m.myName, prompt: Text("Alex").foregroundStyle(Ink.dim)).textFieldStyle(.plain).font(.system(size: 15)).foregroundStyle(Ink.text)
             Rectangle().fill(Ink.text.opacity(0.18)).frame(height: 1).padding(.top, 6)
 
             subhead("What matters to you")
-            Text("Added to the rules that decide what interrupts you.").font(.system(size: 13, design: .serif)).foregroundStyle(Ink.dim).padding(.bottom, 10)
+            Text("Added to the rules that decide what interrupts you.").font(.system(size: 13)).foregroundStyle(Ink.dim).padding(.bottom, 10)
             TextField("", text: $m.importance, prompt: Text("Recruiters, my landlord, anything about payments.").foregroundStyle(Ink.dim), axis: .vertical)
-                .textFieldStyle(.plain).lineLimit(2...4).font(.system(size: 15, design: .serif)).foregroundStyle(Ink.text)
+                .textFieldStyle(.plain).lineLimit(2...4).font(.system(size: 15)).foregroundStyle(Ink.text)
             Rectangle().fill(Ink.text.opacity(0.18)).frame(height: 1).padding(.top, 6)
             if builtIn {
             DisclosureGroup(isExpanded: $m.ownClientOpen) {
@@ -421,11 +421,11 @@ struct SetupView: View {
                     field("Google client ID", "1234-abc.apps.googleusercontent.com", text: $m.gmailID)
                     field("Client secret", "GOCSPX-…", text: $m.gmailSecret)
                     Text("A free OAuth client of type Desktop app, with the Gmail API enabled, from the Google Cloud console. It stays on this Mac. Clear both fields to use the built-in sign-in again.")
-                        .font(.system(size: 12.5, design: .serif)).italic().foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
+                        .font(.system(size: 12.5)).foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
                 }.padding(.top, 14)
             } label: {
                 Text(builtIn ? "Use your own Google client" : "Your Google client (this build has none built in)")
-                    .font(.system(size: 14, design: .serif)).foregroundStyle(Ink.dim).contentShape(Rectangle())
+                    .font(.system(size: 14)).foregroundStyle(Ink.dim).contentShape(Rectangle())
             }
             .tint(Ink.dim).padding(.top, builtIn ? 32 : 22)
             }
@@ -446,7 +446,7 @@ struct SetupView: View {
             ForEach(options, id: \.minutes) { o in
                 let on = m.checkMinutes == o.minutes
                 Button { withAnimation(.spring(duration: 0.3, bounce: 0.1)) { m.checkMinutes = o.minutes } } label: {
-                    Text(o.label).font(.system(size: 15, weight: on ? .semibold : .regular, design: .serif)).foregroundStyle(on ? Ink.ember : Ink.dim)
+                    Text(o.label).font(.system(size: 15, weight: on ? .semibold : .regular)).foregroundStyle(on ? Ink.ember : Ink.dim)
                         .padding(.vertical, 5).contentShape(Rectangle())
                         .overlay(alignment: .bottom) { if on { Rectangle().fill(Ink.ember).frame(height: 1).matchedGeometryEffect(id: "freq", in: freqNS) } }
                 }.buttonStyle(.plain).accessibilityAddTraits(on ? .isSelected : [])
@@ -460,7 +460,7 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 0) {
             header("Welcome to Dex Notch", "Dex Notch turns your Mac's notch into a quiet place for the few things that need you: an AI to ask, important email, and notifications from your iPhone.")
             Text("Next, a few short steps. Each one says what it needs and why, and every step can be skipped. You can change anything later in Settings.")
-                .font(.system(size: 15, design: .serif)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.bottom, 14)
+                .font(.system(size: 15)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.bottom, 14)
             row(title: "An AI to ask", detail: "Uses Claude or Codex if they are installed here.", lead: { Image(systemName: "sparkles").font(.system(size: 16)).foregroundStyle(Ink.dim) }, trail: { EmptyView() })
             row(title: "Folders the AI may edit", detail: "Only the ones you choose.", lead: { Image(systemName: "folder").font(.system(size: 16)).foregroundStyle(Ink.dim) }, trail: { EmptyView() })
             row(title: "Gmail", detail: "Read-only unless you allow replies.", lead: { Image(systemName: "envelope").font(.system(size: 16)).foregroundStyle(Ink.dim) }, trail: { EmptyView() })
@@ -483,7 +483,7 @@ struct SetupView: View {
                     trail: { if !allowed { link("Open System Settings") { _ = PhoneNotes.canRead(); NSWorkspace.shared.open(PhoneNotes.privacyPane) } } })
                 subhead("Before this can work")
                 Text("Your iPhone must be set up with iPhone Mirroring on this Mac, and System Settings → Notifications must allow notifications from your iPhone. Dex Notch can't change either of those for you.")
-                    .font(.system(size: 13.5, design: .serif)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -500,7 +500,7 @@ struct SetupView: View {
                 lead: { Image(systemName: center.accounts.isEmpty ? "circle.dashed" : "checkmark.circle.fill").foregroundStyle(center.accounts.isEmpty ? Ink.dim : Ink.ember) }, trail: { EmptyView() })
             row(title: "iPhone notifications", detail: ok ? "On." : center.settings.phoneAlerts ? "Switched on, but Full Disk Access is still missing." : "Off.",
                 lead: { Image(systemName: ok ? "checkmark.circle.fill" : "circle.dashed").foregroundStyle(ok ? Ink.ember : Ink.dim) }, trail: { EmptyView() })
-            Text("Press ⌥ Space any time to ask.").font(.system(size: 15, design: .serif)).italic().foregroundStyle(Ink.dim).padding(.top, 26)
+            Text("Press ⌥ Space any time to ask.").font(.system(size: 15)).foregroundStyle(Ink.dim).padding(.top, 26)
         }
     }
 
@@ -534,14 +534,14 @@ struct SetupView: View {
         return VStack(spacing: 0) {
             Rectangle().fill(Ink.text.opacity(0.09)).frame(height: 1)
             HStack(spacing: 18) {
-                if let msg = m.message { Text(msg).font(.system(size: 13, design: .serif)).foregroundStyle(Ink.emberDeep).lineLimit(2).fixedSize(horizontal: false, vertical: true) }
-                else { Text("Step \(i + 1) of \(steps.count)").font(.system(size: 13, design: .serif)).foregroundStyle(Ink.dim) }
+                if let msg = m.message { Text(msg).font(.system(size: 13)).foregroundStyle(Ink.emberDeep).lineLimit(2).fixedSize(horizontal: false, vertical: true) }
+                else { Text("Step \(i + 1) of \(steps.count)").font(.system(size: 13)).foregroundStyle(Ink.dim) }
                 Spacer(minLength: 12)
-                if i > 0 { Button("Back") { withAnimation(.spring(duration: 0.4, bounce: 0.12)) { m.pane = steps[i - 1] } }.buttonStyle(.plain).font(.system(size: 15, design: .serif)).foregroundStyle(Ink.dim) }
+                if i > 0 { Button("Back") { withAnimation(.spring(duration: 0.4, bounce: 0.12)) { m.pane = steps[i - 1] } }.buttonStyle(.plain).font(.system(size: 15)).foregroundStyle(Ink.dim) }
                 Button {
                     if last { if m.save() { done() } } else { withAnimation(.spring(duration: 0.4, bounce: 0.12)) { m.pane = steps[i + 1] } }
                 } label: {
-                    Text(last ? "Start using Dex Notch" : i == 0 ? "Begin" : "Continue").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(.black).lineLimit(1).fixedSize()
+                    Text(last ? "Start using Dex Notch" : i == 0 ? "Begin" : "Continue").font(.system(size: 15, weight: .semibold)).foregroundStyle(.black).lineLimit(1).fixedSize()
                         .padding(.horizontal, 22).padding(.vertical, 8).background(Capsule().fill(Ink.ember))
                 }.buttonStyle(.plain).keyboardShortcut(.defaultAction)
             }
@@ -555,13 +555,13 @@ struct SetupView: View {
             Rectangle().fill(Ink.text.opacity(0.09)).frame(height: 1)
             HStack(spacing: 18) {
                 if let msg = m.message {
-                    Text(msg).font(.system(size: 13, design: .serif)).foregroundStyle(Ink.emberDeep).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    Text(msg).font(.system(size: 13)).foregroundStyle(Ink.emberDeep).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 12)
-                Button("Cancel") { done() }.buttonStyle(.plain).font(.system(size: 15, design: .serif)).foregroundStyle(Ink.dim)
+                Button("Cancel") { done() }.buttonStyle(.plain).font(.system(size: 15)).foregroundStyle(Ink.dim)
                     .keyboardShortcut(.cancelAction)
                 Button { if m.save() { done() } } label: {
-                    Text("Save").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(.black).lineLimit(1).fixedSize()
+                    Text("Save").font(.system(size: 15, weight: .semibold)).foregroundStyle(.black).lineLimit(1).fixedSize()
                         .padding(.horizontal, 22).padding(.vertical, 8).background(Capsule().fill(Ink.ember))
                 }.buttonStyle(.plain).keyboardShortcut(.defaultAction)
             }

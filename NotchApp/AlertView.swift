@@ -58,9 +58,9 @@ struct AlertView: View {
             .reveal(c.shown, 0, reduce)
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(a.headline).font(.system(size: 17, weight: .semibold, design: .serif)).foregroundStyle(Ink.text).lineLimit(1)
+                Text(a.headline).font(.system(size: 16, weight: .semibold)).foregroundStyle(Ink.text).lineLimit(1)
                     .reveal(c.shown, 0.07, reduce)
-                Text(a.reason).font(.system(size: 13.5, design: .serif)).italic().foregroundStyle(Ink.dim).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                Text(a.reason).font(.system(size: 13)).foregroundStyle(Ink.dim).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     .reveal(c.shown, 0.15, reduce)
             }
             .frame(maxWidth: .infinity, minHeight: Self.bodyH, alignment: .topLeading)
@@ -82,22 +82,22 @@ struct AlertView: View {
         return HStack(spacing: 22) {
             if reconnect {
                 Button { c.open() } label: {
-                    HStack(spacing: 6) { Text("Reconnect").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
+                    HStack(spacing: 6) { Text("Reconnect").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
                 }
                 Button { c.dismiss() } label: {
-                    HStack(spacing: 6) { Text("Later").font(.system(size: 14, design: .serif)).foregroundStyle(Ink.dim); key("⌥esc") }.contentShape(Rectangle())
+                    HStack(spacing: 6) { Text("Later").font(.system(size: 14)).foregroundStyle(Ink.dim); key("⌥esc") }.contentShape(Rectangle())
                 }
                 Spacer(minLength: 8)
             } else {
             Button { c.open() } label: {
-                HStack(spacing: 6) { Text(phone ? "Done" : "Open").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
+                HStack(spacing: 6) { Text(phone ? "Done" : "Open").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
             }
             if !phone { Button { c.startReply() } label: {
-                HStack(spacing: 6) { Text("Reply").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(Ink.text.opacity(0.9)); key("⌥R") }.contentShape(Rectangle())
+                HStack(spacing: 6) { Text("Reply").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.text.opacity(0.9)); key("⌥R") }.contentShape(Rectangle())
             }
             .help("Draft a reply with an AI agent, or ask about this email") }
             Button { c.notImportant() } label: {
-                HStack(spacing: 6) { Text("Not important").font(.system(size: 14, design: .serif)).foregroundStyle(Ink.dim); key("⌥⌫") }.contentShape(Rectangle())
+                HStack(spacing: 6) { Text("Not important").font(.system(size: 14)).foregroundStyle(Ink.dim); key("⌥⌫") }.contentShape(Rectangle())
             }
             .help(phone ? "Never show notifications from this app  ⌥⌫" : "Never show mail from this sender  ⌥⌫")
             Spacer(minLength: 8)

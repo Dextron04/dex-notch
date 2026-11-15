@@ -58,7 +58,7 @@ struct ReplyPanel: View {
 
     private func message(_ text: String, pulse: Bool, retry: Bool = false) -> some View {
         VStack(spacing: 14) {
-            Text(text).font(.system(size: 15, design: .serif)).italic().foregroundStyle(Ink.dim).multilineTextAlignment(.center)
+            Text(text).font(.system(size: 15)).foregroundStyle(Ink.dim).multilineTextAlignment(.center)
                 .opacity(pulse ? 0.6 : 1).fixedSize(horizontal: false, vertical: true)
             if retry { link("Try again") { c.startReply() } }
             link("Close", dim: true) { c.collapseReply() }
@@ -69,8 +69,8 @@ struct ReplyPanel: View {
     private var permission: some View {
         VStack(spacing: 14) {
             Text("To write replies, Google needs to let Dex Notch create drafts and send mail from \(s.alert.account ?? "this account"). It only does so when you press Send or Save draft.")
-                .font(.system(size: 15, design: .serif)).foregroundStyle(Ink.text.opacity(0.9)).multilineTextAlignment(.center).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
-            if let n = s.note { Text(n).font(.system(size: 13, design: .serif)).italic().foregroundStyle(Ink.dim) }
+                .font(.system(size: 15)).foregroundStyle(Ink.text.opacity(0.9)).multilineTextAlignment(.center).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+            if let n = s.note { Text(n).font(.system(size: 13)).foregroundStyle(Ink.dim) }
             link("Allow replies") { c.allowReplies() }
             link("Not now", dim: true) { c.collapseReply() }
         }
@@ -82,7 +82,7 @@ struct ReplyPanel: View {
             tabs
             Group { s.tab == .draft ? AnyView(draftBody) : AnyView(askBody) }
                 .frame(height: Self.bodyH).padding(.horizontal, 28)
-            Text(s.tab == .draft ? (s.note ?? " ") : " ").font(.system(size: 12, design: .serif)).italic().foregroundStyle(Ink.dim).lineLimit(1)
+            Text(s.tab == .draft ? (s.note ?? " ") : " ").font(.system(size: 12)).foregroundStyle(Ink.dim).lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 28).padding(.top, 4).frame(height: 22)
             inputRow
             actions
@@ -106,7 +106,7 @@ struct ReplyPanel: View {
     private func tab(_ title: String, _ t: ReplySession.Tab) -> some View {
         let on = s.tab == t
         return Button { withAnimation(.spring(duration: 0.3, bounce: 0.1)) { s.tab = t }; focus = .input } label: {
-            Text(title).font(.system(size: 15, weight: on ? .semibold : .regular, design: .serif)).foregroundStyle(on ? Ink.ember : Ink.dim)
+            Text(title).font(.system(size: 15, weight: on ? .semibold : .regular)).foregroundStyle(on ? Ink.ember : Ink.dim)
                 .padding(.vertical, 6).contentShape(Rectangle())
                 .overlay(alignment: .bottom) { if on { Rectangle().fill(Ink.ember).frame(height: 1).matchedGeometryEffect(id: "tab", in: tabNS) } }
         }.buttonStyle(.plain)
@@ -116,11 +116,11 @@ struct ReplyPanel: View {
         ZStack(alignment: .topLeading) {
             TextEditor(text: $s.draft)
                 .focused($focus, equals: .draft)
-                .font(.system(size: 15, design: .serif)).foregroundStyle(Ink.text).tint(Ink.ember).lineSpacing(3)
+                .font(.system(size: 15)).foregroundStyle(Ink.text).tint(Ink.ember).lineSpacing(3)
                 .scrollContentBackground(.hidden).scrollIndicators(.never)
                 .padding(.top, 6).disabled(s.drafting).opacity(s.drafting ? 0.35 : 1)
             if s.drafting {
-                Text(s.draft.isEmpty ? "Writing a reply…" : "Rewriting…").font(.system(size: 15, design: .serif)).italic().foregroundStyle(Ink.dim).padding(.top, 8).padding(.leading, 5)
+                Text(s.draft.isEmpty ? "Writing a reply…" : "Rewriting…").font(.system(size: 15)).foregroundStyle(Ink.dim).padding(.top, 8).padding(.leading, 5)
             }
         }
         .animation(.easeOut(duration: 0.2), value: s.drafting)
@@ -132,13 +132,13 @@ struct ReplyPanel: View {
                 VStack(alignment: .leading, spacing: 14) {
                     if s.exchanges.isEmpty {
                         Text("Ask anything about this email: what it wants from you, what a date or a term means, whether it looks genuine.")
-                            .font(.system(size: 14, design: .serif)).italic().foregroundStyle(Ink.dim).lineSpacing(3)
+                            .font(.system(size: 14)).foregroundStyle(Ink.dim).lineSpacing(3)
                     }
                     ForEach(s.exchanges) { e in
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(e.question).font(.system(size: 13, design: .serif)).italic().foregroundStyle(Ink.dim)
-                            if e.answer.isEmpty { Text("Thinking…").font(.system(size: 15, design: .serif)).foregroundStyle(Ink.dim).opacity(0.6) }
-                            else { Text(e.answer).font(.system(size: 15, design: .serif)).foregroundStyle(Ink.text).lineSpacing(3).textSelection(.enabled) }
+                            Text(e.question).font(.system(size: 13)).foregroundStyle(Ink.dim)
+                            if e.answer.isEmpty { Text("Thinking…").font(.system(size: 15)).foregroundStyle(Ink.dim).opacity(0.6) }
+                            else { Text(e.answer).font(.system(size: 15)).foregroundStyle(Ink.text).lineSpacing(3).textSelection(.enabled) }
                         }.id(e.id)
                     }
                 }
@@ -154,7 +154,7 @@ struct ReplyPanel: View {
         HStack(spacing: 10) {
             TextField("", text: $s.input,
                       prompt: Text(s.tab == .draft ? "Tell it what to change…  “shorter”, “say Thursday doesn't work”" : "Ask about this email…").foregroundStyle(Ink.dim))
-                .textFieldStyle(.plain).font(.system(size: 16, design: .serif)).italic(s.input.isEmpty).foregroundStyle(Ink.text).tint(Ink.ember)
+                .textFieldStyle(.plain).font(.system(size: 16)).foregroundStyle(Ink.text).tint(Ink.ember)
                 .focused($focus, equals: .input).disabled(s.busy).onSubmit { c.submitInput() }
             Image(systemName: "return").font(.system(size: 12, weight: .semibold)).foregroundStyle(s.input.isEmpty ? Ink.dim.opacity(0.5) : Ink.ember)
         }
@@ -167,24 +167,24 @@ struct ReplyPanel: View {
             switch s.outcome {
             case .none, .failed:
                 Button { c.beginSend() } label: {
-                    Text("Send to \(s.recipientName)").font(.system(size: 14, weight: .semibold, design: .serif)).foregroundStyle(.black).lineLimit(1)
+                    Text("Send to \(s.recipientName)").font(.system(size: 14, weight: .semibold)).foregroundStyle(.black).lineLimit(1)
                         .padding(.horizontal, 18).padding(.vertical, 7).background(Capsule().fill(s.canSend ? Ink.ember : Ink.ember.opacity(0.3)))
                 }.buttonStyle(.plain).keyboardShortcut(.return, modifiers: .command).disabled(!s.canSend)
                 link("Save draft", dim: false) { c.saveDraft() }.keyboardShortcut("s", modifiers: .command).disabled(!s.canSend).opacity(s.canSend ? 1 : 0.4)
                 link("Discard", dim: true) { c.discardReply() }
                 Spacer(minLength: 8)
-                if case .failed(let why) = s.outcome { Text(why).font(.system(size: 12, design: .serif)).foregroundStyle(Ink.emberDeep).lineLimit(2) }
-                else { Text("esc keeps the draft for later").font(.system(size: 12, design: .serif)).italic().foregroundStyle(Ink.dim) }
+                if case .failed(let why) = s.outcome { Text(why).font(.system(size: 12)).foregroundStyle(Ink.emberDeep).lineLimit(2) }
+                else { Text("esc keeps the draft for later").font(.system(size: 12)).foregroundStyle(Ink.dim) }
             case .undo(let n):
-                Text("Sending in \(n)…").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(Ink.ember)
+                Text("Sending in \(n)…").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ember)
                 link("Undo") { c.undoSend() }.keyboardShortcut("z", modifiers: .command)
                 Spacer()
             case .sending:
-                Text("Sending…").font(.system(size: 15, design: .serif)).italic().foregroundStyle(Ink.dim); Spacer()
+                Text("Sending…").font(.system(size: 15)).foregroundStyle(Ink.dim); Spacer()
             case .sent:
-                Label("Sent", systemImage: "checkmark").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(Ink.ember); Spacer()
+                Label("Sent", systemImage: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ember); Spacer()
             case .saved:
-                Label("Saved to your Gmail drafts", systemImage: "checkmark").font(.system(size: 15, weight: .semibold, design: .serif)).foregroundStyle(Ink.ember); Spacer()
+                Label("Saved to your Gmail drafts", systemImage: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ember); Spacer()
             }
         }
         .padding(.horizontal, 28).frame(height: 54)
@@ -192,7 +192,7 @@ struct ReplyPanel: View {
     }
 
     private func link(_ title: String, dim: Bool = false, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) { Text(title).font(.system(size: 14, weight: .semibold, design: .serif)).foregroundStyle(dim ? Ink.dim : Ink.ember).contentShape(Rectangle()) }.buttonStyle(.plain)
+        Button(action: action) { Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(dim ? Ink.dim : Ink.ember).contentShape(Rectangle()) }.buttonStyle(.plain)
     }
 }
 
@@ -233,8 +233,8 @@ struct SentSeal: View {
             }
             .frame(width: Self.w + 20, height: Self.h + 56)
             VStack(spacing: 5) {
-                Text(title).font(.system(size: 26, weight: .semibold, design: .serif)).foregroundStyle(Ink.text)
-                Text(detail).font(.system(size: 15, design: .serif)).italic().foregroundStyle(Ink.dim)
+                Text(title).font(.system(size: 26, weight: .semibold)).foregroundStyle(Ink.text)
+                Text(detail).font(.system(size: 15)).foregroundStyle(Ink.dim)
             }
             .opacity(words ? 1 : 0).blur(radius: words || reduce ? 0 : 6).offset(y: words || reduce ? 0 : 6)
         }

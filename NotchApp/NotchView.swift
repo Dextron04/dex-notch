@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Ink & ember: pure black that melts into the hardware notch, one warm accent, a serif voice.
+// Ink & ember: pure black that melts into the hardware notch, one warm accent, a quiet sans voice.
 enum Ink {
     static let ember = Color(red: 1.00, green: 0.69, blue: 0.35)
     static let emberDeep = Color(red: 0.93, green: 0.42, blue: 0.18)
@@ -138,15 +138,15 @@ struct NotchView: View {
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 10) {
                     if let q = a.question {
-                        Text(q).font(.system(size: 13, design: .serif)).foregroundStyle(Ink.dim).lineLimit(2)
+                        Text(q).font(.system(size: 13)).foregroundStyle(Ink.dim).lineLimit(2)
                     }
                     if let e = a.error {
-                        Text(e).font(.system(size: 15, design: .serif)).foregroundStyle(Ink.emberDeep)
+                        Text(e).font(.system(size: 15)).foregroundStyle(Ink.emberDeep)
                     } else if !a.answer.isEmpty {
                         AnswerBody(text: a.answer)
                         if !a.recalled.isEmpty && !a.busy {
                             Text("from your vault · " + a.recalled.prefix(3).joined(separator: " · "))
-                                .font(.system(size: 11, design: .serif)).italic().foregroundStyle(Ink.dim).lineLimit(2)
+                                .font(.system(size: 11)).foregroundStyle(Ink.dim).lineLimit(2)
                         }
                     }
                     Color.clear.frame(height: 1).id("end")
@@ -172,7 +172,7 @@ struct NotchView: View {
             TextField("", text: $a.draft,
                       prompt: Text(a.needsSetup ? "Install claude or codex to begin" : a.backend == .gemma ? (hasAnswer ? "Follow up…" : "Ask anything") : (a.work && !hasAnswer ? "Ask \(a.backend.rawValue) · ⌘F folder" : "Ask \(a.backend.rawValue)…")).foregroundStyle(Ink.dim))
                 .textFieldStyle(.plain)
-                .font(.system(size: 19, design: .serif)).italic(!hasAnswer && a.draft.isEmpty)
+                .font(.system(size: 19))
                 .foregroundStyle(Ink.text)
                 .tint(Ink.ember)
                 .focused($focused)
@@ -208,7 +208,7 @@ struct NotchView: View {
                     VStack(spacing: 3) {
                         HStack(spacing: 2) {
                             ModelMark(backend: b, size: 18, active: on)
-                            if on && a.work { Text("+").font(.system(size: 13, weight: .semibold, design: .serif)).foregroundStyle(Ink.emberDeep) }
+                            if on && a.work { Text("+").font(.system(size: 13, weight: .semibold)).foregroundStyle(Ink.emberDeep) }
                         }
                         .frame(minWidth: 40, minHeight: 20)
                         ZStack {
@@ -232,13 +232,13 @@ struct NotchView: View {
     /// First run with neither CLI installed: say exactly what to do. Gemma is deliberately an afterthought.
     private var setupCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("One model to start.").font(.system(size: 21, weight: .semibold, design: .serif)).foregroundStyle(Ink.text)
+            Text("One model to start.").font(.system(size: 21, weight: .semibold)).foregroundStyle(Ink.text)
             VStack(alignment: .leading, spacing: 8) {
                 setupRow("Claude", "npm install -g @anthropic-ai/claude-code", "then run  claude  once to log in")
                 setupRow("Codex", "npm install -g @openai/codex", "then run  codex  once to log in")
             }
             Text("Then press ⌥ Space again. A model on your own server is optional: menu bar → Settings…")
-                .font(.system(size: 13, design: .serif)).italic().foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
+                .font(.system(size: 13)).foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 30).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -247,10 +247,10 @@ struct NotchView: View {
     private func setupRow(_ name: String, _ cmd: String, _ then: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 10) {
-                Text(name).font(.system(size: 14, weight: .semibold, design: .serif)).foregroundStyle(Ink.ember).frame(width: 52, alignment: .leading)
+                Text(name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Ink.ember).frame(width: 52, alignment: .leading)
                 Text(cmd).font(.system(size: 12.5, design: .monospaced)).foregroundStyle(Ink.text).textSelection(.enabled)
             }
-            Text(then).font(.system(size: 12, design: .serif)).foregroundStyle(Ink.dim).padding(.leading, 62)
+            Text(then).font(.system(size: 12)).foregroundStyle(Ink.dim).padding(.leading, 62)
         }
     }
 
