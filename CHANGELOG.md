@@ -6,6 +6,22 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.6.0: Updates at the notch, Mac notifications, and a plainer look
+
+*15 November 2026*
+
+<p align="center">
+  <img src="docs/assets/shot-alert.png" alt="A mail alert at the notch in the new sans-serif font" width="62%">
+</p>
+
+- **New versions announce themselves.** When an update is out, the notch shows a card once: **What's new** (⌥N), **Update** or **Restart** (⌥↩), **Later** (⌥esc). ⌥N grows the card into a scrollable page with the notes for every release you haven't got yet, including their screenshots, animated gifs and videos.
+- **Your Mac's notifications, judged.** Settings → iPhone has a new switch, off until you turn it on. Notifications from apps on this Mac, such as Slack or Messages, go to the same AI that reads your mail, and only the important ones become cards. This sends their text to the AI you picked, which is why it asks first.
+- **iPhone notifications say when they can't work.** Without Full Disk Access they used to fail quietly. Now the notch shows a card, once a day, with a button that opens the right Privacy page. It goes away by itself when reading works, and failures are written to the system log.
+- **No lag after sleep.** iPhone notifications are read the moment the Mac wakes or unlocks, instead of on the next five-second check.
+- **A plainer look.** The notch, settings and replies now use the Mac's own sans-serif font instead of a serif. Every screenshot and clip in the README is retaken to match.
+- **The model is named once.** Switching model no longer leaves three logos in the notch. The name appears briefly where you're looking, then goes away.
+- Cards that aren't mail or phone cards, such as the update card, can no longer be muted with ⌥⌫.
+
 ## v0.5.0: Outlook and Microsoft 365 mail
 
 *15 November 2026*
