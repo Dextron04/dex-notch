@@ -94,8 +94,8 @@ Don't have `claude` or `codex` yet? The notch tells you what to install and wait
 </table>
 
 <p align="center">
-  <img src="docs/assets/shot-answer.png" alt="An answer with a syntax-highlighted code block and a line naming the vault notes it used" width="62%">
-  <br><sub><b>Answers with receipts.</b> Code gets its own block with a copy button. When the local model drew on your memory it names the notes.</sub>
+  <img src="docs/assets/shot-answer.png" alt="An answer from Claude with a syntax-highlighted Swift code block and its copy button" width="62%">
+  <br><sub><b>Answers with receipts.</b> Code gets its own block with a copy button. When the local model drew on your memory, a line under the answer names the notes it used.</sub>
 </p>
 
 ### Recall
@@ -271,7 +271,7 @@ Dex Notch can watch your inbox and tell you at the notch about the few emails th
 </p>
 
 <p align="center">
-  <img src="docs/assets/shot-mail.png" alt="Settings, Mail page: two Gmail accounts each with a Remove link, Add another account, how often to look (2 min, 5 min, 15 min, 30 min, 1 hour, 4 hours), and what matters to you" width="70%">
+  <img src="docs/assets/shot-mail.png" alt="Settings, Mail page: a Gmail and an Outlook account each with a Remove link, the Allow replies switch, and the Connect Gmail and Connect Outlook links" width="70%">
   <br><sub><b>Mail settings.</b> Accounts, how often to look, and what matters to you. (Demo accounts.)</sub>
 </p>
 
@@ -298,6 +298,10 @@ Notifications from your iPhone can show at the notch too, so you don't have to p
 1. **Set up iPhone Mirroring** on your Mac and iPhone, and in System Settings → Notifications allow notifications from your iPhone. Dex Notch can't do either for you.
 2. **Settings → iPhone** (or the walk-through): switch on **Show iPhone notifications**.
 3. **Allow Full Disk Access.** macOS keeps notifications in a private file that apps can't open unless you allow it. The page has an **Open System Settings** link and a live check that turns green the moment you allow it. Add Dex Notch with **+** if it isn't listed, and reopen the app if macOS asks.
+
+<p align="center">
+  <img src="docs/assets/shot-iphone.png" alt="Settings, iPhone page: why Full Disk Access is needed, the switch, and a live Full Disk Access check with an Open System Settings link" width="62%">
+</p>
 
 It only shows what arrives after you switch it on, never your old notifications. A card shows the iPhone, the app, and what it said. **Done** (`⌥↩`) closes it and **Not important** (`⌥⌫`) hides that app for good. There is no AI involved, and nothing leaves your Mac. A notification counts as the phone's when its app isn't installed on your Mac; an app that exists on both is treated as the Mac's own. See [PRIVACY.md](PRIVACY.md).
 
@@ -392,7 +396,7 @@ scripts/make-dmg.sh v0.2.0                               # a universal, ad-hoc s
 
 Releases are built by GitHub Actions: push a tag (`git tag v0.2.0 && git push --tags`) and a DMG is attached to a new release. CI runs every test on each push. A release also carries the app's own Google sign-in, read from the `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` repository secrets.
 
-**Demo mode.** `NOTCH_VAULT`, `NOTCH_SETTINGS` and `NOTCH_CLIS` (for example `none`, or `claude,codex`) point the app at other data or pretend which CLIs are installed. That is how the screenshots here were made, and how to rehearse the first run:
+**Demo mode.** `NOTCH_VAULT`, `NOTCH_SETTINGS` and `NOTCH_CLIS` (for example `none`, or `claude,codex`) point the app at other data or pretend which CLIs are installed. `NOTCH_ADDONS` points the alert queue and accounts at a throwaway file, `NOTCH_ALERT_DEMO` (`gmail`, `phone`, or anything else for all of them) shows made-up alert cards, and `NOTCH_OPEN_SETTINGS` (`models`, `folders`, `mail`, `iphone`, `updates`) opens Settings on a page. That is how the screenshots here were made, and how to rehearse the first run:
 
 ```bash
 python3 scripts/demo_vault.py /tmp/demo-vault
