@@ -61,6 +61,7 @@ final class AddonCenter {
         reload()
         queueReconnectCard()
         migrateLegacyAccount()
+        AppUpdater.shared.onFound = { [weak self] v in self?.updateFound(v) }
         let dn = DistributedNotificationCenter.default(), ws = NSWorkspace.shared.notificationCenter
         dn.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.locked = true } }
         dn.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.locked = false; self?.welcomeBack() } }
@@ -71,7 +72,7 @@ final class AddonCenter {
         // alerts wait for you: this is what shows them the moment you are back at the keyboard
         Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.pollPhone(); self?.presentIfPossible() } }
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.tick(); self?.presentIfPossible() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.pollPhone(); self?.tick(); self?.presentIfPossible() }
         if ProcessInfo.processInfo.environment["NOTCH_ALERT_DEMO"] != nil { forceDemo = true; demo() }
     }
 
@@ -133,6 +134,11 @@ final class AddonCenter {
             guard let cursor = state.phoneCursor else { state.phoneCursor = try PhoneNotes.latestID(); state.save(to: stateURL); phoneStatus = "Watching for iPhone notifications."; return }
             let notes = try PhoneNotes.rows(after: cursor)
             guard let last = notes.last else { return }
+            if settings.macAlerts {
+                macBuffer += notes.filter { PhoneNotes.isMacCandidate($0.app) { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil } && !state.muted.contains($0.app.lowercased()) }.map { n in PhoneNotes.asMailItem(n, name: NSWorkspace.shared.urlForApplication(withBundleIdentifier: n.app).map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") }) }
+                macBuffer = Array(macBuffer.suffix(Triage.batch))
+                judgeMac()
+            }
             let have = Set(state.pending.map(\.id))
             let fresh = notes.filter { PhoneNotes.fromPhone($0.app) { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil } }
                 .map(PhoneNotes.alert).filter { !have.contains($0.id) && !state.muted.contains($0.address) }
@@ -146,6 +152,59 @@ final class AddonCenter {
         }
     }
     private var lastPhoneLog = ""
+
+    // MARK: updates
+
+    /// A newer version exists: one card per version, and its notes are fetched now so "What's new" opens at once.
+    func updateFound(_ v: String) {
+        guard state.updateNudged != v, Changelog.newer(v, than: AppUpdater.shared.version) else { return }
+        state.updateNudged = v
+        state.pending.append(AddonAlert(id: "update|\(v)", addon: "app", sender: "Dex Notch", address: "", headline: "Dex Notch \(v) is available",
+            reason: "Press ⌥N to see what's new.", url: "", score: 10, created: Date(), account: nil, kind: "update"))
+        state.save(to: stateURL); loadNotes(v); presentIfPossible()
+    }
+    private func loadNotes(_ v: String) {
+        notesState = .loading; notes = []
+        Task {
+            if let b = await Changelog.load(installed: AppUpdater.shared.version, new: v), !b.isEmpty { notes = b; notesState = .ready } else { notesState = .failed }
+        }
+    }
+    /// ⌥N on the update card: it grows into the page of release notes.
+    func openNotes() {
+        guard let a = current, a.kind == "update", !notesOpen else { return }
+        if notesState == .failed { loadNotes(String(a.id.dropFirst("update|".count))) }
+        countdown?.cancel(); cardKeys = []
+        withAnimation(.spring(duration: 0.5, bounce: 0.12)) { notesOpen = true }
+        onReply?(true)
+    }
+    func closeNotes() { if let c = current, notesOpen { retire(c.id) } }
+    enum NotesState { case loading, ready, failed }
+    private(set) var notesOpen = false
+    private(set) var notes: [Changelog.Block] = []
+    private(set) var notesState = NotesState.loading
+    private var macBuffer: [MailItem] = []      // ponytail: memory only; a quit before the model answers drops them
+    private var judging = false
+
+    /// Mac notifications go to the same model as mail, in one batch, within the hourly model budget. Failure keeps them for the next poll.
+    private func judgeMac() {
+        guard !judging, !macBuffer.isEmpty, let assistant, state.canCallModel(now: Date(), limit: settings.maxModelCallsPerHour) else { return }
+        judging = true
+        let batch = macBuffer; state.noteModelCall(now: Date())
+        let order = settings.order.filter { assistant.choices.contains($0) }
+        Task {
+            defer { judging = false }
+            guard let r = await Triage.run(items: batch, importance: settings.importance, order: order, ask: { [self] b, s, u in try await ask(b, s, u) }) else { return }
+            let done = Set(batch.map(\.id)); macBuffer.removeAll { done.contains($0.id) }
+            let have = Set(state.pending.map(\.id))
+            let found = r.alerts.filter { !have.contains($0.id) && !state.muted.contains($0.address) }
+            guard !found.isEmpty else { return }
+            state.pending += found; state.save(to: stateURL); presentIfPossible()
+        }
+    }
+    func setMacAlerts(_ on: Bool) {
+        do { try AddonSettings.saveMacAlerts(at: settingsURL, on) } catch { phoneStatus = "Couldn't save settings.json: \(error.localizedDescription)"; return }
+        macBuffer = []; reload()
+    }
 
     /// Reading failed: say so at the notch (once a day) instead of only in Settings.
     private func queuePhoneAccessCard(_ error: Error) {
@@ -568,6 +627,7 @@ final class AddonCenter {
                 Hotkey(id: 12, keyCode: kVK_Escape, modifiers: optionKey) { [weak self] in self?.dismiss() },
                 Hotkey(id: 13, keyCode: kVK_ANSI_R, modifiers: optionKey) { [weak self] in self?.startReply() },
             ]
+            if next.kind == "update" { cardKeys.append(Hotkey(id: 14, keyCode: kVK_ANSI_N, modifiers: optionKey) { [weak self] in self?.openNotes() }) }
             if resumeRequested { resumeRequested = false; startReply() } else { runCountdown(for: next.id) }
         }
     }
@@ -589,6 +649,7 @@ final class AddonCenter {
 
     func open() {
         guard let c = current else { return }
+        if c.kind == "update" { retire(c.id); if AppUpdater.shared.readyVersion != nil { AppUpdater.shared.restartNow() } else { AppUpdater.shared.checkNow() }; return }
         if c.kind == "phone-access" { retire(c.id); NSWorkspace.shared.open(PhoneNotes.privacyPane); return }
         if c.kind == "reconnect" { retire(c.id); reconnectAll(); return }                 // this card's "Open" is "Reconnect"
         guard !c.url.isEmpty, let u = URL(string: c.url) else { retire(c.id); return }       // an iPhone card has nowhere to go: Done just closes it
@@ -597,7 +658,7 @@ final class AddonCenter {
     func dismiss() { if let c = current { retire(c.id) } }
     /// "Not important": this sender is never shown again.
     func notImportant() {
-        guard let c = current else { return }
+        guard let c = current, c.kind == nil else { return }       // only mail and phone cards can be muted
         if !state.muted.contains(c.address) { state.muted.append(c.address) }
         retire(c.id, alsoDropFrom: c.address)       // their other queued alerts go once the card has closed, so "+N more" doesn't jump while it is still showing
     }
@@ -605,7 +666,7 @@ final class AddonCenter {
     private func retire(_ id: String, alsoDropFrom address: String? = nil, keep: Bool = false) {
         guard let alert = current, alert.id == id, !retiring else { return }
         retiring = true; countdown?.cancel(); cardKeys = []      // the keys go back to whatever you were typing in
-        if replyOpen { onReply?(false) }
+        if replyOpen || notesOpen { onReply?(false) }
         Task {
             withAnimation(.easeIn(duration: 0.22)) { shown = false }
             try? await Task.sleep(for: .milliseconds(140))      // the words start to leave, and the shell begins folding back into the hardware under them
@@ -614,7 +675,7 @@ final class AddonCenter {
             try? await Task.sleep(for: .milliseconds(850))      // longer than the fold (about 0.5s) so the card is never removed mid-motion
             if !keep { state.pending.removeAll { $0.id == id || ($0.address == address && !address!.isEmpty) }; if alert.kind == nil { state.recordShown(alert) } }
             state.save(to: stateURL)
-            current = nil; retiring = false; replyOpen = false
+            current = nil; retiring = false; replyOpen = false; notesOpen = false
             try? await Task.sleep(for: .milliseconds(500))
             presentIfPossible()
         }
@@ -633,6 +694,11 @@ final class AddonCenter {
         switch ProcessInfo.processInfo.environment["NOTCH_ALERT_DEMO"] {
         case "gmail": state.pending = Array(state.pending.filter { $0.id == "demo1" })
         case "phone": state.pending = Array(state.pending.prefix(1))
+        case "update":      // NOTCH_CHANGELOG_DIR=<checkout> NOTCH_DEMO_VERSION=0.6.0
+            let v = ProcessInfo.processInfo.environment["NOTCH_DEMO_VERSION"] ?? "9.9.9"
+            state.pending = [AddonAlert(id: "update|\(v)", addon: "app", sender: "Dex Notch", address: "", headline: "Dex Notch \(v) is available",
+                                        reason: "Press ⌥N to see what's new.", url: "", score: 10, created: now, account: nil, kind: "update")]
+            loadNotes(v)
         default: break
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.presentIfPossible() }

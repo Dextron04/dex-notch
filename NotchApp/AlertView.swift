@@ -14,14 +14,16 @@ struct AlertView: View {
 
     static let width: CGFloat = 480
     static let replyWidth: CGFloat = 600
+    static let notesWidth: CGFloat = 600
+    static func notesHeight(_ notch: CGSize) -> CGFloat { notch.height + NotchWindow.maxBody + 210 }
     static func replyHeight(_ notch: CGSize) -> CGFloat { notch.height + 6 + 38 + ReplyPanel.bodyH + 22 + 44 + 54 + 8 }
     private static let bodyH: CGFloat = 64, actionsH: CGFloat = 40
     static func height(_ notch: CGSize) -> CGFloat { notch.height + 6 + bodyH + actionsH + 8 }
 
     var body: some View {
         if let a = c.current {
-            let open = c.presenting, reply = c.replyOpen
-            let w = reply ? Self.replyWidth : Self.width, h = reply ? Self.replyHeight(notch) : Self.height(notch)
+            let open = c.presenting, notes = c.notesOpen, reply = c.replyOpen || notes
+            let w = notes ? Self.notesWidth : reply ? Self.replyWidth : Self.width, h = notes ? Self.notesHeight(notch) : reply ? Self.replyHeight(notch) : Self.height(notch)
             let mode = open ? (reply ? 2 : 1) : 0            // the animation is picked by where it is going: opening, growing into the reply, or folding away
             let shape = UnevenRoundedRectangle(bottomLeadingRadius: open ? 26 : 10, bottomTrailingRadius: open ? 26 : 10)
             shape.fill(.black)
@@ -29,7 +31,7 @@ struct AlertView: View {
                 .animation(reduce ? .easeOut(duration: 0.2) : open ? .spring(duration: 0.55, bounce: reply ? 0.12 : 0.28) : .smooth(duration: 0.4).delay(0.08), value: mode)      // opens wide first; closes narrow last
                 .frame(height: open ? h : notch.height)
                 .animation(reduce ? .easeOut(duration: 0.2) : open ? .spring(duration: 0.6, bounce: reply ? 0.1 : 0.2).delay(reply ? 0 : 0.07) : .smooth(duration: 0.4), value: mode)         // opens tall second; folds up first, with no bounce
-                .overlay(alignment: .top) { if reply, let s = c.session { ReplyPanel(c: c, s: s, notch: notch) } else { content(a) } }
+                .overlay(alignment: .top) { if notes { WhatsNewPanel(c: c, notch: notch) } else if reply, let s = c.session { ReplyPanel(c: c, s: s, notch: notch) } else { content(a) } }
                 .overlay { rimTimer }
                 .clipShape(shape)
                 .allowsHitTesting(open)
@@ -45,7 +47,7 @@ struct AlertView: View {
             HStack(spacing: 0) {
                 HStack(spacing: 7) {
                     AddonMark(addon: a.addon, size: 17)
-                    Text(a.addon == "phone" ? "iPhone" : c.accounts.count > 1 && a.kind == nil ? (a.account.map { String($0.split(separator: "@").first ?? "") } ?? AddonMark.name(a.addon)) : AddonMark.name(a.addon))   // with several accounts, say which
+                    Text(a.addon == "phone" ? "iPhone" : a.addon == "mac" ? a.sender : c.accounts.count > 1 && a.kind == nil ? (a.account.map { String($0.split(separator: "@").first ?? "") } ?? AddonMark.name(a.addon)) : AddonMark.name(a.addon))   // with several accounts, say which
                         .font(.system(size: 11, weight: .medium)).tracking(0.3).foregroundStyle(Ink.dim).lineLimit(1)
                     if c.queued > 0 { Text("+\(c.queued)").font(.system(size: 11, weight: .medium)).foregroundStyle(Ink.ember).help("\(c.queued) more waiting") }
                 }
@@ -78,9 +80,20 @@ struct AlertView: View {
     }
 
     private var actions: some View {
-        let access = c.current?.kind == "phone-access", reconnect = c.current?.kind == "reconnect" || access, phone = c.current?.addon == "phone"
+        let update = c.current?.kind == "update", access = c.current?.kind == "phone-access", reconnect = c.current?.kind == "reconnect" || access, phone = c.current?.addon == "phone" || c.current?.addon == "mac"
         return HStack(spacing: 22) {
-            if reconnect {
+            if update {
+                Button { c.openNotes() } label: {
+                    HStack(spacing: 6) { Text("What's new").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ember); key("⌥N") }.contentShape(Rectangle())
+                }
+                Button { c.open() } label: {
+                    HStack(spacing: 6) { Text(AppUpdater.shared.readyVersion != nil ? "Restart" : "Update").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.text.opacity(0.9)); key("⌥↩") }.contentShape(Rectangle())
+                }
+                Button { c.dismiss() } label: {
+                    HStack(spacing: 6) { Text("Later").font(.system(size: 14)).foregroundStyle(Ink.dim); key("⌥esc") }.contentShape(Rectangle())
+                }
+                Spacer(minLength: 8)
+            } else if reconnect {
                 Button { c.open() } label: {
                     HStack(spacing: 6) { Text(access ? "Open Settings" : "Reconnect").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
                 }

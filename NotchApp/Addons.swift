@@ -53,6 +53,7 @@ struct AddonSettings: Equatable {
     var repliesOnConnect = true                         // ask Google for permission to draft and send when an account is connected (off: accounts stay read-only until you allow replies)
     var name = ""                                       // your name, for the sign-off on a drafted reply (optional)
     var importance = ""                                 // free text: what matters to you, appended to the triage rules
+    var macAlerts = false                               // judge this Mac's own notifications too, and show the important ones. Sends notification text to your AI, so it is off until you turn it on
     var phoneAlerts = false                             // show iPhone notifications that reach this Mac (iPhone Mirroring). Off until you turn it on: it reads Notification Center's database
 
     /// The Google client a release build carries (injected into Info.plist by CI). Nil in a plain checkout, where `$(…)` stays unresolved or empty.
@@ -84,6 +85,7 @@ struct AddonSettings: Equatable {
         s.name = clip((a["name"] as? String) ?? "", 80)
         if let r = a["replies_on_connect"] as? Bool { s.repliesOnConnect = r }
         if let p = a["phone_alerts"] as? Bool { s.phoneAlerts = p }
+        if let m = a["mac_alerts"] as? Bool { s.macAlerts = m }
         if let m = (a["microsoft"] as? [String: Any])?["client_id"] as? String, !m.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             s.microsoftClientID = m.trimmingCharacters(in: .whitespacesAndNewlines); s.microsoftIsOwn = true
         }
@@ -138,6 +140,14 @@ struct AddonSettings: Equatable {
         }
     }
 
+    static func saveMacAlerts(at url: URL, _ on: Bool) throws {
+        try Settings.mutate(at: url) { root in
+            var a = root["addons"] as? [String: Any] ?? [:]
+            a["mac_alerts"] = on
+            root["addons"] = a
+        }
+    }
+
     static func savePhoneAlerts(at url: URL, _ on: Bool) throws {
         try Settings.mutate(at: url) { root in
             var a = root["addons"] as? [String: Any] ?? [:]
@@ -176,6 +186,7 @@ struct AddonState: Codable, Equatable {
     var consent = 0                     // which version of the permissions the sign-ins were given for; bumped when the app needs more
     var stale: [String] = []            // accounts that must sign in again before the app reads them
     var reconnectNudged: Date?          // when the "reconnect" card was last queued
+    var updateNudged: String?           // the newest version the notch has already announced
     var phoneNudged: Date?              // when the "iPhone needs Full Disk Access" card was last queued
     var replyAccounts: [String] = []    // accounts that have allowed drafts and sending (the rest are read-only)
     var history: [AddonAlert] = []      // the last alerts that were shown, newest first, so nothing you dismissed by accident is gone
@@ -203,6 +214,7 @@ struct AddonState: Codable, Equatable {
         stale = try c.decodeIfPresent([String].self, forKey: .stale) ?? []
         reconnectNudged = try c.decodeIfPresent(Date.self, forKey: .reconnectNudged)
         phoneNudged = try c.decodeIfPresent(Date.self, forKey: .phoneNudged)
+        updateNudged = try c.decodeIfPresent(String.self, forKey: .updateNudged)
         lastTry = try c.decodeIfPresent(Date.self, forKey: .lastTry)
         lastOK = try c.decodeIfPresent(Bool.self, forKey: .lastOK) ?? false
     }
@@ -325,7 +337,8 @@ enum Triage {
                                                  "snippet": clean($0.snippet, max: 240), "mailing_list": $0.bulk]
             .merging($0.account.isEmpty ? [:] : ["account": $0.account]) { a, _ in a } }
         let json = (try? JSONSerialization.data(withJSONObject: rows, options: [.sortedKeys])).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
-        let extra = importance.isEmpty ? "" : "\n\nWhat matters to this person: " + importance
+        let desk = items.contains { $0.provider == "mac" } ? "\n\nItems whose from looks like \"App <com.bundle.id>\" are desktop app notifications, not email: judge them the same way (a person messaging them or waiting on them, a failed payment, a security alert; not likes, promos, or routine app chatter)." : ""
+        let extra = (importance.isEmpty ? "" : "\n\nWhat matters to this person: " + importance) + desk
         return (rules + extra, "<mail>\n" + json + "\n</mail>")
     }
 
@@ -344,7 +357,7 @@ enum Triage {
             let head = clean((o["headline"] as? String) ?? "", max: 80), why = clean((o["reason"] as? String) ?? "", max: 110)
             guard !head.isEmpty, !why.isEmpty else { continue }       // an alert without its reason is just noise
             out.append(AddonAlert(id: id, addon: m.provider, sender: clean(displayName(m.from), max: 40), address: m.address, headline: head, reason: why,
-                                  url: m.link.isEmpty ? AddonSettings.mailURL(account: m.account, thread: m.threadId) : m.link, score: min(score, 10), created: now, account: m.account.isEmpty ? nil : m.account))
+                                  url: m.link.isEmpty ? (m.provider == "mac" ? "" : AddonSettings.mailURL(account: m.account, thread: m.threadId)) : m.link, score: min(score, 10), created: now, account: m.account.isEmpty ? nil : m.account))
         }
         return Array(out.sorted { $0.score > $1.score }.prefix(maxAlerts))
     }
@@ -401,6 +414,16 @@ enum PhoneNotes {
     /// Mirrored iPhone apps carry their iPhone bundle id; a banner from an app that isn't installed on this Mac can only have come from the phone.
     /// ponytail: heuristic. An iPhone app that also exists on the Mac is treated as the Mac's own (it notifies there anyway).
     static func fromPhone(_ bundle: String, installed: (String) -> Bool) -> Bool { !bundle.isEmpty && !bundle.hasPrefix("com.apple.") && !installed(bundle) }
+
+    /// A notification from an app that IS on this Mac, worth putting to the model. Apple's own apps are skipped (Mail is already covered, the rest is system chatter) except Messages.
+    static func isMacCandidate(_ bundle: String, installed: (String) -> Bool, own: String? = Bundle.main.bundleIdentifier) -> Bool {
+        !bundle.isEmpty && bundle != own && installed(bundle) && (!bundle.hasPrefix("com.apple.") || ["com.apple.MobileSMS", "com.apple.iChat"].contains(bundle))
+    }
+    /// The model judges these exactly like mail: sender = the app, subject = title, snippet = body.
+    static func asMailItem(_ n: Note, name: String? = nil) -> MailItem {
+        let app = name ?? n.app.split(separator: ".").last.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? n.app
+        return MailItem(id: "mac|\(n.rec)", threadId: "", from: "\(app) <\(n.app)>", subject: n.title, snippet: n.body, date: n.date, labels: [], bulk: false, provider: "mac")
+    }
 
     static func alert(_ n: Note) -> AddonAlert {
         let app = n.app.split(separator: ".").last.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? "iPhone"

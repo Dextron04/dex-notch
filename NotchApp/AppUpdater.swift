@@ -13,6 +13,7 @@ final class AppUpdater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDeleg
     private(set) var lastChecked: Date?          // when Sparkle last looked, by schedule or because you asked
     var autoUpdate = true { didSet { guard running, autoUpdate != oldValue else { return }; apply() } }
 
+    var onFound: ((String) -> Void)?         // a newer version exists: the notch announces it
     private var install: (() -> Void)?
     private var controller: SPUStandardUpdaterController!
     private var inspect: Bool { ProcessInfo.processInfo.environment["NOTCH_UPDATES"] != nil }
@@ -81,7 +82,7 @@ final class AppUpdater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDeleg
     }
     nonisolated func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
         let v = item.displayVersionString
-        MainActor.assumeIsolated { if readyVersion == nil { status = "Version \(v) found. Downloading…" } }
+        MainActor.assumeIsolated { if readyVersion == nil { status = "Version \(v) found. Downloading…" }; onFound?(v) }
     }
     nonisolated func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
         let m = (error as NSError).localizedDescription

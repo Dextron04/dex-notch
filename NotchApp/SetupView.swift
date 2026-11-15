@@ -481,6 +481,9 @@ struct SetupView: View {
                 row(title: "Full Disk Access", detail: allowed ? "Allowed." : "Not allowed yet. Open System Settings, find Dex Notch in the list (press + to add it if it isn't there) and switch it on. macOS may ask you to reopen Dex Notch.",
                     lead: { Image(systemName: allowed ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(allowed ? Ink.ember : Ink.dim) },
                     trail: { if !allowed { link("Open System Settings") { _ = PhoneNotes.canRead(); NSWorkspace.shared.open(PhoneNotes.privacyPane) } } })
+                row(title: "Also judge this Mac's notifications", detail: "Slack, Messages and other apps here. The AI reads each one and only the important ones come to the notch. This sends their text to the AI you picked, so it stays off until you switch it on.",
+                    lead: { Image(systemName: "laptopcomputer").font(.system(size: 16)).foregroundStyle(Ink.dim) },
+                    trail: { Toggle("", isOn: Binding(get: { center.settings.macAlerts }, set: { center.setMacAlerts($0) })).labelsHidden().toggleStyle(.switch) })
                 subhead("Before this can work")
                 Text("Your iPhone must be set up with iPhone Mirroring on this Mac, and System Settings → Notifications must allow notifications from your iPhone. Dex Notch can't change either of those for you.")
                     .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true)

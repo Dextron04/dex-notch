@@ -53,7 +53,7 @@ struct NotchView: View {
             }
         }
         .frame(width: panel.width, height: panel.height, alignment: .top)
-        .onKeyPress(.escape) { if center.replyOpen { center.collapseReply() } else { a.close() }; return .handled }
+        .onKeyPress(.escape) { if center.notesOpen { center.closeNotes() } else if center.replyOpen { center.collapseReply() } else { a.close() }; return .handled }
         .onChange(of: a.isOpen) { if a.isOpen { center.assistantOpened() } else { center.assistantClosed(); announceTask?.cancel(); announced = nil } }
         .onChange(of: a.backend) { focused = true; announce() }
         .onChange(of: a.work) { announce() }

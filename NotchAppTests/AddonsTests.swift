@@ -379,6 +379,53 @@ final class AddonsTests: XCTestCase {
     private func blob(_ titl: String, _ body: String) -> Data {
         try! PropertyListSerialization.data(fromPropertyList: ["app": "com.burbn.instagram", "req": ["titl": titl, "subt": "", "body": body]], format: .binary, options: 0)
     }
+    func testChangelogSelectsMissedReleasesWithMedia() {
+        let md = """
+        # What's new
+        intro
+
+        ## v0.6.0: Six
+        *1 January 2027*
+        - **Bold** thing
+        <p align="center">
+          <img src="docs/assets/a.gif" alt="A gif" width="62%">
+        </p>
+        [Watch it as a video](docs/assets/a.mp4)
+
+        ## v0.5.0: Five
+        - five
+
+        ## v0.4.0: Four
+        - four
+        """
+        let base = URL(string: "https://example.com/repo/v0.6.0/")!
+        let got = Changelog.missed(md, installed: "0.4.0", upTo: "0.6.0")
+        XCTAssertEqual(got.map(\.version), ["0.6.0", "0.5.0"])
+        XCTAssertTrue(Changelog.newer("0.10.0", than: "0.9.0")); XCTAssertFalse(Changelog.newer("0.5.0", than: "0.5.0"))
+        XCTAssertEqual(Changelog.missed(md, installed: "0.4.0", upTo: "0.5.0").map(\.version), ["0.5.0"])
+        let b = Changelog.blocks(got, base: base)
+        XCTAssertEqual(b.first, .release(version: "0.6.0", title: "Six"))
+        XCTAssertTrue(b.contains(.date("1 January 2027")))
+        XCTAssertTrue(b.contains(.bullet("**Bold** thing")))
+        XCTAssertTrue(b.contains(.image(URL(string: "https://example.com/repo/v0.6.0/docs/assets/a.gif")!, alt: "A gif")))
+        XCTAssertTrue(b.contains(.video(URL(string: "https://example.com/repo/v0.6.0/docs/assets/a.mp4")!, title: "Watch it as a video")))
+    }
+
+    func testMacCandidatesAndJudging() {
+        let on: (String) -> Bool = { _ in true }
+        XCTAssertTrue(PhoneNotes.isMacCandidate("com.tinyspeck.slackmacgap", installed: on, own: "x"))
+        XCTAssertTrue(PhoneNotes.isMacCandidate("com.apple.MobileSMS", installed: on, own: "x"))
+        XCTAssertFalse(PhoneNotes.isMacCandidate("com.apple.mail", installed: on, own: "x"))
+        XCTAssertFalse(PhoneNotes.isMacCandidate("x", installed: on, own: "x"))
+        XCTAssertFalse(PhoneNotes.isMacCandidate("com.foo.bar", installed: { _ in false }, own: "x"))
+        let n = PhoneNotes.Note(rec: 7, app: "com.tinyspeck.slackmacgap", title: "Priya", body: "can you review today?", date: Date())
+        let m = PhoneNotes.asMailItem(n)
+        XCTAssertEqual(m.address, "com.tinyspeck.slackmacgap")
+        XCTAssertTrue(Triage.prompt(items: [m], importance: "").system.contains("desktop app notifications"))
+        let out = Triage.parse(#"[{"id":"mac|7","score":8,"headline":"Priya wants a review","reason":"Waiting on you today"}]"#, items: [m])
+        XCTAssertEqual(out?.first?.addon, "mac"); XCTAssertEqual(out?.first?.url, ""); XCTAssertEqual(out?.first?.sender, "Slackmacgap")
+    }
+
     func testPhoneAccessCardDue() {
         var s = AddonState(), now = Date()
         XCTAssertTrue(s.phoneAccessCardDue(now: now))

@@ -132,6 +132,6 @@ final class NotchWindow {
         // click anywhere else → panel loses key → collapse
         resignObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didResignKeyNotification, object: p, queue: .main
-        ) { [assistant] _ in MainActor.assumeIsolated { assistant.close(); AddonCenter.shared.collapseReply() } }
+        ) { [assistant] _ in MainActor.assumeIsolated { assistant.close(); AddonCenter.shared.collapseReply(); AddonCenter.shared.closeNotes() } }
     }
 }
