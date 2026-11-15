@@ -18,6 +18,7 @@ struct NotchView: View {
     let notch: CGSize
     let panel: CGSize // root fills panel exactly so content never resizes it
 
+    private let center = AddonCenter.shared
     @FocusState private var focused: Bool
     @Namespace private var dialNS
     @State private var contentH: CGFloat = 0
@@ -39,9 +40,12 @@ struct NotchView: View {
             Color.clear.contentShape(Rectangle()).onTapGesture { a.close() }
 
             pill
+            if !a.isOpen { AlertView(c: center, notch: notch) }
+            if !a.isOpen { NotchStreak(tick: center.streakTick, notch: notch) }
         }
         .frame(width: panel.width, height: panel.height, alignment: .top)
         .onKeyPress(.escape) { a.close(); return .handled }
+        .onChange(of: a.isOpen) { if a.isOpen { center.assistantOpened() } else { center.assistantClosed() } }
         .onChange(of: a.backend) { focused = true } // a click on the dial must not strand the caret
         .onChange(of: a.busy) { if !a.busy && a.isOpen { focused = true } } // field is disabled while answering
         .task(id: [a.isOpen ? 1 : 0, a.mode == .prompt ? 1 : 0]) { if a.isOpen && a.mode == .prompt { try? await Task.sleep(for: .milliseconds(120)); focused = true } } // also when switching recall → prompt while open

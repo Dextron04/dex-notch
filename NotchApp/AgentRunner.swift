@@ -41,7 +41,9 @@ enum AgentRunner {
                 guard let exe = find(name) else { cont.finish(throwing: Missing(name: name)); return }
                 let p = Process(), out = Pipe()
                 p.executableURL = URL(fileURLWithPath: exe)
-                p.arguments = route.backend == .claude
+                p.arguments = route.locked
+                    ? (route.backend == .claude ? AgentStream.lockedClaudeArgs(prompt: route.prompt) : AgentStream.lockedCodexArgs(prompt: route.prompt))
+                    : route.backend == .claude
                     ? AgentStream.claudeArgs(prompt: route.prompt, session: session, work: route.work, folder: route.folder)
                     : AgentStream.codexArgs(prompt: route.prompt, session: session, work: route.work, folder: route.folder)
                 p.currentDirectoryURL = scratch

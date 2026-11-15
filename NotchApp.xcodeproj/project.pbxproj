@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		07DDFEAAC32C48FC7609BA86 /* OfficialMarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72682E91183BD251F579ACB6 /* OfficialMarks.swift */; };
+		0999A29BFF7BFEF67D4DB6DD /* Gmail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */; };
 		0B58A8F9C40C3BA0C3325358 /* AgentStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CADAB3DBF5CC60D578B0C3 /* AgentStream.swift */; };
 		0C7BDE62527D048383248291 /* AgentStreamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93222A27B250E3C8A8AE083F /* AgentStreamTests.swift */; };
 		11C732EA3D38A55B3B378D11 /* OfficialMarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72682E91183BD251F579ACB6 /* OfficialMarks.swift */; };
@@ -19,6 +20,7 @@
 		3DAB1EE2139C1FD0BE520C84 /* JournalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 930E261BCB82A59819B0A2A3 /* JournalTests.swift */; };
 		4589E5F5759E858CC57E6466 /* Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582019F4D21E660A42477FFC /* Journal.swift */; };
 		50C799904FBE799B42C449D1 /* SVGPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99408511A3D90560197E556F /* SVGPath.swift */; };
+		54586C4F2DAA8DE93B04E8E4 /* Gmail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */; };
 		5CD049CB380D1303583E2661 /* Assistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218A6628EE36C2AEDB045329 /* Assistant.swift */; };
 		5D77FCCB6F6B59832FB84838 /* AgentStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CADAB3DBF5CC60D578B0C3 /* AgentStream.swift */; };
 		5F04FF700FAE3FFA7F233D2E /* VaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1699F9A9CD5771ED2F953B05 /* VaultReader.swift */; };
@@ -28,17 +30,22 @@
 		797AB89EE2D18992578450C4 /* ConversationStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B7D87E48BF594612257808A /* ConversationStoreTests.swift */; };
 		8180508E708118CF50F0B557 /* Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582019F4D21E660A42477FFC /* Journal.swift */; };
 		84C5DC1B9737D7A5558EE39A /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5DE5AEC6077BF0580C62802 /* Settings.swift */; };
+		8503551F1B10B24D06E2FF0A /* AlertView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E76E22DDB3A2D28B85B7C092 /* AlertView.swift */; };
 		898D7FB93A9186B951B4088F /* NotchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CBB2E551130DD2CE010BFF /* NotchView.swift */; };
 		9D7DA6C3F8755AD1BA023406 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F216985AFA23BC8E9805806 /* ConversationStore.swift */; };
 		A48F6F5CAD79AB60BD5BB30C /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04FED0FDAE6B5FC7FE0D0983 /* SetupView.swift */; };
 		AB5858CF9C6BCC0882589DB0 /* SVGPathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A408D4D4233E5DC1C8E2622A /* SVGPathTests.swift */; };
 		B0E8F6D04051DF78F4E9C917 /* SVGPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99408511A3D90560197E556F /* SVGPath.swift */; };
 		BFF5DE6C28BCA61791F88A08 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */; };
+		C1E493FDAF1341459B05B3C3 /* Addons.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8544183AD3EF18DC864B247 /* Addons.swift */; };
 		C7D2A3408E46CB0BBFCAD224 /* AnswerBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE562AE9C74255701B08F531 /* AnswerBody.swift */; };
 		CB95895D7A39CCCEEF6EAD02 /* Hotkey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01C444F1096C79018A64B462 /* Hotkey.swift */; };
 		D6FDE1727C6435EFD74B6B69 /* KeychainStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3FDC75598EA2E996BF9FAE8 /* KeychainStoreTests.swift */; };
+		DA0BA79E74EFDAAF3E935EC0 /* Addons.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8544183AD3EF18DC864B247 /* Addons.swift */; };
+		DBEE7E9BC8319DCAC4FCFA1D /* AddonsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 837603D3A7FE79211CF92BE4 /* AddonsTests.swift */; };
 		E07EEF3C06EADD40BE52F384 /* NotchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */; };
 		E3ADAE4DD1240F04D154E5CD /* VaultReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */; };
+		E703B3CA52F3E90860D67B7C /* AddonCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 461189366EBDE3A440C7E728 /* AddonCenter.swift */; };
 		ED50E03DCA4D07EBAC51DB90 /* ModelMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794A0159731A8951203F5BD8 /* ModelMark.swift */; };
 /* End PBXBuildFile section */
 
@@ -51,13 +58,16 @@
 		1699F9A9CD5771ED2F953B05 /* VaultReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultReader.swift; sourceTree = "<group>"; };
 		218A6628EE36C2AEDB045329 /* Assistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Assistant.swift; sourceTree = "<group>"; };
 		2F1487592A6A941D9CB95947 /* AgentRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRunner.swift; sourceTree = "<group>"; };
+		2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gmail.swift; sourceTree = "<group>"; };
 		34B56D0B5E24A59E4A23F196 /* RecallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecallView.swift; sourceTree = "<group>"; };
 		3B7D87E48BF594612257808A /* ConversationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStoreTests.swift; sourceTree = "<group>"; };
+		461189366EBDE3A440C7E728 /* AddonCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddonCenter.swift; sourceTree = "<group>"; };
 		582019F4D21E660A42477FFC /* Journal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Journal.swift; sourceTree = "<group>"; };
 		5B960B471D39685753DB2451 /* NotchAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NotchAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		72682E91183BD251F579ACB6 /* OfficialMarks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialMarks.swift; sourceTree = "<group>"; };
 		794A0159731A8951203F5BD8 /* ModelMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelMark.swift; sourceTree = "<group>"; };
 		7E9B5AA03F38C0E8CEEF866E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		837603D3A7FE79211CF92BE4 /* AddonsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddonsTests.swift; sourceTree = "<group>"; };
 		930E261BCB82A59819B0A2A3 /* JournalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalTests.swift; sourceTree = "<group>"; };
 		93222A27B250E3C8A8AE083F /* AgentStreamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStreamTests.swift; sourceTree = "<group>"; };
 		99408511A3D90560197E556F /* SVGPath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGPath.swift; sourceTree = "<group>"; };
@@ -70,6 +80,8 @@
 		CE562AE9C74255701B08F531 /* AnswerBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerBody.swift; sourceTree = "<group>"; };
 		CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchApp.swift; sourceTree = "<group>"; };
 		E3FDC75598EA2E996BF9FAE8 /* KeychainStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStoreTests.swift; sourceTree = "<group>"; };
+		E76E22DDB3A2D28B85B7C092 /* AlertView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertView.swift; sourceTree = "<group>"; };
+		E8544183AD3EF18DC864B247 /* Addons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Addons.swift; sourceTree = "<group>"; };
 		F5DE5AEC6077BF0580C62802 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -86,11 +98,15 @@
 		9DAA1C7250CA94F20218941D /* NotchApp */ = {
 			isa = PBXGroup;
 			children = (
+				461189366EBDE3A440C7E728 /* AddonCenter.swift */,
+				E8544183AD3EF18DC864B247 /* Addons.swift */,
 				2F1487592A6A941D9CB95947 /* AgentRunner.swift */,
 				A5CADAB3DBF5CC60D578B0C3 /* AgentStream.swift */,
+				E76E22DDB3A2D28B85B7C092 /* AlertView.swift */,
 				CE562AE9C74255701B08F531 /* AnswerBody.swift */,
 				218A6628EE36C2AEDB045329 /* Assistant.swift */,
 				9F216985AFA23BC8E9805806 /* ConversationStore.swift */,
+				2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */,
 				01C444F1096C79018A64B462 /* Hotkey.swift */,
 				7E9B5AA03F38C0E8CEEF866E /* Info.plist */,
 				582019F4D21E660A42477FFC /* Journal.swift */,
@@ -112,6 +128,7 @@
 		E8DB5246F60E7ADEE92DAE88 /* NotchAppTests */ = {
 			isa = PBXGroup;
 			children = (
+				837603D3A7FE79211CF92BE4 /* AddonsTests.swift */,
 				93222A27B250E3C8A8AE083F /* AgentStreamTests.swift */,
 				3B7D87E48BF594612257808A /* ConversationStoreTests.swift */,
 				930E261BCB82A59819B0A2A3 /* JournalTests.swift */,
@@ -211,10 +228,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA0BA79E74EFDAAF3E935EC0 /* Addons.swift in Sources */,
+				DBEE7E9BC8319DCAC4FCFA1D /* AddonsTests.swift in Sources */,
 				5D77FCCB6F6B59832FB84838 /* AgentStream.swift in Sources */,
 				0C7BDE62527D048383248291 /* AgentStreamTests.swift in Sources */,
 				6FDCA5158E4E1733118CB32C /* ConversationStore.swift in Sources */,
 				797AB89EE2D18992578450C4 /* ConversationStoreTests.swift in Sources */,
+				54586C4F2DAA8DE93B04E8E4 /* Gmail.swift in Sources */,
 				4589E5F5759E858CC57E6466 /* Journal.swift in Sources */,
 				3DAB1EE2139C1FD0BE520C84 /* JournalTests.swift in Sources */,
 				359D34323BEAC44A4AC0AF5C /* KeychainStore.swift in Sources */,
@@ -233,11 +253,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E703B3CA52F3E90860D67B7C /* AddonCenter.swift in Sources */,
+				C1E493FDAF1341459B05B3C3 /* Addons.swift in Sources */,
 				23B64ECBB548D9A23A57FD34 /* AgentRunner.swift in Sources */,
 				0B58A8F9C40C3BA0C3325358 /* AgentStream.swift in Sources */,
+				8503551F1B10B24D06E2FF0A /* AlertView.swift in Sources */,
 				C7D2A3408E46CB0BBFCAD224 /* AnswerBody.swift in Sources */,
 				5CD049CB380D1303583E2661 /* Assistant.swift in Sources */,
 				9D7DA6C3F8755AD1BA023406 /* ConversationStore.swift in Sources */,
+				0999A29BFF7BFEF67D4DB6DD /* Gmail.swift in Sources */,
 				CB95895D7A39CCCEEF6EAD02 /* Hotkey.swift in Sources */,
 				8180508E708118CF50F0B557 /* Journal.swift in Sources */,
 				BFF5DE6C28BCA61791F88A08 /* KeychainStore.swift in Sources */,

@@ -16,6 +16,7 @@ final class NotchWindow {
     private var panel: KeyPanel?
     private var resignObserver: NSObjectProtocol?
     private var keyMonitor: Any?
+    private var hoverTimer: Timer?
 
     init(assistant: Assistant) { self.assistant = assistant }
 
@@ -93,6 +94,20 @@ final class NotchWindow {
                 return true
             }
             return handled ? nil : e
+        }
+        // An alert card needs clicks; the rest of the (transparent) panel must not eat them. Follow the pointer and let events through everywhere else.
+        let card = CGRect(x: screen.frame.midX - AlertView.width / 2, y: screen.frame.maxY - AlertView.height(notch), width: AlertView.width, height: AlertView.height(notch)).insetBy(dx: -6, dy: -6)
+        AddonCenter.shared.onPresenting = { [weak self, weak p] on in
+            self?.hoverTimer?.invalidate(); self?.hoverTimer = nil
+            guard let p else { return }
+            guard on else { AddonCenter.shared.hovering = false; p.ignoresMouseEvents = !(self?.assistant.isOpen ?? false); return }
+            self?.hoverTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { _ in
+                MainActor.assumeIsolated {
+                    let hot = card.contains(NSEvent.mouseLocation)
+                    AddonCenter.shared.hovering = hot
+                    p.ignoresMouseEvents = !hot
+                }
+            }
         }
         assistant.onOpenChange = { [weak p] open in
             guard let p else { return }

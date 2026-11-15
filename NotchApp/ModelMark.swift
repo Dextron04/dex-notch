@@ -42,3 +42,32 @@ struct ModelMark: View {
         .accessibilityLabel(backend.displayName)
     }
 }
+
+/// An add-on's own logo, in its own colours (never recoloured). Gmail is the only one so far.
+struct AddonMark: View {
+    private static let gmail = OfficialMarks.gmail.map { (Color(hex: $0.0), SVGPath.parse($0.1)) }
+    let addon: String
+    var size: CGFloat = 16      // width; Gmail's mark is 4:3
+
+    var body: some View {
+        ZStack {
+            ForEach(Self.gmail.indices, id: \.self) { i in
+                GmailPiece(path: Self.gmail[i].1).fill(Self.gmail[i].0)
+            }
+        }
+        .frame(width: size, height: size * 0.75)
+        .accessibilityLabel("Gmail")
+    }
+}
+
+private struct GmailPiece: Shape {
+    let path: Path
+    func path(in r: CGRect) -> Path { path.applying(CGAffineTransform(scaleX: r.width / 52, y: r.height / 39)) }
+}
+
+private extension Color {
+    init(hex: String) {
+        let v = UInt32(hex, radix: 16) ?? 0
+        self.init(red: Double(v >> 16 & 255) / 255, green: Double(v >> 8 & 255) / 255, blue: Double(v & 255) / 255)
+    }
+}

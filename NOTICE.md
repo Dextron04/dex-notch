@@ -6,9 +6,10 @@ The Claude and Codex marks that appear in the app and in this repository's scree
 
 - **Claude** and **Anthropic** are trademarks of Anthropic, PBC.
 - **Codex** and **OpenAI** are trademarks of OpenAI.
+- **Gmail** and **Google** are trademarks of Google LLC. The Gmail mark in the add-on card is a redraw of Google's published icon (`NotchApp/OfficialMarks.swift`).
 
 They are shown only to identify the products dex-notch talks to. This project is **not affiliated with, sponsored by or endorsed by**
-Anthropic or OpenAI. The marks are **not covered by this repository's MIT licence**. If you redistribute dex-notch, follow each
+Anthropic, OpenAI or Google. The marks are **not covered by this repository's MIT licence**. If you redistribute dex-notch, follow each
 company's current brand guidelines, or replace the marks (they live in `NotchApp/OfficialMarks.swift` and `NotchApp/ModelMark.swift`).
 
 The mark for the local (Ollama) model, and the app's own artwork, are original to this project.

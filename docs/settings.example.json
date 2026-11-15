@@ -7,5 +7,14 @@
   "gemma": {
     "host": "ai.example.com",
     "model": "gemma3:12b"
+  },
+  "addons": {
+    "order": ["claude", "codex", "gemma"],
+    "interval_hours": 4,
+    "importance": "Recruiters and interview scheduling, anything from my landlord, payment problems.",
+    "gmail": {
+      "client_id": "1234-abc.apps.googleusercontent.com",
+      "client_secret": "GOCSPX-..."
+    }
   }
 }

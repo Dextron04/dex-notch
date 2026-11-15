@@ -124,6 +124,21 @@ enum Settings {
             if g.keychainAccount != "notchapp" { m["keychain_account"] = g.keychainAccount }
             obj["gemma"] = m
         }
+        try write(obj, to: url)
+    }
+
+    /// Edits settings.json in place, keeping every key the edit doesn't touch. Refuses to overwrite a file it can't read.
+    static func mutate(at url: URL, _ edit: (inout [String: Any]) -> Void) throws {
+        var obj: [String: Any] = [:]
+        if FileManager.default.fileExists(atPath: url.path) {
+            guard let d = try? Data(contentsOf: url), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { throw CocoaError(.fileReadCorruptFile) }
+            obj = o
+        }
+        edit(&obj)
+        try write(obj, to: url)
+    }
+
+    private static func write(_ obj: [String: Any], to url: URL) throws {
         let data = try JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
         let dir = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

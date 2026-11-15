@@ -14,6 +14,8 @@ final class SetupModel {
     var keychainService: String?
     var keychainAccount: String?
     var localOpen = false
+    var gmailID = ""
+    var gmailSecret = ""
     var message: String?
 
     private let url = Settings.defaultURL
@@ -28,6 +30,7 @@ final class SetupModel {
         // Show the folder list the app will actually use, so nothing is allowed that the user hasn't seen
         folders = a.folders ?? AgentStream.folderChoices(configured: nil, defaultFolder: nil, home: FileManager.default.homeDirectoryForCurrentUser)
             .compactMap { Settings.normalizeFolder($0, home: FileManager.default.homeDirectoryForCurrentUser, exists: { p in var d: ObjCBool = false; return FileManager.default.fileExists(atPath: p, isDirectory: &d) && d.boolValue }) }
+        if let g = AddonSettings.load(from: url).gmail { gmailID = g.clientID; gmailSecret = g.clientSecret }
         if let g = a.gemma { host = g.host; model = g.model; keychainService = g.keychainService; keychainAccount = g.keychainAccount; localOpen = true }
     }
 
@@ -88,6 +91,7 @@ struct SetupView: View {
                     header
                     section("Pick your model", note: "One is enough to start.") { modelSection }
                     section("Where it may work", note: "Edit runs are sandboxed. They can only change folders you allow here.") { workspaceSection }
+                    section("Mail", note: "Gmail is read-only. dex-notch checks every few hours and only interrupts you for mail that needs you.") { mailSection }
                     section("A model on your own server", note: "Optional. You can add it any time from the menu bar.") { localSection }
                 }
                 .padding(.horizontal, 40).padding(.top, 30).padding(.bottom, 20)
@@ -230,6 +234,27 @@ struct SetupView: View {
             }.contentShape(Rectangle())
         }
         .tint(Ink.dim)
+    }
+
+    // mail
+    private var mailSection: some View {
+        let center = AddonCenter.shared
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                AddonMark(addon: "gmail", size: 24).opacity(center.connected ? 1 : 0.6)
+                Text("Gmail").font(.system(size: 17, weight: .semibold, design: .serif)).foregroundStyle(Ink.text)
+                if center.connected { Label("connected", systemImage: "checkmark").font(.system(size: 13, weight: .medium)).foregroundStyle(Ink.ember) }
+            }
+            field("Google client ID", "1234-abc.apps.googleusercontent.com", text: $m.gmailID)
+            field("Client secret", "GOCSPX-…", text: $m.gmailSecret)
+            Text("Create a free OAuth client of type Desktop app in the Google Cloud console, with the Gmail API enabled, and paste it here. It stays on this Mac.")
+                .font(.system(size: 12, design: .serif)).italic().foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 18) {
+                link(center.connected ? "Reconnect Gmail" : "Connect Gmail") { center.connectGmail(clientID: m.gmailID, clientSecret: m.gmailSecret) }
+                if center.connected { link("Check now") { center.checkNow() } }
+                Text(center.status).font(.system(size: 13, design: .serif)).foregroundStyle(Ink.dim).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private func field(_ label: String, _ placeholder: String, text: Binding<String>) -> some View {

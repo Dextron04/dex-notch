@@ -5,8 +5,10 @@ final class Hotkey {
     nonisolated(unsafe) private static var actions: [UInt32: @MainActor () -> Void] = [:]
     nonisolated(unsafe) private static var installed = false
     private var ref: EventHotKeyRef?
+    private let id: UInt32
 
     init(id: UInt32 = 1, keyCode: Int, modifiers: Int, action: @escaping @MainActor () -> Void) {
+        self.id = id
         Self.actions[id] = action
         if !Self.installed {
             Self.installed = true
@@ -24,5 +26,12 @@ final class Hotkey {
                                          GetApplicationEventTarget(), 0, &ref)
         NSLog("NotchApp: hotkey id %u registered (status %d)", id, status)
         if status != noErr { NSLog("NotchApp: hotkey id %u failed to register (OSStatus %d) — another app may own that combination", id, status) }
+    }
+
+    /// Hotkeys that only exist for a while (the alert card's keys) give the combination back when released.
+    deinit {
+        if let ref { UnregisterEventHotKey(ref) }
+        let id = self.id
+        DispatchQueue.main.async { Hotkey.actions[id] = nil }
     }
 }

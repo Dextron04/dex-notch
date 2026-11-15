@@ -274,6 +274,13 @@ final class Assistant {
         }
     }
 
+    /// One-shot, non-streaming call to the local model (add-on triage).
+    func askGemma(system: String, user: String) async throws -> String {
+        var out = ""
+        try await streamChat([["role": "system", "content": system], ["role": "user", "content": user]]) { out += $0 }
+        return out
+    }
+
     /// Asks the mini's RAG which vault notes bear on the question. Never blocks the answer: any failure just means no context.
     private func vaultRecall(_ question: String) async -> [Snippet] {
         let keywords = AgentStream.keywordQuery(question)

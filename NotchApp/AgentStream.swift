@@ -5,7 +5,7 @@ enum Backend: String, Codable {
     /// What people (and VoiceOver) call it. `gemma` is the self-hosted Ollama connector, whatever model it serves.
     var displayName: String { switch self { case .gemma: "Local model"; case .claude: "Claude"; case .codex: "Codex" } }
 }
-struct Route: Equatable { var backend: Backend; var work: Bool; var prompt: String; var folder: String? = nil } // folder: absolute path `+` runs may also write to
+struct Route: Equatable { var backend: Backend; var work: Bool; var prompt: String; var folder: String? = nil; var locked = false } // folder: absolute path `+` runs may also write to
 struct Snippet: Equatable { var title: String; var source: String; var snippet: String }
 enum AgentEvent: Equatable { case text(String), tool(String), session(String), final(String), error(String) }
 
@@ -131,6 +131,14 @@ enum AgentStream {
         if work { a += ["--permission-mode", "acceptEdits", "--settings", claudeSandbox(folder: folder)] }
         else { a += ["--disallowedTools", "Bash", "Edit", "Write", "NotebookEdit"] }
         return a + ["--", prompt] // `--`: variadic flags above must not swallow the prompt, and a leading "-" must not parse as an option
+    }
+
+    /// Background triage over untrusted mail: no tools at all, nothing written to the CLI's session log (so mail never reaches the shared vault).
+    static func lockedClaudeArgs(prompt: String) -> [String] {
+        ["-p", "--output-format", "stream-json", "--verbose", "--tools", "", "--strict-mcp-config", "--no-session-persistence", "--", prompt]
+    }
+    static func lockedCodexArgs(prompt: String) -> [String] {
+        ["exec", "--json", "--skip-git-repo-check", "--ephemeral", "--sandbox", "read-only", prompt]
     }
 
     static func codexArgs(prompt: String, session: String?, work: Bool, folder: String? = nil) -> [String] {

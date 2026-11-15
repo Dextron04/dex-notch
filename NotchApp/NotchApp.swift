@@ -9,6 +9,7 @@ struct NotchApp: App {
         MenuBarExtra("NotchApp", systemImage: "capsule.fill") {
             Button("Ask…  ⌥Space") { delegate.assistant.toggle() }
             Button("Recall…  ⌥⇧Space") { delegate.assistant.toggleRecall() }
+            Button("Check mail now") { AddonCenter.shared.checkNow() }
             Button("Settings…") { SetupWindow.shared.show(assistant: delegate.assistant) }.keyboardShortcut(",")
             Button("Open settings.json") { delegate.assistant.openSettings() }
             Button("Check connection") { delegate.assistant.connect() }
@@ -32,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Hotkey(id: 2, keyCode: kVK_Space, modifiers: optionKey | shiftKey) { [assistant] in assistant.toggleRecall() },
         ]
         assistant.connect()
+        AddonCenter.shared.start(assistant: assistant)
         if !FileManager.default.fileExists(atPath: Settings.defaultURL.path) {      // first launch: ask, don't make people hunt for a config file
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [assistant] in SetupWindow.shared.show(assistant: assistant) }
         }

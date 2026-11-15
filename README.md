@@ -220,6 +220,18 @@ Without it everything else works, and the dial simply has two models.
 
 ---
 
+## Add-ons: Gmail
+
+dex-notch can watch your inbox and tell you at the notch about the few emails that actually need you. Most mail never reaches you.
+
+1. **Connect once.** Settings → *Mail*. Create a free Google OAuth client of type *Desktop app* (Gmail API on), paste its ID and secret, press **Connect Gmail**. It asks for read-only access; the sign-in token goes in your Keychain.
+2. **It checks every 4 hours** (`addons.interval_hours`). Only headers and the short snippet are read, never message bodies.
+3. **Three filters.** Spam, promotions, social and forum mail are dropped first. A model then scores what is left against strict rules (a real person waiting on you, a deadline, a meeting change, a failed payment, a delivery today) and only a 7 out of 10 or better gets through, at most three per check. A third filter is you: **Not important** mutes that sender for good.
+4. **Claude first, then Codex, then your local model** (`addons.order`). If one is rate-limited, logged out or offline, the next takes over. Add a line of your own under `addons.importance` ("recruiters and my landlord") to tune what counts.
+5. **It waits for you.** Nothing pops up while the Mac is asleep or locked. When you wake or unlock it, the notch opens with two lines: what it is and why it matters. `⌥↩` opens the thread, `⌥⌫` mutes the sender, `⌥esc` dismisses. Those keys exist only while a card is on screen.
+
+Mail is treated as untrusted. The models run with no tools and no saved session (so mail never reaches the shared memory), their answers are checked against the ids they were sent, and the link opened is built by the app, never taken from model text.
+
 ## Safety model
 
 | | Local model | Claude (`@claude`) | Codex (`@codex`) |
