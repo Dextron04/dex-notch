@@ -80,7 +80,7 @@ def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str
 
         def do_DELETE(self): self.send(405, {"error": "no sessions"}) if urlparse(self.path).path == "/mcp" else self.send(404, {"error": "not_found"})
 
-        # -- deploy hook: only a body signed with the shared secret counts, and only a green CI run on master starts a deploy
+        # -- deploy hook (GitHub webhook): only a body signed with the shared secret counts, and only a green CI run on master starts a deploy
         def hook(self):
             raw = self.body()
             if raw is None: return
