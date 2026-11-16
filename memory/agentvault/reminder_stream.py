@@ -18,7 +18,7 @@ def store(vault: Path, files) -> int:
     return n
 
 def wait_once(base: str, key: str, after: str, timeout: float = 45) -> dict:
-    req = urllib.request.Request("%s/reminders/wait?after=%s" % (base.rstrip("/"), after), headers={"Authorization": "Bearer " + key})
+    req = urllib.request.Request("%s/reminders/wait?after=%s" % (base.rstrip("/"), after), headers={"Authorization": "Bearer " + key, "User-Agent": "agentvault-reminders/1"})   # Cloudflare turns away the default Python-urllib agent
     with urllib.request.urlopen(req, timeout=timeout) as r: return json.load(r)
 
 def run(vault: Path, base: str, key: str, log=print) -> None:
