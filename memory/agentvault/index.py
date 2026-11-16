@@ -8,7 +8,8 @@ LIMIT = 50
 
 def session_files(vault: Path):
     """All real session notes (never sync-conflict copies)."""
-    return [p for p in sorted(Path(vault).glob("Sessions/*/*/*.md")) if ".sync-conflict-" not in p.name]
+    root = Path(vault).resolve()  # a note (or folder) that is a symlink out of the vault is never read
+    return [p for p in sorted(Path(vault).glob("Sessions/*/*/*.md")) if ".sync-conflict-" not in p.name and p.resolve().is_relative_to(root)]
 
 def _line(vault: Path, p: Path, fm) -> str:
     rel = p.relative_to(vault).with_suffix("").as_posix()
