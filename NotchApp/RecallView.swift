@@ -9,28 +9,37 @@ struct RecallView: View {
     static let dayRowH: CGFloat = 40
     static let projRowH: CGFloat = 34
     private static let tabsH: CGFloat = 30, headerH: CGFloat = 44, footerH: CGFloat = 36, heatRowH: CGFloat = 22, summaryH: CGFloat = 76
-    static let summaryMax: CGFloat = 260   // past this the summary scrolls instead of growing
     private static let summaryTextW: CGFloat = 496   // 560 pill - 2*18 page inset - 2*12 text inset
 
-    /// Room the summary needs: its text measured at the real width, so nothing is cut. Rounded up to 8 pt so streaming doesn't jitter the pill.
+    /// The summary's text measured at the real width, so nothing is cut. Rounded up to 8 pt so streaming doesn't jitter the pill.
     static func summaryHeight(_ text: String) -> CGFloat {
         guard !text.isEmpty else { return summaryH }
         let p = NSMutableParagraphStyle(); p.lineSpacing = 3
         let r = (text as NSString).boundingRect(with: CGSize(width: summaryTextW, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading],
                                                 attributes: [.font: NSFont.systemFont(ofSize: 14), .paragraphStyle: p])
-        return min(max(summaryH, ((r.height + 26) / 8).rounded(.up) * 8), summaryMax)
+        return max(summaryH, ((r.height + 26) / 8).rounded(.up) * 8)
     }
 
-    /// Height of everything under the wings, per page. The pill uses this to size itself.
-    static func bodyHeight(_ a: Assistant) -> CGFloat {
-        let summary = a.summarizing || !a.summary.isEmpty ? summaryHeight(a.summary) : 0
+    /// Everything on the page except the summary.
+    private static func baseHeight(_ a: Assistant) -> CGFloat {
         switch a.page {
-        case .chats: return tabsH + headerH + CGFloat(max(min(a.recallRows.count, maxRows), 1)) * rowH + summary + footerH
+        case .chats: return tabsH + headerH + CGFloat(max(min(a.recallRows.count, maxRows), 1)) * rowH + footerH
         case .activity: return tabsH + headerH + CGFloat(max(a.grid.agents.count, 1)) * heatRowH + 22
-                                + CGFloat(max(min(a.daySessions.count, maxDayRows), 1)) * dayRowH + summary + footerH
+                                + CGFloat(max(min(a.daySessions.count, maxDayRows), 1)) * dayRowH + footerH
         case .projects: return tabsH + headerH + CGFloat(max(a.projectStats.count, 1)) * projRowH + footerH
         }
     }
+
+    /// The window under the notch is only so tall (NotchWindow: notch + maxBody + panelTail). The summary gets what the page leaves of it, and scrolls past that,
+    /// so the pill can never grow out of its window and get cut off.
+    static let roomForBody: CGFloat = NotchWindow.maxBody + NotchWindow.panelTail - 6 - 12 - 8
+    static func summaryRoom(_ a: Assistant) -> CGFloat {
+        guard a.page != .projects, a.summarizing || !a.summary.isEmpty else { return 0 }
+        return min(summaryHeight(a.summary), max(roomForBody - baseHeight(a), summaryH))
+    }
+
+    /// Height of everything under the wings, per page. The pill uses this to size itself.
+    static func bodyHeight(_ a: Assistant) -> CGFloat { baseHeight(a) + summaryRoom(a) }
 
     @FocusState private var searchFocus: Bool
     @State private var shown = 0     // counter that counts up on open
@@ -240,7 +249,7 @@ struct RecallView: View {
     }
 
     private var summary: some View {
-        let h = Self.summaryHeight(a.summary)
+        let h = Self.summaryRoom(a)
         return VStack(alignment: .leading, spacing: 0) {
             Rectangle().fill(Ink.text.opacity(0.08)).frame(height: 1).padding(.bottom, 9)
             ScrollView {
@@ -249,7 +258,7 @@ struct RecallView: View {
                     .foregroundStyle(a.summary.isEmpty ? Ink.dim : Ink.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .scrollIndicators(h >= Self.summaryMax ? .visible : .hidden)
+            .scrollIndicators(Self.summaryHeight(a.summary) > h ? .visible : .hidden)
         }
         .padding(.horizontal, 12).padding(.top, 6).frame(height: h, alignment: .top).clipped()
     }

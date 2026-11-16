@@ -174,7 +174,7 @@ final class Assistant {
         NSLog("NotchApp: open %@ (already open: %d)", m == .prompt ? "ask" : "recall", isOpen ? 1 : 0)
         if isOpen && mode == m { return }
         mode = m
-        if m == .recall { searching = false; recallQuery = ""; page = .chats; refreshRecall(); recallIndex = 0; summary = ""; cursor = max(grid.days.count - 1, 0); loadDay() }
+        if m == .recall { searching = false; recallQuery = ""; page = .chats; refreshRecall(); recallIndex = 0; summary = ProcessInfo.processInfo.environment["NOTCH_DEMO_SUMMARY"] ?? ""; cursor = max(grid.days.count - 1, 0); loadDay() }
         guard !isOpen else { return } // already open in the other mode: just switch content
         if !busy && AgentStream.isStale(closedAt: closedAt, now: Date()) { reset() } // away a long time: start fresh
         isOpen = true

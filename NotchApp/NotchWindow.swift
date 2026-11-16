@@ -11,6 +11,7 @@ final class KeyPanel: NSPanel {
 final class NotchWindow {
     static let panelWidth: CGFloat = 640
     static let maxBody: CGFloat = 280 // tallest the answer area grows before it scrolls
+    static let panelTail: CGFloat = 400 // window height below the notch row, beyond maxBody: room for Recall with a long summary open
 
     private let assistant: Assistant
     private var panel: KeyPanel?
@@ -41,7 +42,7 @@ final class NotchWindow {
         guard let screen = Self.targetScreen() else { return }
 
         let notch = Self.notchSize(for: screen)
-        let size = CGSize(width: Self.panelWidth, height: notch.height + Self.maxBody + 250)
+        let size = CGSize(width: Self.panelWidth, height: notch.height + Self.maxBody + Self.panelTail)
         let origin = CGPoint(x: screen.frame.midX - size.width / 2, y: screen.frame.maxY - size.height)
 
         let p = KeyPanel(contentRect: NSRect(origin: origin, size: size),
