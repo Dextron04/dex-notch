@@ -363,7 +363,7 @@ final class Assistant {
 
     /// The rows ↑/↓/↩ act on: day sessions on the Activity page, otherwise the chat list.
     var currentRows: [AgentSummary] { page == .activity ? daySessions : recallRows }
-    var currentVisible: Int { page == .activity ? RecallView.maxDayRows : RecallView.maxRows }
+    var currentVisible: Int { page == .activity ? daySessions.count : RecallView.maxRows }
 
     func setPage(_ p: RecallPage) { page = p; recallIndex = 0; summary = ""; summaryTask?.cancel(); summarizing = false; if p == .activity { loadDay() } }
     func stepPage(_ d: Int) { let n = RecallPage.allCases.count; setPage(RecallPage(rawValue: ((page.rawValue + d) % n + n) % n)!) }

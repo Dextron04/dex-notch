@@ -128,7 +128,12 @@ struct RecallView: View {
                 Text("Nothing recorded that day.").font(.system(size: 14)).foregroundStyle(Ink.dim)
                     .frame(maxWidth: .infinity, minHeight: Self.dayRowH, alignment: .leading).padding(.horizontal, 12)
             } else {
-                list(Array(a.daySessions.prefix(Self.maxDayRows)), height: Self.dayRowH, selectable: true)
+                ScrollViewReader { proxy in
+                    ScrollView { list(a.daySessions, height: Self.dayRowH, selectable: true) }
+                        .scrollIndicators(a.daySessions.count > Self.maxDayRows ? .visible : .hidden)
+                        .frame(height: CGFloat(min(a.daySessions.count, Self.maxDayRows)) * Self.dayRowH)
+                        .onChange(of: a.recallIndex) { _, i in if a.daySessions.indices.contains(i) { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(a.daySessions[i].id) } } }
+                }
             }
             if a.summarizing || !a.summary.isEmpty { summary }
         }

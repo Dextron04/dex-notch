@@ -32,7 +32,7 @@ struct VaultSnapshot: Equatable {
 }
 
 /// Reads the vault the Python recorder writes (header of each note + .recorder/status.json). No UI deps.
-// ponytail: scans every note header per call (~ms for hundreds of notes). Cache by mtime if the vault grows past a few thousand.
+// ponytail: lists every note per call but parses a header only when the file changed. Index on disk if the vault passes ~20k notes.
 enum VaultReader {
     /// ~/Vault, or $NOTCH_VAULT (demo data for screenshots, or a second vault).
     static var defaultVault: URL {
@@ -86,11 +86,11 @@ enum VaultReader {
         return ActivityGrid(days: grid, agents: cells.keys.sorted(), cells: cells, maxCount: cells.values.flatMap { $0 }.max() ?? 0)
     }
 
-    /// Sessions that started or last changed on `day`, newest first (max 4).
+    /// Sessions that started or last changed on `day`, newest first (max 500: the view scrolls).
     static func sessions(on day: Date, vault: URL, calendar: Calendar = .current) -> [AgentSummary] {
         notes(in: vault)
             .filter { calendar.isDate($0.started, inSameDayAs: day) || calendar.isDate($0.updated, inSameDayAs: day) }
-            .sorted { $0.updated > $1.updated }.prefix(4)
+            .sorted { $0.updated > $1.updated }.prefix(500)
             .map { AgentSummary(name: $0.agent, sessions: 1, lastTitle: $0.title, lastProject: $0.project, lastUpdated: $0.updated, notePath: $0.url, state: "ok") }
     }
 
@@ -135,22 +135,32 @@ enum VaultReader {
 
     // MARK: internals
 
+    /// Headers are parsed once per file version: the vault is rescanned on every key press, but only changed notes are re-read.
+    private static let cacheLock = NSLock()
+    nonisolated(unsafe) private static var cache: [URL: (stamp: Date, size: Int, note: Note)] = [:]
+
     private static func notes(in vault: URL) -> [Note] {
         let fm = FileManager.default
         let root = vault.appendingPathComponent("Sessions")
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
         var out: [Note] = []
+        cacheLock.lock(); defer { cacheLock.unlock() }
         for agentDir in (try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? [] {
             for monthDir in (try? fm.contentsOfDirectory(at: agentDir, includingPropertiesForKeys: nil)) ?? [] {
-                for url in (try? fm.contentsOfDirectory(at: monthDir, includingPropertiesForKeys: nil)) ?? []
+                for url in (try? fm.contentsOfDirectory(at: monthDir, includingPropertiesForKeys: keys)) ?? []
                 where url.pathExtension == "md" && !url.lastPathComponent.contains(".sync-conflict-") {
+                    let v = try? url.resourceValues(forKeys: Set(keys))
+                    let stamp = v?.contentModificationDate ?? .distantPast, size = v?.fileSize ?? -1
+                    if let c = cache[url], c.stamp == stamp, c.size == size { out.append(c.note); continue }
                     let h = header(url)
-                    out.append(Note(agent: (h["agent"] as? String) ?? agentDir.lastPathComponent,
-                                    title: (h["title"] as? String) ?? url.deletingPathExtension().lastPathComponent,
-                                    project: (h["project"] as? String) ?? "",
-                                    started: (h["started"] as? String).flatMap(parseDate) ?? (h["updated"] as? String).flatMap(parseDate) ?? .distantPast,
-                                    updated: (h["updated"] as? String).flatMap(parseDate) ?? .distantPast,
-                                    turns: (h["turns"] as? Int) ?? 0,
-                                    url: url))
+                    let n = Note(agent: (h["agent"] as? String) ?? agentDir.lastPathComponent,
+                                 title: (h["title"] as? String) ?? url.deletingPathExtension().lastPathComponent,
+                                 project: (h["project"] as? String) ?? "",
+                                 started: (h["started"] as? String).flatMap(parseDate) ?? (h["updated"] as? String).flatMap(parseDate) ?? .distantPast,
+                                 updated: (h["updated"] as? String).flatMap(parseDate) ?? .distantPast,
+                                 turns: (h["turns"] as? Int) ?? 0,
+                                 url: url)
+                    cache[url] = (stamp, size, n); out.append(n)
                 }
             }
         }
@@ -179,9 +189,9 @@ enum VaultReader {
         return try? JSONSerialization.jsonObject(with: d) as? [String: Any]
     }
 
+    nonisolated(unsafe) private static let plainFmt = ISO8601DateFormatter()
+    nonisolated(unsafe) private static let fracFmt: ISO8601DateFormatter = { let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f }()
     static func parseDate(_ s: String) -> Date? {
-        let plain = ISO8601DateFormatter()
-        let frac = ISO8601DateFormatter(); frac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return plain.date(from: s) ?? frac.date(from: s)
+        plainFmt.date(from: s) ?? fracFmt.date(from: s)
     }
 }

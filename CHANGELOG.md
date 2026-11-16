@@ -6,6 +6,14 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.6.1: A faster, scrollable Activity page
+
+*15 November 2026*
+
+- **Activity no longer crawls on a big vault.** Moving between days used to reread every saved conversation on each key press. Dex Notch now remembers each note and only rereads the ones that changed, so it stays quick with thousands of sessions.
+- **Every session on a day, not just three.** The day list under the Activity grid scrolls, and ↑↓ walks through all of them.
+- **Bring in your ChatGPT history.** `agentvault import chatgpt` turns a ChatGPT data export (the unzipped folder, the .zip, or a single `conversations.json`) into notes in your vault. With no path it uses the newest export in Downloads. Secrets are redacted as they go in, and running it again never duplicates anything.
+
 ## v0.6.0: Updates at the notch, Mac notifications, and a plainer look
 
 *15 November 2026*
