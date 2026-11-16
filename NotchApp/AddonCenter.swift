@@ -70,7 +70,7 @@ final class AddonCenter {
         // lid closed onto an external display, or a display plugged in: the notch moves, and the queue follows it
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.welcomeBack() } }
         // alerts wait for you: this is what shows them the moment you are back at the keyboard
-        Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.pollPhone(); self?.presentIfPossible() } }
+        Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.pollPhone(); self?.checkReminders(); self?.presentIfPossible() } }
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.pollPhone(); self?.tick(); self?.presentIfPossible() }
         if ProcessInfo.processInfo.environment["NOTCH_ALERT_DEMO"] != nil { forceDemo = true; demo() }
@@ -152,6 +152,23 @@ final class AddonCenter {
         }
     }
     private var lastPhoneLog = ""
+
+    // MARK: reminders
+
+    /// Reminders set from another assistant: when one comes due it becomes a card, and it keeps coming back every ten minutes until you say Done.
+    func checkReminders() {
+        let now = Date()
+        let due = Reminders.due(Reminders.load(vault: VaultReader.defaultVault), done: state.remindDone, snoozed: state.remindSnooze, now: now)
+        guard !due.isEmpty else { return }
+        for r in due {
+            state.remindDone.append(r.id); state.remindSnooze[r.id] = nil
+            if now.timeIntervalSince(r.due) > Reminders.staleAfter { continue }
+            state.pending.append(AddonAlert(id: "reminder|\(r.id)", addon: "reminder", sender: r.sourceName, address: "", headline: r.text,
+                reason: "Set from \(r.sourceName).", url: "", score: 10, created: now, account: nil, kind: "reminder"))
+        }
+        if state.remindDone.count > 2000 { state.remindDone.removeFirst(state.remindDone.count - 2000) }
+        state.save(to: stateURL); presentIfPossible()
+    }
 
     // MARK: updates
 
@@ -609,7 +626,7 @@ final class AddonCenter {
 
     /// You just woke or unlocked the Mac: give the desktop a moment to settle, then bring the news.
     private func welcomeBack() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { [weak self] in self?.tick(); self?.presentIfPossible() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { [weak self] in self?.tick(); self?.checkReminders(); self?.presentIfPossible() }
     }
 
     func presentIfPossible(force: Bool = false) {
@@ -650,6 +667,7 @@ final class AddonCenter {
     func open() {
         guard let c = current else { return }
         if c.kind == "update" { retire(c.id); if AppUpdater.shared.readyVersion != nil { AppUpdater.shared.restartNow() } else { AppUpdater.shared.checkNow() }; return }
+        if c.kind == "reminder" { retire(c.id, completed: true); return }
         if c.kind == "phone-access" { retire(c.id); NSWorkspace.shared.open(PhoneNotes.privacyPane); return }
         if c.kind == "reconnect" { retire(c.id); reconnectAll(); return }                 // this card's "Open" is "Reconnect"
         guard !c.url.isEmpty, let u = URL(string: c.url) else { retire(c.id); return }       // an iPhone card has nowhere to go: Done just closes it
@@ -663,7 +681,7 @@ final class AddonCenter {
         retire(c.id, alsoDropFrom: c.address)       // their other queued alerts go once the card has closed, so "+N more" doesn't jump while it is still showing
     }
 
-    private func retire(_ id: String, alsoDropFrom address: String? = nil, keep: Bool = false) {
+    private func retire(_ id: String, alsoDropFrom address: String? = nil, keep: Bool = false, completed: Bool = false) {
         guard let alert = current, alert.id == id, !retiring else { return }
         retiring = true; countdown?.cancel(); cardKeys = []      // the keys go back to whatever you were typing in
         if replyOpen || notesOpen { onReply?(false) }
@@ -673,6 +691,9 @@ final class AddonCenter {
             withAnimation(.smooth(duration: 0.5)) { presenting = false }     // explicit, so nothing downstream can swallow it
             onPresenting?(false)
             try? await Task.sleep(for: .milliseconds(850))      // longer than the fold (about 0.5s) so the card is never removed mid-motion
+            if !keep, alert.kind == "reminder", !completed, let rid = alert.id.split(separator: "|", maxSplits: 1).last.map(String.init) {      // anything but Done: it comes back
+                state.remindDone.removeAll { $0 == rid }; state.remindSnooze[rid] = Date().addingTimeInterval(Reminders.snooze)
+            }
             if !keep { state.pending.removeAll { $0.id == id || ($0.address == address && !address!.isEmpty) }; if alert.kind == nil { state.recordShown(alert) } }
             state.save(to: stateURL)
             current = nil; retiring = false; replyOpen = false; notesOpen = false
@@ -694,6 +715,8 @@ final class AddonCenter {
         switch ProcessInfo.processInfo.environment["NOTCH_ALERT_DEMO"] {
         case "gmail": state.pending = Array(state.pending.filter { $0.id == "demo1" })
         case "phone": state.pending = Array(state.pending.prefix(1))
+        case "reminder": state.pending = [AddonAlert(id: "reminder|demo", addon: "reminder", sender: "ChatGPT", address: "", headline: "Call mum about Sunday lunch",
+                                        reason: "Set from ChatGPT.", url: "", score: 10, created: now, account: nil, kind: "reminder")]
         case "update":      // NOTCH_CHANGELOG_DIR=<checkout> NOTCH_DEMO_VERSION=0.6.0
             let v = ProcessInfo.processInfo.environment["NOTCH_DEMO_VERSION"] ?? "9.9.9"
             state.pending = [AddonAlert(id: "update|\(v)", addon: "app", sender: "Dex Notch", address: "", headline: "Dex Notch \(v) is available",

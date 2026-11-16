@@ -515,6 +515,24 @@ final class AddonsTests: XCTestCase {
         XCTAssertEqual(OutlookAPI.explain(code: 401, body: Data()).retry, false)
         XCTAssertTrue(OutlookAPI.lacksPermission(Data(#"{"error":{"code":"ErrorAccessDenied","message":"Access is denied."}}"#.utf8)))
     }
+    func testRemindersLoadAndComeDueOnceWithSnooze() throws {
+        let vault = FileManager.default.temporaryDirectory.appendingPathComponent("rem-\(UUID().uuidString)")
+        let dir = vault.appendingPathComponent("Reminders"); try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: vault) }
+        func put(_ id: String, _ due: String, _ text: String) throws {
+            try "---\nid: \"\(id)\"\ndue: \"\(due)\"\ntext: \"\(text)\"\nsource: \"chatgpt\"\n---\n".write(to: dir.appendingPathComponent("\(id).md"), atomically: true, encoding: .utf8)
+        }
+        try put("a", "2026-11-16T15:00:00Z", "call mum"); try put("b", "2026-11-16T18:00:00Z", "pay rent")
+        try "not a reminder".write(to: dir.appendingPathComponent("junk.md"), atomically: true, encoding: .utf8)
+        let all = Reminders.load(vault: vault)
+        XCTAssertEqual(all.map(\.id), ["a", "b"]); XCTAssertEqual(all[0].sourceName, "ChatGPT")
+        let noon = ISO8601DateFormatter().date(from: "2026-11-16T12:00:00Z")!, four = noon.addingTimeInterval(4 * 3600)
+        XCTAssertEqual(Reminders.due(all, done: [], snoozed: [:], now: noon).count, 0)                       // not yet
+        XCTAssertEqual(Reminders.due(all, done: [], snoozed: [:], now: four).map(\.id), ["a"])               // only the one whose time has come
+        XCTAssertEqual(Reminders.due(all, done: ["a"], snoozed: [:], now: four).count, 0)                    // shown already
+        XCTAssertEqual(Reminders.due(all, done: [], snoozed: ["a": four.addingTimeInterval(600)], now: four).count, 0)   // snoozed
+        XCTAssertEqual(Reminders.due(all, done: [], snoozed: ["a": four.addingTimeInterval(600)], now: four.addingTimeInterval(601)).map(\.id), ["a"])   // snooze over; "b" is still hours away
+    }
 }
 
 private actor Counter { var n = 0; func bump() { n += 1 } }

@@ -24,6 +24,12 @@ class RemoteSyncTests(unittest.TestCase):
         self.assertEqual(r["pulled"], 1)
         self.assertIn("chatgpt", (self.vault / "Index.md").read_text())                     # hubs rebuilt for the pulled note
 
+    def test_pulls_reminders_set_remotely(self):
+        (self.target / "Reminders").mkdir()
+        (self.target / "Reminders" / "r1.md").write_text('---\nid: "r1"\ndue: "2026-11-16T15:00:00Z"\ntext: "call mum"\n---\n')
+        remote_sync.sync(self.vault, str(self.target))
+        self.assertTrue((self.vault / "Reminders" / "r1.md").exists())
+
     def test_push_never_deletes_remote_origin_notes(self):
         remote_sync.sync(self.vault, str(self.target))
         self.assertTrue(list((self.target / "Sessions" / "chatgpt").rglob("*.md")))

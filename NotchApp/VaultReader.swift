@@ -168,7 +168,7 @@ enum VaultReader {
     }
 
     /// Frontmatter of a note: `key: <json value>` lines between the first two `---`. Reads only the first 4 KB.
-    private static func header(_ url: URL) -> [String: Any] {
+    static func header(_ url: URL) -> [String: Any] {
         guard let h = try? FileHandle(forReadingFrom: url), let data = try? h.read(upToCount: 4096) else { return [:] }
         try? h.close()
         var result: [String: Any] = [:]

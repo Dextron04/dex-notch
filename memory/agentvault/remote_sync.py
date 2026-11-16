@@ -23,5 +23,10 @@ def sync(vault: Path, target: str) -> dict:
             if "No such file" in str(e) or "(23)" in str(e) or "(12)" in str(e): continue  # nothing saved from that source yet
             raise
         pulled += len([l for l in out.splitlines() if l[:2] in ("<f", ">f")])
+    try:  # reminders set remotely (by ChatGPT/Claude) land in the laptop's vault, where the notch reads them
+        out = _rsync("%s/Reminders/" % target, "%s/Reminders/" % vault)
+        pulled += len([l for l in out.splitlines() if l[:2] in ("<f", ">f")])
+    except RuntimeError as e:
+        if not ("No such file" in str(e) or "(23)" in str(e) or "(12)" in str(e)): raise
     if pulled: rebuild_indexes(vault)
     return {"pushed": pushed, "pulled": pulled}

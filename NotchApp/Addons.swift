@@ -188,6 +188,8 @@ struct AddonState: Codable, Equatable {
     var reconnectNudged: Date?          // when the "reconnect" card was last queued
     var updateNudged: String?           // the newest version the notch has already announced
     var phoneNudged: Date?              // when the "iPhone needs Full Disk Access" card was last queued
+    var remindDone: [String] = []       // reminders already shown (or on screen now); a snooze takes one back out
+    var remindSnooze: [String: Date] = [:]  // reminder id → when to show it again
     var replyAccounts: [String] = []    // accounts that have allowed drafts and sending (the rest are read-only)
     var history: [AddonAlert] = []      // the last alerts that were shown, newest first, so nothing you dismissed by accident is gone
     var modelCalls: [Date] = []         // when the model last ran (kept for an hour): the ceiling on model use
@@ -215,6 +217,8 @@ struct AddonState: Codable, Equatable {
         reconnectNudged = try c.decodeIfPresent(Date.self, forKey: .reconnectNudged)
         phoneNudged = try c.decodeIfPresent(Date.self, forKey: .phoneNudged)
         updateNudged = try c.decodeIfPresent(String.self, forKey: .updateNudged)
+        remindDone = try c.decodeIfPresent([String].self, forKey: .remindDone) ?? []
+        remindSnooze = try c.decodeIfPresent([String: Date].self, forKey: .remindSnooze) ?? [:]
         lastTry = try c.decodeIfPresent(Date.self, forKey: .lastTry)
         lastOK = try c.decodeIfPresent(Bool.self, forKey: .lastOK) ?? false
     }

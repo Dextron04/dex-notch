@@ -9,10 +9,21 @@ struct RecallView: View {
     static let dayRowH: CGFloat = 40
     static let projRowH: CGFloat = 34
     private static let tabsH: CGFloat = 30, headerH: CGFloat = 44, footerH: CGFloat = 36, heatRowH: CGFloat = 22, summaryH: CGFloat = 76
+    static let summaryMax: CGFloat = 260   // past this the summary scrolls instead of growing
+    private static let summaryTextW: CGFloat = 496   // 560 pill - 2*18 page inset - 2*12 text inset
+
+    /// Room the summary needs: its text measured at the real width, so nothing is cut. Rounded up to 8 pt so streaming doesn't jitter the pill.
+    static func summaryHeight(_ text: String) -> CGFloat {
+        guard !text.isEmpty else { return summaryH }
+        let p = NSMutableParagraphStyle(); p.lineSpacing = 3
+        let r = (text as NSString).boundingRect(with: CGSize(width: summaryTextW, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading],
+                                                attributes: [.font: NSFont.systemFont(ofSize: 14), .paragraphStyle: p])
+        return min(max(summaryH, ((r.height + 26) / 8).rounded(.up) * 8), summaryMax)
+    }
 
     /// Height of everything under the wings, per page. The pill uses this to size itself.
     static func bodyHeight(_ a: Assistant) -> CGFloat {
-        let summary = a.summarizing || !a.summary.isEmpty ? summaryH : 0
+        let summary = a.summarizing || !a.summary.isEmpty ? summaryHeight(a.summary) : 0
         switch a.page {
         case .chats: return tabsH + headerH + CGFloat(max(min(a.recallRows.count, maxRows), 1)) * rowH + summary + footerH
         case .activity: return tabsH + headerH + CGFloat(max(a.grid.agents.count, 1)) * heatRowH + 22
@@ -229,13 +240,18 @@ struct RecallView: View {
     }
 
     private var summary: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let h = Self.summaryHeight(a.summary)
+        return VStack(alignment: .leading, spacing: 0) {
             Rectangle().fill(Ink.text.opacity(0.08)).frame(height: 1).padding(.bottom, 9)
-            Text(a.summary.isEmpty ? "summarising…" : a.summary)
-                .font(.system(size: 14)).lineSpacing(3)
-                .foregroundStyle(a.summary.isEmpty ? Ink.dim : Ink.text).lineLimit(4)
+            ScrollView {
+                Text(a.summary.isEmpty ? "summarising…" : a.summary)
+                    .font(.system(size: 14)).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(a.summary.isEmpty ? Ink.dim : Ink.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollIndicators(h >= Self.summaryMax ? .visible : .hidden)
         }
-        .padding(.horizontal, 12).padding(.top, 6).frame(height: Self.summaryH, alignment: .top).clipped()
+        .padding(.horizontal, 12).padding(.top, 6).frame(height: h, alignment: .top).clipped()
     }
 
     private var footerHints: [(String, String)] {

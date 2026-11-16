@@ -6,6 +6,19 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.6.2: Reminders from your phone, and summaries that fit
+
+*15 November 2026*
+
+<p align="center">
+  <img src="docs/assets/reminder.gif" alt="The notch opens with a reminder card: Call mum about Sunday lunch, set from ChatGPT. Pressing Done folds it away" width="62%">
+</p>
+
+[Watch it as a video](docs/assets/reminder.mp4)
+
+- **Ask ChatGPT to remind you, and the notch does.** Tell ChatGPT or Claude "remind me to call mum at 9 tomorrow" and the reminder shows up at your notch at that time, with **Done** (⌥↩) and **In 10 min** (⌥esc). If your Mac was asleep, it shows when you're back. Until you press Done it comes back every ten minutes. This needs the Dex vault connector, which now has a `remind` tool.
+- **Summaries are no longer cut off.** In Recall, ⌘↩ on a session grows the panel just enough to show the whole summary, and scrolls if it is very long.
+
 ## v0.6.1: A faster, scrollable Activity page
 
 *15 November 2026*

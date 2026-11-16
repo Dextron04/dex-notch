@@ -82,7 +82,15 @@ struct AlertView: View {
     private var actions: some View {
         let update = c.current?.kind == "update", access = c.current?.kind == "phone-access", reconnect = c.current?.kind == "reconnect" || access, phone = c.current?.addon == "phone" || c.current?.addon == "mac"
         return HStack(spacing: 22) {
-            if update {
+            if c.current?.kind == "reminder" {
+                Button { c.open() } label: {
+                    HStack(spacing: 6) { Text("Done").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
+                }
+                Button { c.dismiss() } label: {
+                    HStack(spacing: 6) { Text("In 10 min").font(.system(size: 14)).foregroundStyle(Ink.dim); key("⌥esc") }.contentShape(Rectangle())
+                }
+                Spacer(minLength: 8)
+            } else if update {
                 Button { c.openNotes() } label: {
                     HStack(spacing: 6) { Text("What's new").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ember); key("⌥N") }.contentShape(Rectangle())
                 }

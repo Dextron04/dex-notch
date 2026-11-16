@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 from .. import mcp_server
 from .oauth import OAuthError, OAuthStore
-from .tools import REMEMBER, remember
+from .tools import REMEMBER, REMIND, remember, remind
 
 MAX_BODY = 1024 * 1024
 MAX_FAILS, LOCK_SECONDS, MAX_TRACKED = 5, 600, 10_000
@@ -24,7 +24,8 @@ def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str
     guard = {}  # client key -> [failures, locked_until]; in memory on purpose: a restart clears locks, not security
 
     def tool_call(name: str, args: dict):
-        return remember(vault, args) if name == "remember" else None
+        if name == "remember": return remember(vault, args)
+        if name == "remind": return remind(vault, args)
 
     class H(BaseHTTPRequestHandler):
         server_version = "agentvault"
@@ -86,7 +87,7 @@ def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str
                 return self.send(401, {"error": "unauthorized"}, extra={"WWW-Authenticate": 'Bearer resource_metadata="%s/.well-known/oauth-protected-resource"' % public})
             try: req = json.loads(raw)
             except ValueError: return self.send(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}})
-            extra = ([REMEMBER], tool_call)
+            extra = ([REMEMBER, REMIND], tool_call)
             batch = req if isinstance(req, list) else [req]
             out = [r for r in (mcp_server.handle(x, vault, extra) for x in batch if isinstance(x, dict)) if r is not None]
             if not out: return self.send(202)

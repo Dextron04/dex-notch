@@ -86,7 +86,7 @@ class RemoteTests(unittest.TestCase):
         _, tok = self.token()
         st, _, b = self.rpc(tok["access_token"], "tools/list")
         names = sorted(t["name"] for t in json.loads(b)["result"]["tools"])
-        self.assertEqual(names, ["remember", "vault_read", "vault_recent", "vault_search"])
+        self.assertEqual(names, ["remember", "remind", "vault_read", "vault_recent", "vault_search"])
         st, _, b = self.rpc(tok["access_token"], "tools/call", {"name": "vault_search", "arguments": {"query": "keychain"}})
         self.assertIn("Auth lock fix", json.loads(b)["result"]["content"][0]["text"])
 
