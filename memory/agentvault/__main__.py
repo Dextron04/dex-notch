@@ -8,7 +8,9 @@ REMOTE_EVERY = 300  # seconds between syncs with the remote connector host
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="agentvault", description="Record agent conversations into an Obsidian vault.")
-    ap.add_argument("cmd", choices=["once", "run", "backfill", "rag-sync", "remote-sync"])
+    ap.add_argument("cmd", choices=["once", "run", "backfill", "import", "rag-sync", "remote-sync"])
+    ap.add_argument("what", nargs="?", help="import: chatgpt")
+    ap.add_argument("path", nargs="?", help="import: export folder, .zip or conversations.json (default: newest chatgpt export in ~/Downloads)")
     ap.add_argument("--vault", default="~/Vault")
     ap.add_argument("--interval", type=int, default=30)
     ap.add_argument("--remote", help="rsync target of the remote connector vault, e.g. mac-agent:agentvault/Vault")
@@ -16,6 +18,12 @@ def main(argv=None) -> int:
     vault = Path(a.vault).expanduser()
     if a.cmd == "backfill":
         s = recorder.backfill(vault, default_adapters()); print(s); return 1 if s["errors"] else 0
+    if a.cmd == "import":
+        from . import importers
+        if a.what != "chatgpt": ap.error("import supports: chatgpt")
+        src = Path(a.path) if a.path else importers.find_chatgpt_export()
+        if not src: ap.error("no export found in ~/Downloads; pass the path")
+        s = importers.import_chatgpt(vault, src); print(s); return 1 if s["errors"] else 0
     if a.cmd == "rag-sync":
         try: print(rag_push.sync(vault)); return 0
         except rag_push.PushError as e: print("rag-sync:", e, file=sys.stderr); return 1
