@@ -11,6 +11,14 @@ def _rsync(*args: str) -> str:
     if p.returncode != 0: raise RuntimeError("rsync failed (%d): %s" % (p.returncode, p.stderr.strip()[:300]))
     return p.stdout
 
+def pull_reminders(vault: Path, target: str) -> int:
+    """Reminders set remotely (by ChatGPT/Claude) land in the laptop's vault, where the notch reads them. Cheap, so the daemon runs it every tick, not every few minutes."""
+    try: out = _rsync("%s/Reminders/" % target.rstrip("/"), "%s/Reminders/" % Path(vault))
+    except RuntimeError as e:
+        if "No such file" in str(e) or "(23)" in str(e) or "(12)" in str(e): return 0     # nothing set yet
+        raise
+    return len([l for l in out.splitlines() if l[:2] in ("<f", ">f")])
+
 def sync(vault: Path, target: str) -> dict:
     vault, target = Path(vault), target.rstrip("/")
     (vault / "Sessions").mkdir(parents=True, exist_ok=True)
@@ -23,10 +31,6 @@ def sync(vault: Path, target: str) -> dict:
             if "No such file" in str(e) or "(23)" in str(e) or "(12)" in str(e): continue  # nothing saved from that source yet
             raise
         pulled += len([l for l in out.splitlines() if l[:2] in ("<f", ">f")])
-    try:  # reminders set remotely (by ChatGPT/Claude) land in the laptop's vault, where the notch reads them
-        out = _rsync("%s/Reminders/" % target, "%s/Reminders/" % vault)
-        pulled += len([l for l in out.splitlines() if l[:2] in ("<f", ">f")])
-    except RuntimeError as e:
-        if not ("No such file" in str(e) or "(23)" in str(e) or "(12)" in str(e)): raise
+    pulled += pull_reminders(vault, target)
     if pulled: rebuild_indexes(vault)
     return {"pushed": pushed, "pulled": pulled}

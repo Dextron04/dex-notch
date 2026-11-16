@@ -44,6 +44,10 @@ def main(argv=None) -> int:
             last_remote = time.time()
             try: print("remote:", remote_sync.sync(vault, a.remote), flush=True)
             except Exception as e: print("remote sync failed:", e, file=sys.stderr, flush=True)
+        if a.remote:  # a reminder is only useful on time: pull them on every tick, not every REMOTE_EVERY
+            try:
+                if remote_sync.pull_reminders(vault, a.remote): print("reminders: pulled", flush=True)
+            except Exception as e: print("reminder pull failed:", e, file=sys.stderr, flush=True)
         time.sleep(a.interval)
 
 if __name__ == "__main__":
