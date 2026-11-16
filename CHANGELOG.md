@@ -6,6 +6,13 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.6.3: Long summaries fit, and reminders arrive instantly
+
+*15 November 2026*
+
+- **A long summary is no longer cut off.** In Recall, ⌘↩ on a session opens its summary under the list. The panel makes room for it, and if it is longer than the room there is, it scrolls instead of running off the bottom.
+- **Reminders arrive the moment you set them.** A reminder you ask ChatGPT or Claude for now reaches your Mac within a second, instead of up to five minutes later, so it shows at the notch on time.
+
 ## v0.6.2: Reminders from your phone, and summaries that fit
 
 *15 November 2026*
