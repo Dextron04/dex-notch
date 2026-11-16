@@ -183,4 +183,35 @@ final class SettingsTests: XCTestCase {
         setenv("NOTCH_SETTINGS", "", 1)
         XCTAssertTrue(Settings.defaultURL.path.hasSuffix("NotchApp/settings.json"))
     }
+
+    // MARK: hosted account
+
+    func testHostedTokenShapeIsChecked() {
+        XCTAssertTrue(HostedAccount.isValidToken("dvt_" + String(repeating: "A", count: 43)))
+        XCTAssertTrue(HostedAccount.isValidToken("dvt_abc-DEF_1234567890abcdefgh"))
+        for bad in ["", "dvt_", "dvt_short", "abc_" + String(repeating: "A", count: 43), "dvt_" + String(repeating: "A", count: 43) + "\n", "dvt_ " + String(repeating: "A", count: 30), "dvt_" + String(repeating: "é", count: 30), "dvt_" + String(repeating: "A", count: 101)] {
+            XCTAssertFalse(HostedAccount.isValidToken(bad), bad)
+        }
+    }
+    func testHostedHostIsSavedNormalizedAndKeepsTheRestOfTheFile() throws {
+        try write(#"{"default":"claude","gemma":{"host":"ai.example.com","model":"m"}}"#)
+        XCTAssertNil(HostedAccount.host(at: url))
+        try HostedAccount.saveHost(at: url, "vault.example.com")
+        XCTAssertEqual(HostedAccount.host(at: url), "vault.example.com")
+        let root = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+        XCTAssertEqual(root["default"] as? String, "claude"); XCTAssertNotNil(root["gemma"])
+        try HostedAccount.removeHost(at: url)
+        XCTAssertNil(HostedAccount.host(at: url)); XCTAssertEqual(app(Settings.load(from: url))?.gemma?.host, "ai.example.com")
+    }
+    func testHandEditedBadHostIsNotUsed() throws {
+        try write(#"{"hosted":{"host":"https://evil.com/steal?x=1"}}"#); XCTAssertNil(HostedAccount.host(at: url))
+        try write(#"{"hosted":{"host":"https://vault.example.com/"}}"#); XCTAssertEqual(HostedAccount.host(at: url), "vault.example.com")
+    }
+    func testConnectedNeedsBothTheHostAndAToken() throws {
+        try HostedAccount.saveHost(at: url, "vault.example.com")
+        XCTAssertNil(HostedAccount.connectedHost(at: url, token: { _, _ in nil }))
+        XCTAssertEqual(HostedAccount.connectedHost(at: url, token: { s, a in (s, a) == ("dex-notch-hosted", "device-token") ? "dvt_x" : nil }), "vault.example.com")
+        try HostedAccount.removeHost(at: url)
+        XCTAssertNil(HostedAccount.connectedHost(at: url, token: { _, _ in "dvt_x" }))
+    }
 }

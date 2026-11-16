@@ -25,6 +25,9 @@ final class SetupModel {
     var checkMinutes = 5.0
     var pane: SetupPane = .models
     var message: String?
+    var hostedHost = ""
+    var hostedToken = ""
+    var hostedConnected: String?
 
     private let url = Settings.defaultURL
     private var home: URL { FileManager.default.homeDirectoryForCurrentUser }
@@ -43,6 +46,7 @@ final class SetupModel {
         if ad.gmailIsOwn, let g = ad.gmail { gmailID = g.clientID; gmailSecret = g.clientSecret; ownClientOpen = true }
         else if ad.gmail == nil { ownClientOpen = true }
         if ad.microsoftIsOwn, let id = ad.microsoftClientID { msID = id; msOpen = true } else if ad.microsoftClientID == nil { msOpen = true }
+        hostedConnected = HostedAccount.connectedHost(at: url)
         if let g = a.gemma { host = g.host; model = g.model; keychainService = g.keychainService; keychainAccount = g.keychainAccount; localOpen = true }
     }
 
@@ -69,6 +73,25 @@ final class SetupModel {
     func useProjects() { if let p = projectsSuggestion { workspace = p; if !folders.contains(p) { folders.append(p) } } }
     func remove(_ f: String) { folders.removeAll { $0 == f }; if workspace == f { workspace = nil } }
 
+    /// Connect and Disconnect act at once (they are not part of Save): the token goes to the keychain first, so a host is never saved without one.
+    func connectHosted() {
+        message = nil
+        guard let h = Settings.normalizeHost(hostedHost) else { message = "The server should look like vault.example.com (no path, no username)."; return }
+        let t = hostedToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard HostedAccount.isValidToken(t) else { message = "That doesn't look like a device token. It starts with dvt_ and is shown once on your account page."; return }
+        guard KeychainStore.set(token: t, service: HostedAccount.keychainService, account: HostedAccount.keychainAccount) else { message = "The token couldn't be stored in the keychain."; return }
+        do { try HostedAccount.saveHost(at: url, h) }
+        catch { KeychainStore.delete(service: HostedAccount.keychainService, account: HostedAccount.keychainAccount); message = "Couldn't save settings.json: \(error.localizedDescription)"; return }
+        hostedConnected = h; hostedToken = ""
+    }
+
+    func disconnectHosted() {
+        message = nil
+        KeychainStore.delete(service: HostedAccount.keychainService, account: HostedAccount.keychainAccount)
+        do { try HostedAccount.removeHost(at: url) } catch { message = "Couldn't save settings.json: \(error.localizedDescription)"; return }
+        hostedConnected = nil
+    }
+
     func save() -> Bool {
         message = nil
         let h = host.trimmingCharacters(in: .whitespacesAndNewlines), m = model.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -93,9 +116,9 @@ final class SetupModel {
 }
 
 enum SetupPane: String, CaseIterable, Identifiable {
-    case welcome = "Welcome", models = "Models", folders = "Folders", mail = "Mail", phone = "iPhone", updates = "Updates", finish = "All set"
+    case welcome = "Welcome", models = "Models", folders = "Folders", mail = "Mail", phone = "iPhone", memory = "Memory", updates = "Updates", finish = "All set"
     var id: String { rawValue }
-    static let settings: [SetupPane] = [.models, .folders, .mail, .phone, .updates]
+    static let settings: [SetupPane] = [.models, .folders, .mail, .phone, .memory, .updates]
     static let guided: [SetupPane] = [.welcome, .models, .folders, .mail, .phone, .finish]       // the first-run walk-through, in order
 }
 
@@ -166,6 +189,7 @@ struct SetupView: View {
         case .folders: foldersPane
         case .mail: mailPane
         case .phone: phonePane
+        case .memory: memoryPane
         case .updates: updatesPane
         case .finish: finishPane
         }
@@ -487,6 +511,34 @@ struct SetupView: View {
                 subhead("Before this can work")
                 Text("Your iPhone must be set up with iPhone Mirroring on this Mac, and System Settings → Notifications must allow notifications from your iPhone. Dex Notch can't change either of those for you.")
                     .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var memoryPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header("Memory", "Keep your AI conversations in your Dex account, so Claude and ChatGPT can search them from anywhere.")
+            why("This uploads the conversations recorded on this Mac (Claude Code, Codex, Gemini) to the Dex server you connect, with passwords and keys removed first. It is optional and does nothing until you connect. You can disconnect at any time; what was already uploaded stays in your account until you delete it.")
+            if let h = m.hostedConnected {
+                row(title: "Connected", detail: h, mono: true,
+                    lead: { Image(systemName: "checkmark.circle.fill").font(.system(size: 17)).foregroundStyle(Ink.ember) },
+                    trail: { HStack(spacing: 18) {
+                        link("Open account page") { if let u = URL(string: "https://\(h)/account") { NSWorkspace.shared.open(u) } }
+                        link("Disconnect", dim: true) { m.disconnectHosted() }
+                    } })
+            } else {
+                VStack(alignment: .leading, spacing: 22) {
+                    field("Server", "vault.example.com", text: $m.hostedHost)
+                    field("Device token", "dvt_…", text: $m.hostedToken, secure: true)
+                }
+                HStack(spacing: 22) {
+                    link("Connect") { m.connectHosted() }
+                    if let h = Settings.normalizeHost(m.hostedHost) {
+                        link("Get a token", dim: true) { if let u = URL(string: "https://\(h)/account") { NSWorkspace.shared.open(u) } }
+                    }
+                }.padding(.top, 20)
+                Text("On your account page choose Add this Mac, then paste the token here. It is shown only once.")
+                    .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
             }
         }
     }

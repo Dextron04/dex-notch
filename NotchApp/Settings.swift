@@ -157,3 +157,29 @@ enum Settings {
         return h
     }
 }
+
+/// The hosted Dex account (the paid memory service). The server name lives in settings.json; the device token lives only in the keychain.
+/// The recorder (Python) reads the same two places, so connecting here is all it takes to start uploading.
+enum HostedAccount {
+    static let keychainService = "dex-notch-hosted", keychainAccount = "device-token"
+
+    /// Device tokens are `dvt_` plus URL-safe characters; anything else is a paste mistake, and the token is sent to the saved host.
+    static func isValidToken(_ t: String) -> Bool {
+        t.range(of: #"^dvt_[A-Za-z0-9_-]{20,100}\z"#, options: .regularExpression) != nil
+    }
+
+    static func host(at url: URL) -> String? {
+        guard let d = try? Data(contentsOf: url), let root = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let h = (root["hosted"] as? [String: Any])?["host"] as? String else { return nil }
+        return Settings.normalizeHost(h)
+    }
+
+    /// The host when this Mac is connected: saved in settings.json AND a token is in the keychain.
+    static func connectedHost(at url: URL, token: (String, String) -> String? = { KeychainStore.get(service: $0, account: $1) }) -> String? {
+        guard let h = host(at: url), token(keychainService, keychainAccount) != nil else { return nil }
+        return h
+    }
+
+    static func saveHost(at url: URL, _ host: String) throws { try Settings.mutate(at: url) { $0["hosted"] = ["host": host] } }
+    static func removeHost(at url: URL) throws { try Settings.mutate(at: url) { $0.removeValue(forKey: "hosted") } }
+}

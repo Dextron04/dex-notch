@@ -67,6 +67,9 @@ class Auth:
         with self.store.conn() as c: r = c.execute("SELECT user_id, exp FROM sessions WHERE hash=?", (_h(sess or ""),)).fetchone()
         return r["user_id"] if r and r["exp"] > self.now() and self.store.status(r["user_id"]) not in (None, "deleted") else None
 
+    def end_session(self, sess: str) -> None:
+        with self.store.conn() as c: c.execute("DELETE FROM sessions WHERE hash=?", (_h(sess or ""),))
+
     def revoke_all(self, uid: str) -> None:
         """Sign out everywhere: browser sessions and every OAuth grant (so ChatGPT/Claude must re-authorize)."""
         with self.store.conn() as c:

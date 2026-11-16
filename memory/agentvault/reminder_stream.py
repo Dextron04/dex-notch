@@ -17,16 +17,16 @@ def store(vault: Path, files) -> int:
         write_atomic(p, body); n += 1
     return n
 
-def wait_once(base: str, key: str, after: str, timeout: float = 45) -> dict:
-    req = urllib.request.Request("%s/reminders/wait?after=%s" % (base.rstrip("/"), after), headers={"Authorization": "Bearer " + key, "User-Agent": "agentvault-reminders/1"})   # Cloudflare turns away the default Python-urllib agent
+def wait_once(base: str, key: str, after: str, timeout: float = 45, path: str = "/reminders/wait") -> dict:
+    req = urllib.request.Request("%s%s?after=%s" % (base.rstrip("/"), path, after), headers={"Authorization": "Bearer " + key, "User-Agent": "agentvault-reminders/1"})   # Cloudflare turns away the default Python-urllib agent
     with urllib.request.urlopen(req, timeout=timeout) as r: return json.load(r)
 
-def run(vault: Path, base: str, key: str, log=print) -> None:
-    """Forever. A dropped connection or a sleeping laptop just means we ask again; the 30s pull catches anything missed meanwhile."""
+def run(vault: Path, base: str, key: str, log=print, path: str = "/reminders/wait", stop=None) -> None:
+    """Until `stop` is set (never, by default). A dropped connection or a sleeping laptop just means we ask again; the 30s pull catches anything missed meanwhile."""
     after, delay = "", 2
-    while True:
+    while not (stop and stop.is_set()):
         try:
-            d = wait_once(base, key, after)
+            d = wait_once(base, key, after, path=path)
             after, delay = str(d.get("token", after)), 2
             if store(vault, d.get("files")): log("reminders: received", flush=True)
         except Exception as e:

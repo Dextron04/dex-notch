@@ -93,3 +93,13 @@ def append_turns(vault: Path, meta: SessionMeta, turns: List[Turn]) -> Path:
 def reset_note(vault: Path, meta: SessionMeta) -> None:
     p = note_path(vault, meta)
     if p.exists(): p.unlink()
+
+
+_SECTION = re.compile(r"^## (user|assistant) · (\S+)\n\n(.*?)\n\n<!-- t:[0-9a-f]{10} -->|^> (\S+) · (.*?) <!-- t:[0-9a-f]{10} -->$", re.S | re.M)
+
+def read_note(path: Path) -> Tuple[Dict[str, Any], List[Turn]]:
+    """The inverse of add_turns: a note's frontmatter and its turns, in order. Used to upload an existing vault note to the hosted service."""
+    raw = Path(path).read_text(encoding="utf-8")
+    head, _, body = raw[4:].partition("\n---\n")
+    turns = [Turn(m.group(1), m.group(3), m.group(2)) if m.group(1) else Turn("tool", m.group(5), m.group(4)) for m in _SECTION.finditer(body)]
+    return _parse_fm_lines(head.split("\n")), turns

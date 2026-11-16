@@ -7,7 +7,8 @@ from urllib.parse import parse_qs, urlencode, urlparse
 from .. import mcp_server
 from ..remote.server import MAX_BODY, client_key
 from ..remote.tools import REMEMBER, REMIND
-from . import billing, tools
+from . import billing, devices, tools
+from .ingest import MAX_BODY as INGEST_MAX, IngestError, ingest
 from .oauth import SESSION_TTL, Auth, AuthError
 from .store import Store
 
@@ -39,11 +40,12 @@ def hidden(d: dict) -> str:
 
 def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[str, str], None],
                 stripe: Optional[billing.Stripe] = None, stripe_webhook_secret: bytes = b"", port: int = 8766, host: str = "127.0.0.1",
-                now=time.time) -> ThreadingHTTPServer:
+                now=time.time, wait_seconds: float = 25) -> ThreadingHTTPServer:
     """`send_mail(email, link)` delivers the sign-in link (see mail.py). Without `stripe`, billing is off and only the `grant` CLI can mark users paid."""
     public = public_url.rstrip("/")
     secure = "; Secure" if public.startswith("https://") else ""
     by_ip, by_email, reg_ip = Limiter(10, 3600, now), Limiter(3, 900, now), Limiter(20, 3600, now)
+    by_device = Limiter(120, 60, now)  # uploads and reminder polls per device per minute
 
     class H(BaseHTTPRequestHandler):
         server_version = "agentvault-hosted"
@@ -60,18 +62,27 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             self.end_headers()
             if self.command != "HEAD": self.wfile.write(body)
 
-        def body(self):
+        def body(self, limit=MAX_BODY):
             n = int(self.headers.get("Content-Length") or 0)
-            if n > MAX_BODY:
+            if n > limit:
                 self.send(413, {"error": "too_large"}, extra={"Connection": "close"}); self.close_connection = True; return None
             return self.rfile.read(n)
         def form(self):
             raw = self.body()
             return None if raw is None else {k: v[0] for k, v in parse_qs(raw.decode("utf-8", "replace")).items()}
         def ip(self): return client_key(self.headers.get("CF-Connecting-IP") or self.client_address[0])  # server listens on localhost: only the tunnel reaches it
-        def user(self):
+        def cookie(self):
             c = SimpleCookie(self.headers.get("Cookie") or "")
-            return auth.session_user(c[COOKIE].value) if COOKIE in c else None
+            return c[COOKIE].value if COOKIE in c else ""
+        def user(self): return auth.session_user(self.cookie())
+        def device(self):
+            """(uid, device id) for a valid, entitled device token, else answers 401/402 itself and returns None."""
+            a = self.headers.get("Authorization") or ""
+            d = devices.check(store, a[7:] if a.startswith("Bearer ") else "", now())
+            if not d: self.send(401, {"error": "unauthorized"}); return None
+            if not store.entitled(d[0]): self.send(402, {"error": "subscription_required"}); return None
+            if not by_device.allow(d[1]): self.send(429, {"error": "slow_down"}); return None
+            return d
         def validate(self, q):
             c = auth.client(q.get("client_id", ""))
             if q.get("redirect_uri") not in c["redirect_uris"]: raise AuthError("redirect_uri not registered")
@@ -98,7 +109,11 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                 ok = u.path.endswith("success")
                 return self.send(200, page("Billing", "<h2 style='font-weight:400'>%s</h2>" % ("Thanks. Your plan activates in a few seconds; go back to Claude or ChatGPT and connect again." if ok
                                                                                              else "No charge was made.")), "text/html; charset=utf-8")
-            if u.path == "/login/done": return self.send(200, page("Signed in", "<h2 style='font-weight:400'>You're signed in</h2>"), "text/html; charset=utf-8")
+            if u.path == "/login/done": return self.redirect("/account")
+            if u.path == "/login": return self.send(200, page("Sign in", "<h2 style='font-weight:400'>Sign in</h2><form method=post>"
+                "<input type=email name=email placeholder=you@example.com autofocus required style='%s'><button style='%s'>Email me a sign-in link</button></form>" % (INPUT, BTN)), "text/html; charset=utf-8")
+            if u.path == "/account": return self.account()
+            if u.path == "/v1/reminders/wait": return self.reminders_wait(q)
             if u.path == "/login/verify":  # a button, not an automatic sign-in: mail scanners that prefetch links must not burn the token
                 return self.send(200, page("Sign in", "<h2 style='font-weight:400'>Finish signing in</h2><form method=post>%s<button style='%s'>Continue</button></form>"
                                            % (hidden({"t": q.get("t", "")}), BTN)), "text/html; charset=utf-8")
@@ -107,7 +122,9 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
         def do_POST(self):
             path = urlparse(self.path).path
             fn = {"/mcp": self.mcp, "/register": self.register, "/authorize": self.consent, "/token": self.token,
-                  "/login": self.login, "/login/verify": self.verify, "/hooks/stripe": self.stripe_hook}.get(path)
+                  "/login": self.login, "/login/verify": self.verify, "/hooks/stripe": self.stripe_hook,
+                  "/account/devices": self.add_device, "/account/devices/revoke": self.revoke_device, "/account/signout-all": self.signout_all,
+                  "/logout": self.logout, "/v1/ingest": self.v1_ingest}.get(path)
             fn() if fn else self.send(404, {"error": "not_found"})
 
         def do_DELETE(self): self.send(405, {"error": "no sessions"}) if urlparse(self.path).path == "/mcp" else self.send(404, {"error": "not_found"})
@@ -164,6 +181,83 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             q = {"error": "access_denied"} if f.get("decision") != "allow" else {"code": auth.issue_code(f["client_id"], uid, f["redirect_uri"], f["code_challenge"])}
             if f.get("state"): q["state"] = f["state"]
             self.redirect(f["redirect_uri"] + ("&" if "?" in f["redirect_uri"] else "?") + urlencode(q))
+
+        # -- account page: sign-out and the Macs allowed to upload
+        def account(self):
+            uid = self.user()
+            if not uid: return self.redirect("/login")
+            rows = "".join("<li>%s <span style='color:#999'>added %s, last seen %s</span><form method=post action=/account/devices/revoke style=display:inline>%s<button style='background:none;border:0;color:#ffb059;cursor:pointer'>remove</button></form></li>"
+                           % (html.escape(d["name"]), time.strftime("%Y-%m-%d", time.gmtime(d["created_at"])),
+                              time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(d["last_seen"])) if d["last_seen"] else "never", hidden({"id": d["id"]})) for d in devices.listing(store, uid))
+            st = store.status(uid)
+            bill = ('<p><a style="color:#ffb059" href="/billing/%s">%s</a></p>' % (("portal", "Manage your subscription") if store.entitled(uid) else ("checkout", "Subscribe"))) if stripe else ""
+            self.send(200, page("Account", "<h2 style='font-weight:400'>%s</h2><p style='color:#999'>Plan status: %s</p>%s<h3 style='font-weight:400'>Your Macs</h3><ul>%s</ul>"
+                "<form method=post action=/account/devices><input name=name placeholder='This Mac' maxlength=60 style='%s'><button style='%s'>Add this Mac</button></form>"
+                "<form method=post action=/logout style=display:inline><button style='%s;background:#333;color:#eee'>Sign out</button></form> "
+                "<form method=post action=/account/signout-all style=display:inline><button style='%s;background:#333;color:#eee'>Sign out everywhere</button></form>"
+                % (html.escape(store.email(uid) or ""), html.escape(st or ""), bill, rows or "<li style='color:#999'>none yet</li>", INPUT, BTN, BTN, BTN)), "text/html; charset=utf-8")
+
+        def add_device(self):
+            f = self.form()
+            if f is None: return
+            uid = self.user()
+            if not uid: return self.send(401, "Sign in first.", "text/plain")
+            try: _, tok = devices.create(store, uid, f.get("name", ""))
+            except ValueError as e: return self.bad(e)
+            self.send(200, page("Your device token", "<h2 style='font-weight:400'>Paste this into Dex Notch</h2><p style='color:#999'>It is shown once. Anyone holding it can upload notes to your account; remove the Mac from your account page if it leaks.</p>"
+                "<pre style='white-space:pre-wrap;word-break:break-all;background:#111;padding:1rem;border:1px solid #444'>%s</pre><p><a style='color:#ffb059' href=/account>Back to account</a></p>" % html.escape(tok)), "text/html; charset=utf-8")
+
+        def revoke_device(self):
+            f = self.form()
+            if f is None: return
+            uid = self.user()
+            if not uid: return self.send(401, "Sign in first.", "text/plain")
+            devices.revoke(store, uid, f.get("id", "")); self.redirect("/account")
+
+        def logout(self):
+            if self.form() is None: return
+            auth.end_session(self.cookie()); self.redirect("/login", {"Set-Cookie": "%s=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0%s" % (COOKIE, secure)})
+
+        def signout_all(self):
+            if self.form() is None: return
+            uid = self.user()
+            if uid: auth.revoke_all(uid)
+            self.redirect("/login", {"Set-Cookie": "%s=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0%s" % (COOKIE, secure)})
+
+        # -- a Mac's recorder (device token): upload sessions, and hold a request open to be told the moment a reminder is saved
+        def v1_ingest(self):
+            raw = self.body(INGEST_MAX)
+            if raw is None: return
+            d = self.device()
+            if not d: return
+            try: self.send(200, ingest(store, d[0], json.loads(raw), len(raw)))
+            except (IngestError, ValueError) as e: self.send(413 if "quota" in str(e) else 400, {"error": str(e)[:200]})
+
+        def reminders_wait(self, q):
+            d = self.device()
+            if not d: return
+            folder = store.user_vault(d[0]) / "Reminders"
+            def snap():
+                fs = []
+                for f in sorted(folder.glob("*.md")) if folder.is_dir() else []:
+                    try: fs.append((f, f.stat().st_mtime_ns))
+                    except OSError: pass
+                return fs, "%d:%d" % (max((m for _, m in fs), default=0), len(fs))
+            after = q.get("after", "")
+            try: seen = int(after.split(":")[0])
+            except ValueError: seen = -1
+            deadline = time.monotonic() + wait_seconds
+            while True:
+                fs, token = snap()
+                if token != after or time.monotonic() >= deadline: break
+                time.sleep(0.3)
+            files = []
+            if token != after:
+                for f, m in fs:
+                    if m > seen:
+                        try: files.append({"name": f.name, "content": f.read_text(encoding="utf-8")[:4096]})
+                        except OSError: pass
+            self.send(200, {"token": token, "files": files})
 
         # -- billing
         def checkout(self):
