@@ -54,7 +54,10 @@ struct AddonSettings: Equatable {
     var name = ""                                       // your name, for the sign-off on a drafted reply (optional)
     var importance = ""                                 // free text: what matters to you, appended to the triage rules
     var macAlerts = false                               // judge this Mac's own notifications too, and show the important ones. Sends notification text to your AI, so it is off until you turn it on
+    var urgentWords = AddonSettings.defaultUrgentWords  // a Mac notification containing one of these skips the model and always shows ("urgent_words": [] turns it off)
     var phoneAlerts = false                             // show iPhone notifications that reach this Mac (iPhone Mirroring). Off until you turn it on: it reads Notification Center's database
+
+    static let defaultUrgentWords = ["interview", "offer letter", "job offer", "deadline", "otp", "verification code", "security alert", "payment failed", "meeting"]
 
     /// The Google client a release build carries (injected into Info.plist by CI). Nil in a plain checkout, where `$(…)` stays unresolved or empty.
     static func bundled(_ info: [String: Any]? = Bundle.main.infoDictionary) -> GmailConfig? {
@@ -86,6 +89,7 @@ struct AddonSettings: Equatable {
         if let r = a["replies_on_connect"] as? Bool { s.repliesOnConnect = r }
         if let p = a["phone_alerts"] as? Bool { s.phoneAlerts = p }
         if let m = a["mac_alerts"] as? Bool { s.macAlerts = m }
+        if let w = a["urgent_words"] as? [String] { s.urgentWords = w.map { clip($0, 40).lowercased() }.filter { !$0.isEmpty } }
         if let m = (a["microsoft"] as? [String: Any])?["client_id"] as? String, !m.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             s.microsoftClientID = m.trimmingCharacters(in: .whitespacesAndNewlines); s.microsoftIsOwn = true
         }
@@ -425,6 +429,29 @@ enum PhoneNotes {
     static func isMacCandidate(_ bundle: String, installed: (String) -> Bool, own: String? = Bundle.main.bundleIdentifier) -> Bool {
         !bundle.isEmpty && bundle != own && installed(bundle) && (!bundle.hasPrefix("com.apple.") || ["com.apple.MobileSMS", "com.apple.iChat"].contains(bundle))
     }
+    /// Whole words only: "otp" must not fire on "footprint".
+    static func isUrgent(_ n: Note, words: [String]) -> Bool {
+        let text = n.title + " " + n.body
+        return words.contains { w in !w.isEmpty && text.range(of: "\\b" + NSRegularExpression.escapedPattern(for: w) + "\\b", options: [.regularExpression, .caseInsensitive]) != nil }
+    }
+    /// Right away, a few words in the tray when something urgent arrives; no model in the way.
+    static func urgentAlert(_ n: Note, name: String?) -> AddonAlert {
+        let app = name ?? n.app.split(separator: ".").last.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? n.app
+        let title = Triage.clean(n.title, max: 90), body = Triage.clean(n.body, max: 200)
+        return AddonAlert(id: "mac|\(n.rec)", addon: "mac", sender: app, address: n.app.lowercased(),
+                          headline: title.isEmpty ? body : title, reason: title.isEmpty ? "" : body, url: "", score: 8, created: n.date, account: nil, kind: nil)
+    }
+
+    /// Where one notification goes, and why. `skip` carries the reason, for the log.
+    enum Route: Equatable { case phone, urgent, judge, muted, skip(String) }
+    static func route(_ n: Note, macAlerts: Bool, urgent: [String], muted: Set<String>, installed: (String) -> Bool, own: String? = Bundle.main.bundleIdentifier) -> Route {
+        if fromPhone(n.app, installed: installed) { return muted.contains("phone:" + n.app) ? .muted : .phone }
+        guard macAlerts else { return .skip("Mac alerts are off") }
+        guard isMacCandidate(n.app, installed: installed, own: own) else { return .skip("not a Mac app we judge") }
+        if muted.contains(n.app.lowercased()) { return .muted }
+        return isUrgent(n, words: urgent) ? .urgent : .judge
+    }
+
     /// The model judges these exactly like mail: sender = the app, subject = title, snippet = body.
     static func asMailItem(_ n: Note, name: String? = nil) -> MailItem {
         let app = name ?? n.app.split(separator: ".").last.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? n.app

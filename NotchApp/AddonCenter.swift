@@ -133,15 +133,23 @@ final class AddonCenter {
             if state.pending.contains(where: { $0.kind == "phone-access" }) { state.pending.removeAll { $0.kind == "phone-access" && $0.id != current?.id } }   // readable now
             guard let cursor = state.phoneCursor else { state.phoneCursor = try PhoneNotes.latestID(); state.save(to: stateURL); phoneStatus = "Watching for iPhone notifications."; return }
             let notes = try PhoneNotes.rows(after: cursor)
+            if notes.isEmpty { if !macBuffer.isEmpty, Date().timeIntervalSince(lastJudge) > 60 { judgeMac() }; return }      // a judge that failed is tried again, not left until the next banner
             guard let last = notes.last else { return }
-            if settings.macAlerts {
-                macBuffer += notes.filter { PhoneNotes.isMacCandidate($0.app) { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil } && !state.muted.contains($0.app.lowercased()) }.map { n in PhoneNotes.asMailItem(n, name: NSWorkspace.shared.urlForApplication(withBundleIdentifier: n.app).map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") }) }
-                macBuffer = Array(macBuffer.suffix(Triage.batch))
-                judgeMac()
-            }
+            let installed: (String) -> Bool = { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
             let have = Set(state.pending.map(\.id))
-            let fresh = notes.filter { PhoneNotes.fromPhone($0.app) { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil } }
-                .map(PhoneNotes.alert).filter { !have.contains($0.id) && !state.muted.contains($0.address) }
+            var fresh: [AddonAlert] = [], judge: [MailItem] = []
+            for n in notes {
+                let r = PhoneNotes.route(n, macAlerts: settings.macAlerts, urgent: settings.urgentWords, muted: Set(state.muted), installed: installed)
+                Logger(subsystem: "in.dextron04.notch", category: "notes").info("\(n.app, privacy: .public) -> \(String(describing: r), privacy: .public)")   // app and decision only, never the text
+                switch r {
+                case .phone: fresh.append(PhoneNotes.alert(n))
+                case .urgent: fresh.append(PhoneNotes.urgentAlert(n, name: appName(n.app)))
+                case .judge: judge.append(PhoneNotes.asMailItem(n, name: appName(n.app)))
+                case .muted, .skip: break
+                }
+            }
+            fresh = fresh.filter { !have.contains($0.id) }
+            if !judge.isEmpty { macBuffer = Array((macBuffer + judge).suffix(Triage.batch)); judgeMac() }
             state.pending += fresh.suffix(10)                                   // a burst after sleep is a few cards, not a flood
             state.phoneCursor = last.rec; state.save(to: stateURL)
             if !fresh.isEmpty { presentIfPossible() }
@@ -152,6 +160,9 @@ final class AddonCenter {
         }
     }
     private var lastPhoneLog = ""
+    private func appName(_ bundle: String) -> String? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle).map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") }
+    }
 
     /// usernoted appends each banner to the database's write-ahead log, so a write there wakes the poll at once instead of waiting up to 5s.
     /// The 5s timer stays as the net: it re-arms this when the file was replaced, or couldn't be opened yet (no Full Disk Access).
@@ -222,17 +233,29 @@ final class AddonCenter {
     private var judging = false
 
     /// Mac notifications go to the same model as mail, in one batch, within the hourly model budget. Failure keeps them for the next poll.
+    private var lastJudge = Date.distantPast
+    private var lastJudgeLog = ""
+    private func judgeNote(_ m: String) {     // said once per change, so a wait doesn't fill the log
+        guard m != lastJudgeLog else { return }
+        lastJudgeLog = m; Logger(subsystem: "in.dextron04.notch", category: "notes").info("judge: \(m, privacy: .public)")
+    }
     private func judgeMac() {
-        guard !judging, !macBuffer.isEmpty, let assistant, state.canCallModel(now: Date(), limit: settings.maxModelCallsPerHour) else { return }
-        judging = true
+        guard !judging, !macBuffer.isEmpty else { return }
+        guard let assistant else { judgeNote("no AI connected, \(macBuffer.count) waiting"); return }
+        guard state.canCallModel(now: Date(), limit: settings.maxModelCallsPerHour) else { judgeNote("hourly model limit reached, \(macBuffer.count) waiting"); return }
+        judging = true; lastJudge = Date()
         let batch = macBuffer; state.noteModelCall(now: Date())
         let order = settings.order.filter { assistant.choices.contains($0) }
         Task {
             defer { judging = false }
-            guard let r = await Triage.run(items: batch, importance: settings.importance, order: order, ask: { [self] b, s, u in try await ask(b, s, u) }) else { return }
+            guard let r = await Triage.run(items: batch, importance: settings.importance, order: order, ask: { [self] b, s, u in try await ask(b, s, u) }) else {
+                judgeNote("no model answered, \(batch.count) kept to retry"); return
+            }
             let done = Set(batch.map(\.id)); macBuffer.removeAll { done.contains($0.id) }
             let have = Set(state.pending.map(\.id))
             let found = r.alerts.filter { !have.contains($0.id) && !state.muted.contains($0.address) }
+            judgeNote("\(r.backend.rawValue) judged \(batch.count), showing \(found.count)")
+            lastJudgeLog = ""
             guard !found.isEmpty else { return }
             state.pending += found; state.save(to: stateURL); presentIfPossible()
         }

@@ -6,6 +6,14 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.6.6: Urgent notifications always show
+
+*15 November 2026*
+
+- **Interview, OTP, deadline and similar notifications skip the AI and show at once.** A notification from an app that is on your Mac used to wait for the AI to judge it, and a notification the AI scored low never reached the notch. Now one that contains a word like *interview*, *offer letter*, *deadline*, *OTP*, *verification code*, *security alert*, *payment failed* or *meeting* is shown immediately. Change the list with `urgent_words` in the `addons` part of `settings.json`; an empty list turns this off.
+- **A judge that failed tries again.** If no AI answered, the notifications waited for the next banner to arrive. Now they are retried about every minute.
+- **The log says what happened to each notification.** For every banner, Console shows the app and where it went: iPhone card, shown at once, sent to the AI, muted or skipped (and why). It never logs the text. Filter on `in.dextron04.notch`, category `notes`.
+
 ## v0.6.5: iPhone notifications arrive instantly
 
 *15 November 2026*

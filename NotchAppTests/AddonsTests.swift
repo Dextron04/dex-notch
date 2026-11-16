@@ -426,6 +426,34 @@ final class AddonsTests: XCTestCase {
         XCTAssertEqual(out?.first?.addon, "mac"); XCTAssertEqual(out?.first?.url, ""); XCTAssertEqual(out?.first?.sender, "Slackmacgap")
     }
 
+    func testUrgentWordsSkipTheModelAndRouteSaysWhy() {
+        let w = AddonSettings.defaultUrgentWords
+        func note(_ app: String, _ t: String, _ b: String = "") -> PhoneNotes.Note { .init(rec: 9, app: app, title: t, body: b, date: Date()) }
+        XCTAssertTrue(PhoneNotes.isUrgent(note("a", "Interview tomorrow at 10"), words: w))
+        XCTAssertTrue(PhoneNotes.isUrgent(note("a", "Your OTP is 123456"), words: w))
+        XCTAssertFalse(PhoneNotes.isUrgent(note("a", "New footprint report", "see the offers page"), words: w))
+        XCTAssertFalse(PhoneNotes.isUrgent(note("a", "Interview"), words: []))
+        let on: (String) -> Bool = { $0 == "com.slack" }
+        func r(_ n: PhoneNotes.Note, mac: Bool = true, muted: Set<String> = []) -> PhoneNotes.Route { PhoneNotes.route(n, macAlerts: mac, urgent: w, muted: muted, installed: on, own: "me") }
+        XCTAssertEqual(r(note("com.phoneonly", "hi")), .phone)
+        XCTAssertEqual(r(note("com.phoneonly", "hi"), muted: ["phone:com.phoneonly"]), .muted)
+        XCTAssertEqual(r(note("com.slack", "Interview at 3")), .urgent)
+        XCTAssertEqual(r(note("com.slack", "lunch?")), .judge)
+        XCTAssertEqual(r(note("com.slack", "Interview at 3"), muted: ["com.slack"]), .muted)
+        XCTAssertEqual(r(note("com.slack", "Interview at 3"), mac: false), .skip("Mac alerts are off"))
+        XCTAssertEqual(r(note("com.apple.mail", "Interview")), .skip("not a Mac app we judge"))
+        let a = PhoneNotes.urgentAlert(note("com.slack", "Interview at 3", "Priya"), name: "Slack")
+        XCTAssertEqual([a.id, a.addon, a.sender, a.address, a.headline, a.reason], ["mac|9", "mac", "Slack", "com.slack", "Interview at 3", "Priya"])
+    }
+
+    func testUrgentWordsFromSettings() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("urgent-\(UUID().uuidString).json")
+        try #"{"addons":{"urgent_words":["Standup"," "]}}"#.write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertEqual(AddonSettings.load(from: url).urgentWords, ["standup"])
+        try #"{"addons":{}}"#.write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertEqual(AddonSettings.load(from: url).urgentWords, AddonSettings.defaultUrgentWords)
+    }
+
     func testPhoneAccessCardDue() {
         var s = AddonState(), now = Date()
         XCTAssertTrue(s.phoneAccessCardDue(now: now))
