@@ -1,7 +1,7 @@
-import argparse, sys, time
+import argparse, sys, threading, time
 from pathlib import Path
 from .adapters import default_adapters
-from . import rag_push, recorder, remote_sync, settings
+from . import rag_push, recorder, remote_sync, reminder_stream, settings
 
 RAG_EVERY = 600  # seconds between pushes of changed notes
 REMOTE_EVERY = 300  # seconds between syncs with the remote connector host
@@ -13,6 +13,8 @@ def main(argv=None) -> int:
     ap.add_argument("path", nargs="?", help="import: export folder, .zip or conversations.json (default: newest chatgpt export in ~/Downloads)")
     ap.add_argument("--vault", default="~/Vault")
     ap.add_argument("--interval", type=int, default=30)
+    ap.add_argument("--reminders-url", help="the connector's public URL, for instant reminders (with --reminders-key-file)")
+    ap.add_argument("--reminders-key-file")
     ap.add_argument("--remote", help="rsync target of the remote connector vault, e.g. mac-agent:agentvault/Vault")
     a = ap.parse_args(argv)
     vault = Path(a.vault).expanduser()
@@ -33,6 +35,9 @@ def main(argv=None) -> int:
     if a.cmd == "once":
         print(recorder.tick(vault, default_adapters(), wait=True)); return 0
     last_push = last_remote = 0.0
+    if a.reminders_url and a.reminders_key_file:
+        key = Path(a.reminders_key_file).expanduser().read_text().strip()
+        threading.Thread(target=reminder_stream.run, args=(vault, a.reminders_url, key), daemon=True).start()
     while True:  # run: never die on a bad tick
         try: recorder.tick(vault, default_adapters())
         except Exception as e: print("tick failed:", e, file=sys.stderr, flush=True)

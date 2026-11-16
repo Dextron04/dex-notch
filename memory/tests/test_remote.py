@@ -1,4 +1,4 @@
-import base64, hashlib, json, sys, tempfile, threading, unittest, urllib.error, urllib.parse, urllib.request
+import time, base64, hashlib, json, sys, tempfile, threading, unittest, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from agentvault import notes
@@ -247,3 +247,39 @@ class DeployHookTests(unittest.TestCase):
         self.assertEqual(cm.exception.code, 404); cm.exception.close()
 
 if __name__ == "__main__": unittest.main()
+
+class ReminderWaitTests(unittest.TestCase):
+    KEY = b"reminder-key-for-the-test-123456"
+    def setUp(self):
+        self.d = tempfile.TemporaryDirectory(); self.addCleanup(self.d.cleanup)
+        self.root = Path(self.d.name)
+        self.srv = make_server(self.root / "V", OAuthStore(self.root / "o.json"), "correct horse", PUB, port=0, reminder_key=self.KEY, wait_seconds=0.6)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.addCleanup(self.srv.server_close); self.addCleanup(self.srv.shutdown)
+        self.base = "http://127.0.0.1:%d" % self.srv.server_address[1]
+    def get(self, after="", key=None):
+        h = {"Authorization": "Bearer " + (key or self.KEY).decode()}
+        try: r = OPENER.open(urllib.request.Request(self.base + "/reminders/wait?after=" + after, headers=h), timeout=10); return r.status, json.load(r)
+        except urllib.error.HTTPError as e: e.close(); return e.code, None
+    def put(self, name, body="---\nid: \"x\"\n---\n"):
+        (self.root / "V" / "Reminders").mkdir(parents=True, exist_ok=True); (self.root / "V" / "Reminders" / name).write_text(body)
+    def test_wrong_key_is_refused(self):
+        self.assertEqual(self.get(key=b"not-the-key-not-the-key-xx")[0], 401)
+    def test_first_call_sends_all_then_only_news_then_times_out_empty(self):
+        self.put("aaaaaaaaaaaaaaaa.md")
+        s, d = self.get(); self.assertEqual((s, [f["name"] for f in d["files"]]), (200, ["aaaaaaaaaaaaaaaa.md"]))
+        s, d2 = self.get(d["token"]); self.assertEqual(d2["files"], [])                    # nothing new: waits, then empty
+        time.sleep(0.01); self.put("bbbbbbbbbbbbbbbb.md")
+        s, d3 = self.get(d["token"]); self.assertEqual([f["name"] for f in d3["files"]], ["bbbbbbbbbbbbbbbb.md"])
+    def test_answers_as_soon_as_a_reminder_lands(self):
+        s, d = self.get()
+        threading.Timer(0.2, self.put, args=("cccccccccccccccc.md",)).start()
+        t = time.monotonic(); s, d2 = self.get(d["token"])
+        self.assertEqual([f["name"] for f in d2["files"]], ["cccccccccccccccc.md"]); self.assertLess(time.monotonic() - t, 0.55)
+    def test_store_accepts_only_plain_reminder_files(self):
+        from agentvault import reminder_stream as R
+        v = self.root / "M"
+        ok = {"name": "dddddddddddddddd.md", "content": "---\nid: \"d\"\n---\n"}
+        bad = [{"name": "../evil.md", "content": "---\n"}, {"name": "eeeeeeeeeeeeeeee.md", "content": "no front matter"}, {"name": "ffffffffffffffff.md", "content": 5}, "junk"]
+        self.assertEqual(R.store(v, [ok] + bad), 1); self.assertEqual(R.store(v, [ok]), 0)
+        self.assertEqual([p.name for p in (v / "Reminders").iterdir()], ["dddddddddddddddd.md"]); self.assertFalse((v / "evil.md").exists())

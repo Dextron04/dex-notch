@@ -19,7 +19,8 @@ def client_key(ip: str) -> str:
         return "unknown"
 
 def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str, port: int = 8765, host: str = "127.0.0.1",
-                now=time.time, deploy_secret: bytes = b"", on_deploy=None) -> ThreadingHTTPServer:
+                now=time.time, deploy_secret: bytes = b"", on_deploy=None,
+                reminder_key: bytes = b"", wait_seconds: float = 25) -> ThreadingHTTPServer:
     """`deploy_secret` + `on_deploy` switch on POST /hooks/deploy: GitHub's signed "CI finished" webhook asks the mini to deploy."""
     vault, public = Path(vault), public_url.rstrip("/")
     guard = {}  # client key -> [failures, locked_until]; in memory on purpose: a restart clears locks, not security
@@ -67,6 +68,7 @@ def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str
                 q = {k: v[0] for k, v in parse_qs(u.query).items()}
                 try: return self.send(200, self.page(self.validate(q), q), "text/html; charset=utf-8")
                 except OAuthError as e: return self.send(400, "Invalid request: %s" % html.escape(str(e)), "text/plain")
+            if u.path == "/reminders/wait": return self.reminders_wait({k: v[0] for k, v in parse_qs(u.query).items()})
             self.send(404, {"error": "not_found"})
 
         def do_POST(self):
@@ -79,6 +81,33 @@ def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str
             self.send(404, {"error": "not_found"})
 
         def do_DELETE(self): self.send(405, {"error": "no sessions"}) if urlparse(self.path).path == "/mcp" else self.send(404, {"error": "not_found"})
+
+        # -- reminders: the laptop holds this request open and is answered the moment a reminder is saved (its own key, not the OAuth one)
+        def reminders_wait(self, q):
+            if not reminder_key: return self.send(404, {"error": "not_found"})
+            if not hmac.compare_digest(self.headers.get("Authorization") or "", "Bearer " + reminder_key.decode()): return self.send(401, {"error": "unauthorized"})
+            folder = vault / "Reminders"
+            def snap():
+                fs = []
+                for f in sorted(folder.glob("*.md")) if folder.is_dir() else []:
+                    try: fs.append((f, f.stat().st_mtime_ns))
+                    except OSError: pass
+                return fs, "%d:%d" % (max((m for _, m in fs), default=0), len(fs))
+            after = q.get("after", "")
+            try: seen = int(after.split(":")[0])
+            except ValueError: seen = -1                     # first call: send everything
+            deadline = time.monotonic() + wait_seconds
+            while True:
+                fs, token = snap()
+                if token != after or time.monotonic() >= deadline: break
+                time.sleep(0.3)
+            files = []
+            if token != after:
+                for f, m in fs:
+                    if m > seen:
+                        try: files.append({"name": f.name, "content": f.read_text(encoding="utf-8")[:4096]})
+                        except OSError: pass
+            self.send(200, {"token": token, "files": files})
 
         # -- deploy hook (GitHub webhook): only a body signed with the shared secret counts, and only a green CI run on master starts a deploy
         def hook(self):

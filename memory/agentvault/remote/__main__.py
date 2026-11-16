@@ -9,6 +9,7 @@ def main() -> None:
     ap.add_argument("--passphrase-file", required=True); ap.add_argument("--public-url", required=True)
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--deploy-secret-file", help="shared secret of GitHub's webhook; with --deploy-script, switches on POST /hooks/deploy")
+    ap.add_argument("--reminder-key-file", help="secret the laptop uses to hold GET /reminders/wait open (instant reminders)")
     ap.add_argument("--deploy-script", help="run (detached) when GitHub reports a green CI run on master")
     a = ap.parse_args()
     pw = Path(a.passphrase_file).expanduser().read_text().strip()
@@ -20,7 +21,11 @@ def main() -> None:
         script = str(Path(a.deploy_script).expanduser())
     # new session: the deploy restarts this very process, and must outlive it to finish (or roll back)
     on_deploy = (lambda: subprocess.Popen(["/bin/zsh", script], start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)) if script else None
-    srv = make_server(Path(a.vault).expanduser(), OAuthStore(Path(a.state).expanduser()), pw, a.public_url, a.port, deploy_secret=secret, on_deploy=on_deploy)
+    rkey = b""
+    if a.reminder_key_file:
+        rkey = Path(a.reminder_key_file).expanduser().read_text().strip().encode()
+        if len(rkey) < 20: raise SystemExit("reminder key must be at least 20 characters")
+    srv = make_server(Path(a.vault).expanduser(), OAuthStore(Path(a.state).expanduser()), pw, a.public_url, a.port, deploy_secret=secret, on_deploy=on_deploy, reminder_key=rkey)
     print("agentvault remote on 127.0.0.1:%d as %s" % (a.port, a.public_url), flush=True)
     srv.serve_forever()
 
