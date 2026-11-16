@@ -1,4 +1,4 @@
-import argparse, subprocess
+import argparse, os, subprocess
 from pathlib import Path
 from .oauth import OAuthStore
 from .server import make_server
@@ -20,7 +20,10 @@ def main() -> None:
         if len(secret) < 20: raise SystemExit("deploy secret must be at least 20 characters")
         script = str(Path(a.deploy_script).expanduser())
     # new session: the deploy restarts this very process, and must outlive it to finish (or roll back)
-    on_deploy = (lambda: subprocess.Popen(["/bin/zsh", script], start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)) if script else None
+    def on_deploy():
+        log = open(Path(script).parent / "logs" / "deploy.err", "ab")          # the script's own errors, not lost with the request
+        subprocess.Popen(["/bin/zsh", script], start_new_session=True, stdin=subprocess.DEVNULL, stdout=log, stderr=log, env={**os.environ, "DEPLOY_HOOK": "1"})
+    if not script: on_deploy = None
     rkey = b""
     if a.reminder_key_file:
         rkey = Path(a.reminder_key_file).expanduser().read_text().strip().encode()

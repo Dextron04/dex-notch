@@ -14,16 +14,18 @@ SEEN=$BASE/deploy-seen     # last commit looked at (deployed, or rejected: never
 mkdir -p $BASE/logs $BASE/backups
 LOCK=$BASE/.deploy.lock     # the webhook and the 5-minute poll can fire together; one deploy at a time
 find $LOCK -maxdepth 0 -mmin +10 -exec rmdir {} \; 2>/dev/null
-mkdir $LOCK 2>/dev/null || exit 0
+mkdir $LOCK 2>/dev/null || { [[ -n "${DEPLOY_HOOK:-}" ]] && print -r -- "$(date '+%F %T') hook: another deploy holds the lock" >> $LOG; exit 0 }
 trap 'rmdir $LOCK' EXIT
 log() { print -r -- "$(date '+%F %T') $*" >> $LOG }
+say() { [[ -n "${DEPLOY_HOOK:-}" ]] && log "hook: $*" }     # the 5-minute poll stays quiet; a run started by the webhook says why it stopped
+say "started"
 api() { curl -fsS --max-time 20 -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$REPO/$1" }
 json() { python3 -c "import json,sys; d=json.load(sys.stdin); print($1)" }
 
-sha=$(api commits/master | json 'd["sha"]') || exit 0                 # offline or rate limited: try again later
-[[ "$sha" == "$(cat $SEEN 2>/dev/null)" ]] && exit 0
+sha=$(api commits/master | json 'd["sha"]') || { say "GitHub API failed"; exit 0 }                 # offline or rate limited: try again later
+[[ "$sha" == "$(cat $SEEN 2>/dev/null)" ]] && { say "${sha:0:7} already handled"; exit 0 }
 ci=$(api commits/$sha/check-runs | json '(lambda r: "none" if not r else r[0]["conclusion"] or "pending")([c for c in d["check_runs"] if c["name"] == "test"])') || exit 0
-[[ "$ci" == "pending" || "$ci" == "none" ]] && exit 0                 # CI hasn't finished yet
+[[ "$ci" == "pending" || "$ci" == "none" ]] && { say "${sha:0:7} CI is $ci"; exit 0 }                 # CI hasn't finished yet
 if [[ "$ci" != "success" ]]; then log "skip ${sha:0:7}: CI is $ci"; print -r -- $sha > $SEEN; exit 0; fi
 
 tmp=$(mktemp -d); trap 'rm -rf $tmp; rmdir $LOCK' EXIT
