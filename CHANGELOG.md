@@ -6,6 +6,12 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.6.5: iPhone notifications arrive instantly
+
+*15 November 2026*
+
+- **iPhone notifications show up the moment your Mac gets them.** Before, the notch looked for new ones every 5 seconds. Now it is woken as soon as one lands, so the card appears at once. The 5-second check stays as a backup.
+
 ## v0.6.4: Reminders stop nagging
 
 *15 November 2026*

@@ -70,7 +70,7 @@ final class AddonCenter {
         // lid closed onto an external display, or a display plugged in: the notch moves, and the queue follows it
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.welcomeBack() } }
         // alerts wait for you: this is what shows them the moment you are back at the keyboard
-        Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.pollPhone(); self?.checkReminders(); self?.presentIfPossible() } }
+        Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.watchPhone(); self?.pollPhone(); self?.checkReminders(); self?.presentIfPossible() } }
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.pollPhone(); self?.tick(); self?.presentIfPossible() }
         if ProcessInfo.processInfo.environment["NOTCH_ALERT_DEMO"] != nil { forceDemo = true; demo() }
@@ -152,6 +152,25 @@ final class AddonCenter {
         }
     }
     private var lastPhoneLog = ""
+
+    /// usernoted appends each banner to the database's write-ahead log, so a write there wakes the poll at once instead of waiting up to 5s.
+    /// The 5s timer stays as the net: it re-arms this when the file was replaced, or couldn't be opened yet (no Full Disk Access).
+    private var phoneWatch: DispatchSourceFileSystemObject?
+    private func watchPhone() {
+        guard settings.phoneAlerts, phoneWatch == nil else { return }
+        let fd = Darwin.open(PhoneNotes.dbURL.path + "-wal", O_EVTONLY)
+        guard fd >= 0 else { return }
+        let w = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .extend, .delete, .rename], queue: .main)
+        w.setEventHandler { [weak self, weak w] in
+            guard let w else { return }
+            MainActor.assumeIsolated {
+                if !w.data.isDisjoint(with: [.delete, .rename]) { w.cancel(); if self?.phoneWatch === w { self?.phoneWatch = nil } }
+                self?.pollPhone()
+            }
+        }
+        w.setCancelHandler { close(fd) }
+        w.resume(); phoneWatch = w
+    }
 
     // MARK: reminders
 
