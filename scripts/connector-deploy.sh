@@ -1,7 +1,8 @@
 #!/bin/zsh
-# Pull-based deploy of the vault connector (memory/agentvault) on the mini. launchd runs it every 5 minutes.
+# Deploys the vault connector (memory/agentvault) on the mini. Started by GitHub's signed "CI finished" webhook (POST /hooks/deploy on the connector),
+# and by launchd every 5 minutes as a fallback if a webhook is missed.
 # It deploys the newest master commit whose CI "test" job passed, restarts the connector, and rolls back if the restart doesn't answer.
-# Pull, not push: the repo is public, so nothing outside can reach the mini and no runner or secret is needed.
+# No self-hosted runner: the repo is public, so a fork's pull request must never be able to run code on the mini.
 export PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
 REPO=${DEPLOY_REPO:-Dextron04/dex-notch}
 BASE=${DEPLOY_BASE:-$HOME/agentvault}
@@ -11,6 +12,10 @@ PORT=8765
 LOG=$BASE/logs/deploy.log
 SEEN=$BASE/deploy-seen     # last commit looked at (deployed, or rejected: never retried)
 mkdir -p $BASE/logs $BASE/backups
+LOCK=$BASE/.deploy.lock     # the webhook and the 5-minute poll can fire together; one deploy at a time
+find $LOCK -maxdepth 0 -mmin +10 -exec rmdir {} \; 2>/dev/null
+mkdir $LOCK 2>/dev/null || exit 0
+trap 'rmdir $LOCK' EXIT
 log() { print -r -- "$(date '+%F %T') $*" >> $LOG }
 api() { curl -fsS --max-time 20 -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$REPO/$1" }
 json() { python3 -c "import json,sys; d=json.load(sys.stdin); print($1)" }
@@ -21,7 +26,7 @@ ci=$(api commits/$sha/check-runs | json '(lambda r: "none" if not r else r[0]["c
 [[ "$ci" == "pending" || "$ci" == "none" ]] && exit 0                 # CI hasn't finished yet
 if [[ "$ci" != "success" ]]; then log "skip ${sha:0:7}: CI is $ci"; print -r -- $sha > $SEEN; exit 0; fi
 
-tmp=$(mktemp -d); trap 'rm -rf $tmp' EXIT
+tmp=$(mktemp -d); trap 'rm -rf $tmp; rmdir $LOCK' EXIT
 curl -fsSL --max-time 120 "https://api.github.com/repos/$REPO/tarball/$sha" -o $tmp/src.tgz || { log "download failed for ${sha:0:7}"; exit 0; }
 tar -xzf $tmp/src.tgz -C $tmp --strip-components=1 --exclude '__pycache__' --exclude '.claude-flow' --exclude '.swarm' '*/memory/agentvault' || { log "unpack failed"; exit 0; }
 SRC=$tmp/memory/agentvault

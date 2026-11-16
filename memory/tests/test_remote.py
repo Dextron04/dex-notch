@@ -209,4 +209,41 @@ class RemoteTests(unittest.TestCase):
         self.assertFalse(w["openWorldHint"])         # it touches only the user's own vault
         for t in tools.values(): self.assertTrue(t["title"])
 
+
+class DeployHookTests(unittest.TestCase):
+    SECRET = b"s3cret-for-the-test-1234567890"
+    def setUp(self):
+        self.d = tempfile.TemporaryDirectory(); self.addCleanup(self.d.cleanup)
+        root = Path(self.d.name); self.fired = []
+        self.srv = make_server(root / "V", OAuthStore(root / "o.json"), "correct horse", PUB, port=0, deploy_secret=self.SECRET, on_deploy=lambda: self.fired.append(1))
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.addCleanup(self.srv.server_close); self.addCleanup(self.srv.shutdown)
+        self.url = "http://127.0.0.1:%d/hooks/deploy" % self.srv.server_address[1]
+    def post(self, body, event="workflow_run", secret=None, sig=None):
+        import hmac as H
+        raw = json.dumps(body).encode()
+        sig = sig or "sha256=" + H.new(secret or self.SECRET, raw, "sha256").hexdigest()
+        req = urllib.request.Request(self.url, data=raw, method="POST", headers={"X-Hub-Signature-256": sig, "X-GitHub-Event": event, "Content-Type": "application/json"})
+        try: return OPENER.open(req, timeout=10).status
+        except urllib.error.HTTPError as e: e.close(); return e.code
+    GREEN = {"action": "completed", "workflow_run": {"name": "CI", "conclusion": "success", "head_branch": "master"}}
+    def test_green_ci_on_master_deploys(self):
+        self.assertEqual(self.post(self.GREEN), 202); self.assertEqual(self.fired, [1])
+    def test_bad_or_missing_signature_never_deploys(self):
+        self.assertEqual(self.post(self.GREEN, secret=b"wrong-secret-wrong-secret-xx"), 401)
+        self.assertEqual(self.post(self.GREEN, sig="sha256=00"), 401); self.assertEqual(self.fired, [])
+    def test_only_green_ci_on_master_counts(self):
+        for run in ({"name": "CI", "conclusion": "failure", "head_branch": "master"}, {"name": "CI", "conclusion": "success", "head_branch": "feature"},
+                    {"name": "Release", "conclusion": "success", "head_branch": "master"}):
+            self.assertEqual(self.post({"action": "completed", "workflow_run": run}), 200)
+        self.assertEqual(self.post({"action": "requested", "workflow_run": self.GREEN["workflow_run"]}), 200)
+        self.assertEqual(self.post({}, event="ping"), 200); self.assertEqual(self.fired, [])
+    def test_off_without_a_secret(self):
+        root = Path(self.d.name)
+        srv = make_server(root / "V", OAuthStore(root / "o2.json"), "correct horse", PUB, port=0)
+        threading.Thread(target=srv.serve_forever, daemon=True).start(); self.addCleanup(srv.server_close); self.addCleanup(srv.shutdown)
+        req = urllib.request.Request("http://127.0.0.1:%d/hooks/deploy" % srv.server_address[1], data=b"{}", method="POST")
+        with self.assertRaises(urllib.error.HTTPError) as cm: OPENER.open(req, timeout=10)
+        self.assertEqual(cm.exception.code, 404); cm.exception.close()
+
 if __name__ == "__main__": unittest.main()

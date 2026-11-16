@@ -19,7 +19,8 @@ def client_key(ip: str) -> str:
         return "unknown"
 
 def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str, port: int = 8765, host: str = "127.0.0.1",
-                now=time.time) -> ThreadingHTTPServer:
+                now=time.time, deploy_secret: bytes = b"", on_deploy=None) -> ThreadingHTTPServer:
+    """`deploy_secret` + `on_deploy` switch on POST /hooks/deploy: GitHub's signed "CI finished" webhook asks the mini to deploy."""
     vault, public = Path(vault), public_url.rstrip("/")
     guard = {}  # client key -> [failures, locked_until]; in memory on purpose: a restart clears locks, not security
 
@@ -74,9 +75,27 @@ def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str
             if path == "/register": return self.register()
             if path == "/authorize": return self.consent()
             if path == "/token": return self.token()
+            if path == "/hooks/deploy": return self.hook()
             self.send(404, {"error": "not_found"})
 
         def do_DELETE(self): self.send(405, {"error": "no sessions"}) if urlparse(self.path).path == "/mcp" else self.send(404, {"error": "not_found"})
+
+        # -- deploy hook: only a body signed with the shared secret counts, and only a green CI run on master starts a deploy
+        def hook(self):
+            raw = self.body()
+            if raw is None: return
+            if not deploy_secret or on_deploy is None: return self.send(404, {"error": "not_found"})
+            want = "sha256=" + hmac.new(deploy_secret, raw, "sha256").hexdigest()
+            if not hmac.compare_digest(self.headers.get("X-Hub-Signature-256") or "", want): return self.send(401, {"error": "bad_signature"})
+            event = self.headers.get("X-GitHub-Event")
+            if event == "ping": return self.send(200, {"ok": True})
+            try: d = json.loads(raw)
+            except ValueError: return self.send(400, {"error": "bad_json"})
+            run = d.get("workflow_run") or {}
+            if event == "workflow_run" and d.get("action") == "completed" and run.get("name") == "CI" \
+                    and run.get("conclusion") == "success" and run.get("head_branch") == "master":
+                on_deploy(); return self.send(202, {"deploying": True})
+            self.send(200, {"ignored": True})
 
         # -- mcp
         def mcp(self):
