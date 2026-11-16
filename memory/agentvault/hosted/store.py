@@ -9,7 +9,9 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at REAL NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending');
 CREATE TABLE IF NOT EXISTS billing(user_id TEXT PRIMARY KEY REFERENCES users(id), stripe_customer_id TEXT, stripe_sub_id TEXT,
-  plan TEXT, period_end REAL);
+  plan TEXT, period_end REAL, event_ts REAL);
+CREATE INDEX IF NOT EXISTS billing_customer ON billing(stripe_customer_id);
+CREATE TABLE IF NOT EXISTS stripe_events(id TEXT PRIMARY KEY, received REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS clients(id TEXT PRIMARY KEY, name TEXT NOT NULL, redirect_uris TEXT NOT NULL, created_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS grants(hash TEXT PRIMARY KEY, kind TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id),
   client_id TEXT NOT NULL, data TEXT, exp REAL NOT NULL);
@@ -18,7 +20,7 @@ CREATE TABLE IF NOT EXISTS login_links(hash TEXT PRIMARY KEY, email TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), exp REAL NOT NULL);
 """
 STATUSES = {"pending", "active", "past_due", "canceled", "deleted"}
-ENTITLED = {"active", "past_due"}  # ponytail: past_due gets the whole period, not a timed grace; add period_end logic with Stripe
+ENTITLED = {"active", "past_due"}  # past_due = Stripe is still retrying the card; it flips to canceled when the retries end
 USER_ID = re.compile(r"u_[A-Za-z0-9_-]{22}")
 EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 
@@ -43,6 +45,10 @@ class Store:
         except sqlite3.IntegrityError: raise ValueError("email already registered")
         return uid
 
+    def email(self, uid: str) -> Optional[str]:
+        with self.conn() as c: r = c.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
+        return r["email"] if r else None
+
     def by_email(self, email: str) -> Optional[str]:
         with self.conn() as c: r = c.execute("SELECT id FROM users WHERE email=?", ((email or "").strip().lower(),)).fetchone()
         return r["id"] if r else None
@@ -61,7 +67,7 @@ class Store:
         return self.status(uid) in ENTITLED
 
     def grant(self, uid: str, plan: str = "placeholder") -> None:
-        """PLACEHOLDER for Stripe: marks the user paid. The webhook handler will replace the callers, and fill stripe_* and period_end."""
+        """Dev/manual override (the `grant` CLI): marks the user paid without Stripe. Real payments arrive through billing.apply_event."""
         self.set_status(uid, "active")
         with self.conn() as c:
             c.execute("INSERT INTO billing(user_id,plan) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan", (uid, plan))

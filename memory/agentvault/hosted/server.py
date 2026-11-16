@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 from .. import mcp_server
 from ..remote.server import MAX_BODY, client_key
 from ..remote.tools import REMEMBER, REMIND
-from . import tools
+from . import billing, tools
 from .oauth import SESSION_TTL, Auth, AuthError
 from .store import Store
 
@@ -39,8 +39,9 @@ def hidden(d: dict) -> str:
     return "".join('<input type="hidden" name="%s" value="%s">' % (html.escape(k), html.escape(v, True)) for k, v in d.items())
 
 def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[str, str], None],
-                checkout_url: Callable[[str], Optional[str]] = lambda uid: None, port: int = 8766, host: str = "127.0.0.1",
+                stripe: Optional[billing.Stripe] = None, stripe_webhook_secret: bytes = b"", port: int = 8766, host: str = "127.0.0.1",
                 now=time.time) -> ThreadingHTTPServer:
+    """`send_mail` is still a placeholder (no real email yet). Without `stripe`, billing is off and only the `grant` CLI can mark users paid."""
     public = public_url.rstrip("/")
     secure = "; Secure" if public.startswith("https://") else ""
     by_ip, by_email, reg_ip = Limiter(10, 3600, now), Limiter(3, 900, now), Limiter(20, 3600, now)
@@ -92,6 +93,12 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                     "grant_types_supported": ["authorization_code", "refresh_token"], "code_challenge_methods_supported": ["S256"],
                     "token_endpoint_auth_methods_supported": ["none"], "scopes_supported": ["vault"]})
             if u.path == "/authorize": return self.authorize_page(q)
+            if u.path == "/billing/checkout": return self.checkout()
+            if u.path == "/billing/portal": return self.portal()
+            if u.path in ("/billing/success", "/billing/cancel"):
+                ok = u.path.endswith("success")
+                return self.send(200, page("Billing", "<h2 style='font-weight:400'>%s</h2>" % ("Thanks. Your plan activates in a few seconds; go back to Claude or ChatGPT and connect again." if ok
+                                                                                             else "No charge was made.")), "text/html; charset=utf-8")
             if u.path == "/login/done": return self.send(200, page("Signed in", "<h2 style='font-weight:400'>You're signed in</h2>"), "text/html; charset=utf-8")
             if u.path == "/login/verify":  # a button, not an automatic sign-in: mail scanners that prefetch links must not burn the token
                 return self.send(200, page("Sign in", "<h2 style='font-weight:400'>Finish signing in</h2><form method=post>%s<button style='%s'>Continue</button></form>"
@@ -101,7 +108,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
         def do_POST(self):
             path = urlparse(self.path).path
             fn = {"/mcp": self.mcp, "/register": self.register, "/authorize": self.consent, "/token": self.token,
-                  "/login": self.login, "/login/verify": self.verify}.get(path)
+                  "/login": self.login, "/login/verify": self.verify, "/hooks/stripe": self.stripe_hook}.get(path)
             fn() if fn else self.send(404, {"error": "not_found"})
 
         def do_DELETE(self): self.send(405, {"error": "no sessions"}) if urlparse(self.path).path == "/mcp" else self.send(404, {"error": "not_found"})
@@ -117,7 +124,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                     "<form method=post action=/login>%s<input type=email name=email placeholder=you@example.com autofocus required style='%s'>"
                     "<button style='%s'>Email me a sign-in link</button></form>" % (html.escape(c["name"]), hidden(fields), INPUT, BTN)), "text/html; charset=utf-8")
             if not store.entitled(uid):
-                link = checkout_url(uid)
+                link = public + "/billing/checkout" if stripe else None
                 msg = ('<p><a style="color:#ffb059" href="%s">Subscribe to continue</a></p>' % html.escape(link, True)) if link else "<p style='color:#999'>Paid plans aren't open yet.</p>"
                 return self.send(402, page("Subscription needed", "<h2 style='font-weight:400'>A subscription is needed first</h2>" + msg), "text/html; charset=utf-8")
             host = html.escape(urlparse(q["redirect_uri"]).hostname or "")
@@ -157,6 +164,34 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             q = {"error": "access_denied"} if f.get("decision") != "allow" else {"code": auth.issue_code(f["client_id"], uid, f["redirect_uri"], f["code_challenge"])}
             if f.get("state"): q["state"] = f["state"]
             self.redirect(f["redirect_uri"] + ("&" if "?" in f["redirect_uri"] else "?") + urlencode(q))
+
+        # -- billing
+        def checkout(self):
+            uid = self.user()
+            if not stripe: return self.send(404, {"error": "not_found"})
+            if not uid: return self.send(401, "Sign in first.", "text/plain")
+            if store.entitled(uid): return self.portal()
+            try: self.redirect(stripe.checkout_url(uid, store.email(uid), billing.customer_of(store, uid)))
+            except billing.BillingError: self.send(502, "Payments are unavailable right now. Try again shortly.", "text/plain")
+
+        def portal(self):
+            uid, cus = self.user(), None
+            if not stripe: return self.send(404, {"error": "not_found"})
+            if not uid: return self.send(401, "Sign in first.", "text/plain")
+            cus = billing.customer_of(store, uid)
+            if not cus: return self.send(404, "No subscription on this account.", "text/plain")
+            try: self.redirect(stripe.portal_url(cus))
+            except billing.BillingError: self.send(502, "Payments are unavailable right now. Try again shortly.", "text/plain")
+
+        def stripe_hook(self):
+            raw = self.body()
+            if raw is None: return
+            if not stripe_webhook_secret: return self.send(404, {"error": "not_found"})
+            if not billing.verify_signature(raw, self.headers.get("Stripe-Signature") or "", stripe_webhook_secret, now()): return self.send(400, {"error": "bad_signature"})
+            try: ev = json.loads(raw); assert isinstance(ev, dict) and ev.get("id")
+            except (ValueError, AssertionError): return self.send(400, {"error": "bad_json"})
+            try: self.send(200, {"result": billing.apply_event(store, ev)})
+            except Exception: self.send(500, {"error": "retry"})  # Stripe retries with backoff; the event was not recorded
 
         # -- oauth
         def register(self):
