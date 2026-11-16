@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Hosted (multi-user) service. Replace __HOME__ and __PUBLIC_URL__. Add the --smtp-* and --stripe-* flags when those are set up. -->
+<plist version="1.0"><dict>
+<key>Label</key><string>in.dextron04.agentvault-hosted</string>
+<key>ProgramArguments</key><array>
+  <string>/opt/homebrew/bin/python3</string><string>-m</string><string>agentvault.hosted</string><string>serve</string>
+  <string>--root</string><string>__HOME__/agentvault-hosted/data</string>
+  <string>--public-url</string><string>__PUBLIC_URL__</string>
+  <string>--port</string><string>8766</string>
+</array>
+<key>WorkingDirectory</key><string>__HOME__/agentvault-hosted/app</string>
+<key>KeepAlive</key><true/>
+<key>RunAtLoad</key><true/>
+<key>StandardOutPath</key><string>__HOME__/agentvault-hosted/logs/hosted.log</string>
+<key>StandardErrorPath</key><string>__HOME__/agentvault-hosted/logs/hosted.log</string>
+</dict></plist>
