@@ -6,6 +6,13 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.6.4: Reminders stop nagging
+
+*15 November 2026*
+
+- **An ignored reminder comes back at most twice.** Before, a reminder you didn't press **Done** on returned every ten minutes for ever. Now it shows three times in all, ten minutes apart, and then leaves you alone. **Done** still clears it at once.
+- **Old reminders stay quiet.** One that is more than a day overdue, such as after a long break, is dropped instead of popping up.
+
 ## v0.6.3: Long summaries fit, and reminders arrive instantly
 
 *15 November 2026*
