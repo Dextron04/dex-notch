@@ -6,6 +6,14 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.7.0: Hosted memory (optional)
+
+*16 November 2026*
+
+- **A new Memory pane in Settings.** If you have a Dex account on a hosted memory server, you can connect this Mac to it, and your recorded AI conversations are kept there so Claude and ChatGPT can search them from anywhere. It is optional and does nothing until you connect: nothing is uploaded unless you create an account, add this Mac, and paste its device token. Paid plans are not open yet, so for now this is for early testers.
+- **You stay in control.** On your account page you can see your Macs, remove one (it stops uploading at once), sign out everywhere, **download all your data**, or **delete your account**, which erases your notes. Disconnecting in Settings → Memory stops uploads from this Mac. The first connection uploads your whole history; after that only new turns.
+- **What it means for privacy.** Notes are stored on the server operator's machine and are not end-to-end encrypted, so don't upload anything you wouldn't trust the operator with. Passwords and API keys are stripped first, but that can't catch everything. [PRIVACY.md](PRIVACY.md) has the full details.
+
 ## v0.6.6: Urgent notifications always show
 
 *15 November 2026*
