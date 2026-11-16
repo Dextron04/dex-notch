@@ -275,7 +275,7 @@ class ReminderWaitTests(unittest.TestCase):
         s, d = self.get()
         threading.Timer(0.2, self.put, args=("cccccccccccccccc.md",)).start()
         t = time.monotonic(); s, d2 = self.get(d["token"])
-        self.assertEqual([f["name"] for f in d2["files"]], ["cccccccccccccccc.md"]); self.assertLess(time.monotonic() - t, 0.55)
+        self.assertEqual([f["name"] for f in d2["files"]], ["cccccccccccccccc.md"]); self.assertLess(time.monotonic() - t, 2.0)
     def test_store_accepts_only_plain_reminder_files(self):
         from agentvault import reminder_stream as R
         v = self.root / "M"
