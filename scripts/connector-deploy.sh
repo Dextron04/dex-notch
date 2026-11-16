@@ -27,7 +27,7 @@ tar -xzf $tmp/src.tgz -C $tmp --strip-components=1 --exclude '__pycache__' --exc
 SRC=$tmp/memory/agentvault
 [[ -d $SRC ]] || { log "no memory/agentvault in ${sha:0:7}"; print -r -- $sha > $SEEN; exit 0; }
 
-changed=$(rsync -rcni --exclude __pycache__ $SRC/ $APP/ | grep -c '^<f')
+changed=$(rsync -rcni --exclude __pycache__ $SRC/ $APP/ | grep -c '^[<>]f')
 if [[ "$changed" == 0 ]]; then print -r -- $sha > $SEEN; exit 0; fi   # this commit didn't touch the connector
 
 bk=$BASE/backups/deploy-$(date +%Y%m%d-%H%M%S); mkdir -p $bk && cp -R $APP $bk/
