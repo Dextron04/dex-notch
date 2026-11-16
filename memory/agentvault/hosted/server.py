@@ -1,6 +1,5 @@
-"""Hosted HTTP front: sign-in (magic link) + OAuth endpoints + MCP over streamable HTTP, one vault per user. Stdlib only.
-Placeholders (to replace later): `send_mail` (real email) and `checkout_url` (Stripe Checkout)."""
-import html, json, time
+"""Hosted HTTP front: sign-in (magic link) + OAuth endpoints + billing + MCP over streamable HTTP, one vault per user. Stdlib only."""
+import html, json, sys, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 from typing import Callable, Optional
@@ -41,7 +40,7 @@ def hidden(d: dict) -> str:
 def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[str, str], None],
                 stripe: Optional[billing.Stripe] = None, stripe_webhook_secret: bytes = b"", port: int = 8766, host: str = "127.0.0.1",
                 now=time.time) -> ThreadingHTTPServer:
-    """`send_mail` is still a placeholder (no real email yet). Without `stripe`, billing is off and only the `grant` CLI can mark users paid."""
+    """`send_mail(email, link)` delivers the sign-in link (see mail.py). Without `stripe`, billing is off and only the `grant` CLI can mark users paid."""
     public = public_url.rstrip("/")
     secure = "; Secure" if public.startswith("https://") else ""
     by_ip, by_email, reg_ip = Limiter(10, 3600, now), Limiter(3, 900, now), Limiter(20, 3600, now)
@@ -143,6 +142,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if by_ip.allow(self.ip()) and by_email.allow(email):
                 try: send_mail(email, "%s/login/verify?t=%s" % (public, auth.start_login(email, nxt)))
                 except AuthError: pass
+                except Exception as e: print("sign-in mail failed: %s" % type(e).__name__, file=sys.stderr, flush=True)  # the response must not reveal it, and the link must not be logged
             self.send(200, page("Check your email", "<h2 style='font-weight:400'>Check your email</h2><p style='color:#999'>If the address is valid, a sign-in link is on its way. It works once, for 15 minutes.</p>"), "text/html; charset=utf-8")
 
         def verify(self):

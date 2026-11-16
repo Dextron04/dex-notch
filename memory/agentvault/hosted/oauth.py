@@ -3,7 +3,7 @@ single-use codes) but every grant belongs to a user. Secrets are only ever store
 import base64, hashlib, hmac, json, secrets, time
 from typing import Callable, List, Optional, Tuple
 from urllib.parse import urlparse
-from .store import Store
+from .store import EMAIL, Store
 
 CODE_TTL, ACCESS_TTL, REFRESH_TTL, LINK_TTL, SESSION_TTL = 300, 3600, 30 * 86400, 900, 7 * 86400
 ALLOWED_REDIRECT_HOSTS = ("chatgpt.com", "claude.ai", "claude.com")
@@ -46,7 +46,7 @@ class Auth:
     # -- magic-link login: proves the person owns the email; the account is created at this point, not before
     def start_login(self, email: str, nxt: Optional[str] = None) -> str:
         email = (email or "").strip().lower()
-        if not email or len(email) > 254 or "@" not in email: raise AuthError("invalid email")
+        if len(email) > 254 or not EMAIL.fullmatch(email): raise AuthError("invalid email")  # also keeps newlines out of mail headers
         token = secrets.token_urlsafe(32)
         with self.store.conn() as c:
             self._gc(c)
