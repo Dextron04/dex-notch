@@ -1,6 +1,6 @@
 # Privacy
 
-Dex Notch runs on your Mac. It has no server and no account, and the project collects nothing about you.
+Dex Notch runs on your Mac. By default it has no server and no account, and the project collects nothing about you. The one exception is the optional hosted memory service, described below, which exists only if you connect it.
 
 ## Gmail (optional add-on)
 
@@ -36,12 +36,24 @@ If you switch it on:
 - **Where it goes:** nowhere. There is no AI model and no network request involved. Notification text stays on your Mac.
 - **Turning it off:** the switch in Settings → iPhone. Remove Full Disk Access for Dex Notch in System Settings if you no longer want the permission at all.
 
+## Hosted memory (optional, off until you connect it)
+
+An optional Dex account keeps your recorded AI conversations on a server so Claude and ChatGPT can search them from anywhere. Nothing is uploaded unless you create an account, add this Mac, and paste its device token into Settings → Memory.
+
+- **What is uploaded:** the conversations the recorder has written on your Mac (Claude Code, Codex, Gemini and any other agent it records): the text of your messages, the assistant's replies, tool-use lines, project names and folder paths. The recorder removes passwords and API keys when it writes a note, and the server removes them again before storing. That is pattern-based and cannot catch everything, so don't rely on it for secrets. The first connection uploads your whole history; after that, only new turns.
+- **What we keep about you:** your email address; when you signed in; the names you gave your Macs; a hashed copy of each device token (the token itself is shown once and kept only in your Keychain); and your plan status. When paid plans open, payments are handled by Stripe: we store Stripe's customer and subscription ids, never card numbers.
+- **Who can read your notes:** the notes are stored on the operator's server, readable by the person who runs it. They are protected in transit by HTTPS but are **not end-to-end encrypted**: the service has to read them to search them. Other users cannot see them. Claude or ChatGPT can search and add to them only after you approve the connector, and what those apps do with what they read is covered by your account with them.
+- **Services involved:** the network provider that carries traffic to the server (Cloudflare), the email provider that delivers your sign-in links (once configured), and Stripe for payments (once paid plans open). No analytics or advertising of any kind.
+- **Your controls:** on your account page you can see your Macs and remove one (it stops uploading at once), sign out everywhere, **Download my data** (a zip of every note), and **Delete my account**, which cancels your subscription first and then permanently erases your notes, devices and sign-ins. Backups made before a deletion are overwritten within 14 days. Disconnecting in Settings → Memory stops uploads from this Mac but does not delete what was uploaded.
+- **If you stop paying:** your notes stay available for export. Canceled accounts are erased periodically, no sooner than 30 days after the subscription ended; download your data before then.
+- **Limits:** 500 MB of notes per account.
+
 ## Updates
 
 Once a day Dex Notch asks `github.com` for the list of releases (a small file named `appcast.xml`) to see whether a newer version exists. That is an ordinary HTTPS request, so GitHub sees your IP address and the app's version like it would for any download. Nothing else is sent: no system profile, no account, no mail, no chats. A new version is only installed if it carries a signature that matches the key built into the app, and it only restarts the app after you say so. You can turn automatic checks off in Settings → Updates.
 
 ## Everything else
 
-Your questions go to the model you pick, through its own app or your own server. The shared memory (the recorder) is a folder of notes on your Mac; it is only reachable from outside if you set up the optional remote connector yourself.
+Your questions go to the model you pick, through its own app or your own server. The shared memory (the recorder) is a folder of notes on your Mac; it is only reachable from outside if you set up the optional remote connector yourself, or connect the hosted memory service above.
 
 Questions: open an issue at <https://github.com/Dextron04/dex-notch/issues>.

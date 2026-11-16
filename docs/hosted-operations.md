@@ -1,0 +1,32 @@
+# Hosted service: operations
+
+Runs on the mini as `in.dextron04.agentvault-hosted` (port 8766, `https://vault.dextron04.in`). Code in `~/agentvault-hosted/app`, data in `~/agentvault-hosted/data` (`hosted.db` + `data/<user_id>/Vault`).
+
+## Deploy (manual; the GitHub auto-deploy only covers the personal connector)
+```
+cd memory
+ssh mac-agent 'cp -R ~/agentvault-hosted/app ~/agentvault-hosted/app.bak-$(date +%Y%m%d%H%M%S)'
+rsync -a --delete --exclude __pycache__ agentvault tests mac-agent:agentvault-hosted/app/
+ssh mac-agent 'cd ~/agentvault-hosted/app && /opt/homebrew/bin/python3 -m unittest discover -s tests -p "test_hosted*.py" && launchctl kickstart -k gui/$(id -u)/in.dextron04.agentvault-hosted'
+```
+Roll back by moving `app.bak-*` back to `app` and kickstarting.
+
+## Check it
+- `curl https://vault.dextron04.in/healthz` is `{"ok": true}` (503 if the database can't be read). Point an uptime monitor at it.
+- `tail ~/agentvault-hosted/logs/hosted.log`: one line per request (time, method, path, status); no queries, bodies or users.
+- `python3 -m agentvault.hosted stats --root ~/agentvault-hosted/data`: accounts by status, devices, database size, largest vaults.
+
+## Backups
+`scripts/hosted-backup.sh` snapshots the database (integrity-checked) and all notes into `~/agentvault-hosted/backups/hosted-*.tar.gz` (owner-only), keeps the newest 14. Install: copy it to `~/agentvault-hosted/hosted-backup.sh` and load `memory/launchd/in.dextron04.agentvault-hosted-backup.plist.template` (nightly 03:15). **This is a copy on the same disk**: set `BACKUP_RSYNC_TARGET` to somewhere off the machine to survive a dead disk.
+
+Restore (stop the service first): `scripts/hosted-restore.sh ARCHIVE EMPTY_DIR`, check its report, move the contents over `~/agentvault-hosted/data`, start the service.
+
+## People
+- Give someone access without Stripe: `python3 -m agentvault.hosted grant --root DIR EMAIL` (they must have signed in once).
+- Erase long-canceled accounts: `python3 -m agentvault.hosted purge --root DIR --days 30` (dry run), then add `--yes`.
+- A user can delete themselves from their account page; that cancels Stripe first and refuses if Stripe won't confirm.
+
+## Known gaps
+- Sign-in emails need `--smtp-*` flags; without them the link is printed to the log (only the operator can sign in).
+- Disk encryption of the mini is not verified here; the privacy text says notes are readable by the operator and not end-to-end encrypted.
+- No automatic purge schedule, no off-machine backup by default, no alerting beyond `/healthz`.

@@ -1,5 +1,5 @@
 """Hosted HTTP front: sign-in (magic link) + OAuth endpoints + billing + MCP over streamable HTTP, one vault per user. Stdlib only."""
-import html, json, sys, time
+import html, json, os, sys, tempfile, threading, time, zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 from typing import Callable, Optional
@@ -46,10 +46,14 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
     secure = "; Secure" if public.startswith("https://") else ""
     by_ip, by_email, reg_ip = Limiter(10, 3600, now), Limiter(3, 900, now), Limiter(20, 3600, now)
     by_device = Limiter(120, 60, now)  # uploads and reminder polls per device per minute
+    by_user = Limiter(120, 60, now)    # MCP calls per user per minute
+    exporting, export_slots = set(), threading.BoundedSemaphore(2)  # a zip of a whole vault is heavy: one per user, two at a time
 
     class H(BaseHTTPRequestHandler):
         server_version = "agentvault-hosted"
         def log_message(self, *a): pass  # never log URLs: they carry codes and sign-in tokens
+        def log_request(self, code="-", size="-"):
+            print("%s %s %s %s" % (time.strftime("%F %T"), self.command, urlparse(self.path).path, code), file=sys.stderr, flush=True)  # the path only: no query, no body, no user
 
         def send(self, status, body=b"", ctype="application/json", extra=None):
             if isinstance(body, (dict, list)): body = json.dumps(body).encode()
@@ -113,6 +117,10 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if u.path == "/login": return self.send(200, page("Sign in", "<h2 style='font-weight:400'>Sign in</h2><form method=post>"
                 "<input type=email name=email placeholder=you@example.com autofocus required style='%s'><button style='%s'>Email me a sign-in link</button></form>" % (INPUT, BTN)), "text/html; charset=utf-8")
             if u.path == "/account": return self.account()
+            if u.path == "/healthz":
+                try: store.stats(); return self.send(200, {"ok": True})
+                except Exception: return self.send(503, {"ok": False})
+            if u.path == "/goodbye": return self.send(200, page("Account deleted", "<h2 style='font-weight:400'>Your account was deleted</h2><p style='color:#999'>Your notes, devices and sign-ins are gone. Backups are overwritten within 14 days.</p>"), "text/html; charset=utf-8")
             if u.path == "/v1/reminders/wait": return self.reminders_wait(q)
             if u.path == "/login/verify":  # a button, not an automatic sign-in: mail scanners that prefetch links must not burn the token
                 return self.send(200, page("Sign in", "<h2 style='font-weight:400'>Finish signing in</h2><form method=post>%s<button style='%s'>Continue</button></form>"
@@ -124,7 +132,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             fn = {"/mcp": self.mcp, "/register": self.register, "/authorize": self.consent, "/token": self.token,
                   "/login": self.login, "/login/verify": self.verify, "/hooks/stripe": self.stripe_hook,
                   "/account/devices": self.add_device, "/account/devices/revoke": self.revoke_device, "/account/signout-all": self.signout_all,
-                  "/logout": self.logout, "/v1/ingest": self.v1_ingest}.get(path)
+                  "/logout": self.logout, "/v1/ingest": self.v1_ingest, "/account/export": self.export, "/account/delete": self.delete}.get(path)
             fn() if fn else self.send(404, {"error": "not_found"})
 
         def do_DELETE(self): self.send(405, {"error": "no sessions"}) if urlparse(self.path).path == "/mcp" else self.send(404, {"error": "not_found"})
@@ -193,9 +201,12 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             bill = ('<p><a style="color:#ffb059" href="/billing/%s">%s</a></p>' % (("portal", "Manage your subscription") if store.entitled(uid) else ("checkout", "Subscribe"))) if stripe else ""
             self.send(200, page("Account", "<h2 style='font-weight:400'>%s</h2><p style='color:#999'>Plan status: %s</p>%s<h3 style='font-weight:400'>Your Macs</h3><ul>%s</ul>"
                 "<form method=post action=/account/devices><input name=name placeholder='This Mac' maxlength=60 style='%s'><button style='%s'>Add this Mac</button></form>"
+                "<form method=post action=/account/export><button style='%s;background:#333;color:#eee'>Download my data</button></form>"
                 "<form method=post action=/logout style=display:inline><button style='%s;background:#333;color:#eee'>Sign out</button></form> "
                 "<form method=post action=/account/signout-all style=display:inline><button style='%s;background:#333;color:#eee'>Sign out everywhere</button></form>"
-                % (html.escape(store.email(uid) or ""), html.escape(st or ""), bill, rows or "<li style='color:#999'>none yet</li>", INPUT, BTN, BTN, BTN)), "text/html; charset=utf-8")
+                "<h3 style='font-weight:400;margin-top:2.5rem'>Delete account</h3><p style='color:#999'>Cancels your subscription and permanently erases your notes. This cannot be undone.</p>"
+                "<form method=post action=/account/delete><input name=confirm placeholder='type your email to confirm' autocomplete=off style='%s'><button style='%s;background:#7a2a1a;color:#eee'>Delete my account</button></form>"
+                % (html.escape(store.email(uid) or ""), html.escape(st or ""), bill, rows or "<li style='color:#999'>none yet</li>", INPUT, BTN, BTN, BTN, BTN, INPUT, BTN)), "text/html; charset=utf-8")
 
         def add_device(self):
             f = self.form()
@@ -213,6 +224,43 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             uid = self.user()
             if not uid: return self.send(401, "Sign in first.", "text/plain")
             devices.revoke(store, uid, f.get("id", "")); self.redirect("/account")
+
+        def export(self):
+            """Everything we hold about the account as one zip: every note, plus account.json. Allowed for canceled accounts: your data is yours."""
+            if self.form() is None: return
+            uid = self.user()
+            if not uid: return self.send(401, "Sign in first.", "text/plain")
+            if uid in exporting or not export_slots.acquire(blocking=False): return self.send(429, "An export is already running. Try again in a minute.", "text/plain")
+            exporting.add(uid)
+            try:
+                vault = store.root / "data" / uid / "Vault"
+                with tempfile.TemporaryFile() as tmp:
+                    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
+                        z.writestr("account.json", json.dumps({"email": store.email(uid), "status": store.status(uid),
+                            "devices": [{"name": d["name"], "added": d["created_at"]} for d in devices.listing(store, uid)]}, indent=1))
+                        for root, _, files in os.walk(vault):
+                            for fn in files:
+                                p = os.path.join(root, fn)
+                                if not os.path.islink(p): z.write(p, os.path.join("Vault", os.path.relpath(p, vault)))   # a symlink is never followed out of the vault
+                    n = tmp.tell(); tmp.seek(0)
+                    self.send_response(200); self.send_header("Content-Type", "application/zip"); self.send_header("Content-Length", str(n))
+                    self.send_header("Content-Disposition", 'attachment; filename="dex-notch-export.zip"'); self.send_header("Cache-Control", "no-store"); self.end_headers()
+                    while chunk := tmp.read(1 << 20): self.wfile.write(chunk)
+            finally:
+                exporting.discard(uid); export_slots.release()
+
+        def delete(self):
+            f = self.form()
+            if f is None: return
+            uid = self.user()
+            if not uid: return self.send(401, "Sign in first.", "text/plain")
+            if (f.get("confirm") or "").strip().lower() != (store.email(uid) or "\0"): return self.send(400, "Type your email address exactly to confirm.", "text/plain")
+            sub = billing.subscription_of(store, uid)
+            if stripe and sub and store.entitled(uid):  # stop the billing first; if Stripe won't confirm, keep the account so nobody is charged for nothing
+                try: stripe.cancel(sub)
+                except billing.BillingError: return self.send(502, "We couldn't cancel your subscription, so nothing was deleted. Cancel it from the billing page, then try again.", "text/plain")
+            store.delete_account(uid)
+            self.redirect("/goodbye", {"Set-Cookie": "%s=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0%s" % (COOKIE, secure)})
 
         def logout(self):
             if self.form() is None: return
@@ -319,6 +367,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if not uid:
                 return self.send(401, {"error": "unauthorized"}, extra={"WWW-Authenticate": 'Bearer resource_metadata="%s/.well-known/oauth-protected-resource"' % public})
             if not store.entitled(uid): return self.send(402, {"error": "subscription_required"})
+            if not by_user.allow(uid): return self.send(429, {"error": "slow_down"})
             try: req = json.loads(raw)
             except ValueError: return self.send(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}})
             extra = ([REMEMBER, REMIND], lambda name, args: tools.call(store, uid, name, args))

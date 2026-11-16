@@ -1,6 +1,6 @@
 """Stripe, stdlib only: Checkout and the customer portal (outbound), and signed webhooks (inbound).
 Access is decided ONLY by webhook events, never by the browser coming back from Checkout."""
-import base64, hashlib, hmac, json, sqlite3, time
+import base64, hashlib, hmac, json, re, sqlite3, time
 from typing import Callable, Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -25,12 +25,13 @@ def verify_signature(payload: bytes, header: str, secret: bytes, now: float, tol
     return any(hmac.compare_digest(want, s) for s in sigs)
 
 class Stripe:
-    def __init__(self, secret_key: str, price_id: str, public_url: str, post: Optional[Callable[[str, dict], dict]] = None):
+    def __init__(self, secret_key: str, price_id: str, public_url: str, post: Optional[Callable[[str, dict], dict]] = None,
+                 delete: Optional[Callable[[str], dict]] = None):
         self.key, self.price, self.public = secret_key, price_id, public_url.rstrip("/")
-        self._post = post or self._http
+        self._post, self._delete = post or self._http, delete or (lambda path: self._http(path, {}, "DELETE"))
 
-    def _http(self, path: str, form: dict) -> dict:
-        req = Request("https://api.stripe.com/v1" + path, data=urlencode(form).encode(), method="POST", headers={
+    def _http(self, path: str, form: dict, method: str = "POST") -> dict:
+        req = Request("https://api.stripe.com/v1" + path, data=urlencode(form).encode() if method == "POST" else None, method=method, headers={
             "Authorization": "Basic " + base64.b64encode((self.key + ":").encode()).decode(), "Content-Type": "application/x-www-form-urlencoded"})
         try:
             with urlopen(req, timeout=15) as r: return json.load(r)
@@ -44,6 +45,11 @@ class Stripe:
         if not url: raise BillingError("stripe returned no checkout url")
         return url
 
+    def cancel(self, sub_id: str) -> None:
+        """Ends the subscription now (account deletion). Raises BillingError if Stripe did not confirm: we must not delete an account that is still being charged."""
+        if not re.fullmatch(r"sub_[A-Za-z0-9]+", sub_id or ""): raise BillingError("bad subscription id")
+        self._delete("/subscriptions/" + sub_id)
+
     def portal_url(self, customer: str) -> str:
         url = self._post("/billing_portal/sessions", {"customer": customer, "return_url": self.public + "/billing/success"}).get("url")
         if not url: raise BillingError("stripe returned no portal url")
@@ -52,6 +58,10 @@ class Stripe:
 def customer_of(store: Store, uid: str) -> Optional[str]:
     with store.conn() as c: r = c.execute("SELECT stripe_customer_id FROM billing WHERE user_id=?", (uid,)).fetchone()
     return r["stripe_customer_id"] if r else None
+
+def subscription_of(store: Store, uid: str) -> Optional[str]:
+    with store.conn() as c: r = c.execute("SELECT stripe_sub_id FROM billing WHERE user_id=?", (uid,)).fetchone()
+    return r["stripe_sub_id"] if r else None
 
 def apply_event(store: Store, ev: dict) -> str:
     """Applies one verified Stripe event. Returns what happened: applied | duplicate | stale | ignored.
@@ -84,5 +94,5 @@ def apply_event(store: Store, ev: dict) -> str:
                   "stripe_customer_id=COALESCE(excluded.stripe_customer_id,stripe_customer_id), stripe_sub_id=COALESCE(excluded.stripe_sub_id,stripe_sub_id), "
                   "plan=COALESCE(excluded.plan,plan), period_end=COALESCE(excluded.period_end,period_end), event_ts=excluded.event_ts",
                   (uid, customer, sub, plan, end, ts))
-        if new: c.execute("UPDATE users SET status=? WHERE id=?", (new, uid))
+        if new: c.execute("UPDATE users SET status=?, status_at=? WHERE id=?", (new, ts or time.time(), uid))
         return "applied"

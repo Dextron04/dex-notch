@@ -1,13 +1,13 @@
 """Hosted accounts: users, billing status, and the one place a user id becomes a directory.
 SQLite, one short-lived connection per call (the HTTP server is threaded). Billing is a placeholder: see `grant`."""
-import re, secrets, sqlite3, time
+import re, secrets, shutil, sqlite3, time
 from contextlib import closing
 from pathlib import Path
 from typing import Optional
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, created_at REAL NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending');
+  status TEXT NOT NULL DEFAULT 'pending', status_at REAL);
 CREATE TABLE IF NOT EXISTS billing(user_id TEXT PRIMARY KEY REFERENCES users(id), stripe_customer_id TEXT, stripe_sub_id TEXT,
   plan TEXT, period_end REAL, event_ts REAL);
 CREATE INDEX IF NOT EXISTS billing_customer ON billing(stripe_customer_id);
@@ -32,7 +32,9 @@ class Store:
         """`root` holds hosted.db and data/<user_id>/Vault."""
         self.root = Path(root); self.root.mkdir(parents=True, exist_ok=True)
         self.db = self.root / "hosted.db"
-        with self.conn() as c: c.executescript(SCHEMA)
+        with self.conn() as c:
+            c.executescript(SCHEMA)
+            if "status_at" not in [r["name"] for r in c.execute("PRAGMA table_info(users)")]: c.execute("ALTER TABLE users ADD COLUMN status_at REAL")  # databases from before retention existed
 
     def conn(self):
         c = sqlite3.connect(self.db, timeout=10); c.row_factory = sqlite3.Row
@@ -63,7 +65,29 @@ class Store:
     def set_status(self, uid: str, status: str) -> None:
         if status not in STATUSES: raise ValueError("unknown status")
         with self.conn() as c:
-            if not c.execute("UPDATE users SET status=? WHERE id=?", (status, uid)).rowcount: raise KeyError(uid)
+            if not c.execute("UPDATE users SET status=?, status_at=? WHERE id=?", (status, time.time(), uid)).rowcount: raise KeyError(uid)
+
+    def delete_account(self, uid: str) -> None:
+        """Erases a user: credentials, devices, sessions and every note. The users row stays as a tombstone (id, status) with the email freed, so the same
+        address can sign up again and late Stripe events have nothing to revive. Safe to run twice (a half-finished delete is finished by the second run)."""
+        if not USER_ID.fullmatch(uid or ""): raise ValueError("invalid user id")
+        with self.conn() as c:
+            r = c.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
+            if not r: raise KeyError(uid)
+            for t in ("devices", "grants", "sessions"): c.execute("DELETE FROM %s WHERE user_id=?" % t, (uid,))
+            c.execute("DELETE FROM login_links WHERE email=?", (r["email"],))
+            c.execute("UPDATE users SET status='deleted', status_at=?, email=? WHERE id=?", (time.time(), "deleted-%s@invalid" % uid, uid))
+        shutil.rmtree(self.root / "data" / uid, ignore_errors=True)
+
+    def canceled_before(self, ts: float) -> list:
+        """Users whose subscription ended before `ts` (unix) and who never came back: candidates for the retention purge."""
+        with self.conn() as c: return [r["id"] for r in c.execute("SELECT id FROM users WHERE status='canceled' AND status_at IS NOT NULL AND status_at<?", (ts,))]
+
+    def stats(self) -> dict:
+        with self.conn() as c:
+            by = {r["status"]: r["n"] for r in c.execute("SELECT status, COUNT(*) n FROM users GROUP BY status")}
+            dev = c.execute("SELECT COUNT(*) FROM devices WHERE revoked=0").fetchone()[0]
+        return {"users": by, "devices": dev, "db_bytes": self.db.stat().st_size}
 
     def entitled(self, uid: str) -> bool:
         """The gate every /mcp and /v1 call will check."""

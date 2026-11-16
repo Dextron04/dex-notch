@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Nightly backup of the hosted service. Replace __HOME__. Copy scripts/hosted-backup.sh to __HOME__/agentvault-hosted/hosted-backup.sh. -->
+<plist version="1.0"><dict>
+<key>Label</key><string>in.dextron04.agentvault-hosted-backup</string>
+<key>ProgramArguments</key><array><string>/bin/bash</string><string>__HOME__/agentvault-hosted/hosted-backup.sh</string></array>
+<key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin</string></dict>
+<key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>15</integer></dict>
+<key>StandardOutPath</key><string>__HOME__/agentvault-hosted/logs/backup.log</string>
+<key>StandardErrorPath</key><string>__HOME__/agentvault-hosted/logs/backup.log</string>
+</dict></plist>

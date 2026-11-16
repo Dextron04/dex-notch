@@ -1,7 +1,8 @@
 """python3 -m agentvault.hosted serve --root DIR --public-url URL [--port N] [--smtp-host H --mail-from F ...] [--stripe-... ]   |   ... grant --root DIR EMAIL"""
-import argparse, sys
+import argparse, json, sys, time
 from pathlib import Path
 from .billing import Stripe
+from .ingest import vault_bytes
 from .mail import smtp_sender
 from .oauth import Auth
 from .server import make_server
@@ -13,9 +14,24 @@ def main() -> None:
     s.add_argument("--smtp-host"); s.add_argument("--smtp-port", type=int, default=587); s.add_argument("--smtp-user", default="")
     s.add_argument("--smtp-password-file"); s.add_argument("--mail-from", help='e.g. "Dex Notch <login@yourdomain>"')
     s.add_argument("--stripe-key-file"); s.add_argument("--stripe-price"); s.add_argument("--stripe-webhook-secret-file")
+    st = sub.add_parser("stats", help="users by status, devices, database size, and the biggest vaults"); st.add_argument("--root", required=True)
+    pg = sub.add_parser("purge", help="erase accounts canceled more than N days ago (a dry run unless --yes)"); pg.add_argument("--root", required=True)
+    pg.add_argument("--days", type=int, default=30); pg.add_argument("--yes", action="store_true")
     g = sub.add_parser("grant", help="dev override: mark an account paid without Stripe"); g.add_argument("--root", required=True); g.add_argument("email")
     a = ap.parse_args()
     store = Store(Path(a.root).expanduser())
+    if a.cmd == "stats":
+        print(json.dumps(store.stats(), indent=1))
+        sizes = sorted(((vault_bytes(d / "Vault"), d.name) for d in (store.root / "data").glob("u_*") if d.is_dir()), reverse=True)[:10]
+        print("largest vaults (MB):", [(round(b / 1e6, 1), u) for b, u in sizes]); return
+    if a.cmd == "purge":
+        old = store.canceled_before(time.time() - a.days * 86400)
+        print("%d account(s) canceled more than %d days ago: %s" % (len(old), a.days, old))
+        if a.yes:
+            for u in old: store.delete_account(u)
+            print("erased")
+        elif old: print("dry run: add --yes to erase them")
+        return
     if a.cmd == "grant":
         uid = store.by_email(a.email)
         if not uid: raise SystemExit("no such account (sign in once first)")
