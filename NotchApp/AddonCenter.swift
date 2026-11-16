@@ -161,7 +161,7 @@ final class AddonCenter {
         let due = Reminders.due(Reminders.load(vault: VaultReader.defaultVault), done: state.remindDone, snoozed: state.remindSnooze, now: now)
         guard !due.isEmpty else { return }
         for r in due {
-            state.remindDone.append(r.id); state.remindSnooze[r.id] = nil
+            state.remindDone.append(r.id); state.remindSnooze[r.id] = nil; state.remindCount[r.id, default: 0] += 1
             if now.timeIntervalSince(r.due) > Reminders.staleAfter { continue }
             state.pending.append(AddonAlert(id: "reminder|\(r.id)", addon: "reminder", sender: r.sourceName, address: "", headline: r.text,
                 reason: "Set from \(r.sourceName).", url: "", score: 10, created: now, account: nil, kind: "reminder"))
@@ -691,7 +691,7 @@ final class AddonCenter {
             withAnimation(.smooth(duration: 0.5)) { presenting = false }     // explicit, so nothing downstream can swallow it
             onPresenting?(false)
             try? await Task.sleep(for: .milliseconds(850))      // longer than the fold (about 0.5s) so the card is never removed mid-motion
-            if !keep, alert.kind == "reminder", !completed, let rid = alert.id.split(separator: "|", maxSplits: 1).last.map(String.init) {      // anything but Done: it comes back
+            if !keep, alert.kind == "reminder", !completed, (state.remindCount[alert.id.split(separator: "|", maxSplits: 1).last.map(String.init) ?? ""] ?? 0) < Reminders.maxShows, let rid = alert.id.split(separator: "|", maxSplits: 1).last.map(String.init) {      // anything but Done: it comes back
                 state.remindDone.removeAll { $0 == rid }; state.remindSnooze[rid] = Date().addingTimeInterval(Reminders.snooze)
             }
             if !keep { state.pending.removeAll { $0.id == id || ($0.address == address && !address!.isEmpty) }; if alert.kind == nil { state.recordShown(alert) } }

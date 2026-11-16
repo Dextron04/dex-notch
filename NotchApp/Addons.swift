@@ -190,6 +190,7 @@ struct AddonState: Codable, Equatable {
     var phoneNudged: Date?              // when the "iPhone needs Full Disk Access" card was last queued
     var remindDone: [String] = []       // reminders already shown (or on screen now); a snooze takes one back out
     var remindSnooze: [String: Date] = [:]  // reminder id → when to show it again
+    var remindCount: [String: Int] = [:]    // reminder id → how many times it has been put on screen
     var replyAccounts: [String] = []    // accounts that have allowed drafts and sending (the rest are read-only)
     var history: [AddonAlert] = []      // the last alerts that were shown, newest first, so nothing you dismissed by accident is gone
     var modelCalls: [Date] = []         // when the model last ran (kept for an hour): the ceiling on model use
@@ -219,6 +220,7 @@ struct AddonState: Codable, Equatable {
         updateNudged = try c.decodeIfPresent(String.self, forKey: .updateNudged)
         remindDone = try c.decodeIfPresent([String].self, forKey: .remindDone) ?? []
         remindSnooze = try c.decodeIfPresent([String: Date].self, forKey: .remindSnooze) ?? [:]
+        remindCount = try c.decodeIfPresent([String: Int].self, forKey: .remindCount) ?? [:]
         lastTry = try c.decodeIfPresent(Date.self, forKey: .lastTry)
         lastOK = try c.decodeIfPresent(Bool.self, forKey: .lastOK) ?? false
     }

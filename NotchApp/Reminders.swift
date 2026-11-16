@@ -12,8 +12,10 @@ struct Reminder: Equatable, Sendable {
 
 enum Reminders {
     /// Reminders further overdue than this were missed while the app was off for days; they are marked done without a card.
-    static let staleAfter: TimeInterval = 3 * 86_400
+    static let staleAfter: TimeInterval = 86_400
     static let snooze: TimeInterval = 600
+    /// A reminder you ignore comes back, but only this many times in all; after that it is left alone rather than nagging for ever.
+    static let maxShows = 3
 
     static func load(vault: URL) -> [Reminder] {
         let dir = vault.appendingPathComponent("Reminders")
