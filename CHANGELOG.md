@@ -6,6 +6,13 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.7.1: A home for hosted memory
+
+*16 November 2026*
+
+- **The hosted memory service now has a proper website.** A home page with a live demo of the notch, a redesigned sign-in, and an account page that shows what is set up: your Macs, whether Claude or ChatGPT is connected, and how much space you are using. Everything is served from the service itself, with no outside fonts or trackers. The Mac app itself is unchanged.
+- **Link previews work.** The service now answers the "headers only" requests that chat apps and link checkers send.
+
 ## v0.7.0: Hosted memory (optional)
 
 *16 November 2026*
