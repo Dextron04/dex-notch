@@ -102,6 +102,17 @@ class ServerAssetTests(unittest.TestCase):
             self.assertEqual(h["cache-control"], "no-store", path)
         self.assertNotIn("'unsafe-inline'", CSP); self.assertIn("frame-ancestors 'none'", CSP)
 
+    def test_head_matches_get_without_a_body_and_skips_routes_that_do_work(self):
+        def head(path):
+            try: r = urllib.request.urlopen(urllib.request.Request(self.base + path, method="HEAD"), timeout=10)
+            except urllib.error.HTTPError as e: r = e
+            h = {k.lower(): v for k, v in r.headers.items()}; body = r.read(); r.close(); return r.status if hasattr(r, "status") else r.code, h, body
+        for path in ("/", "/login", "/healthz", "/static/app.css", "/nowhere"):
+            st, h, body = head(path); gst, gh, gbody = self.get(path)
+            self.assertEqual((st, body), (gst, b""), path); self.assertEqual(h["content-length"], str(len(gbody)), path)
+            self.assertEqual(h.get("content-security-policy"), gh.get("content-security-policy"), path)
+        for path in ("/billing/checkout", "/billing/portal", "/v1/reminders/wait"): self.assertEqual(head(path)[0], 405, path)
+
     def test_static_is_a_closed_set(self):
         for bad in ("/static/../store.py", "/static/%2e%2e/store.py", "/static/..%2fstore.py", "/static/fonts/../../server.py", "/static/", "/static/nope.css", "/static/fonts", "/static//etc/passwd", "/static/app.py"):
             self.assertEqual(self.get(bad)[0], 404, bad)

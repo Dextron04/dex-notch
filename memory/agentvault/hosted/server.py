@@ -131,6 +131,10 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                 return self.html(200, pages.verify(q.get("t", "")))
             self.fail(404)
 
+        def do_HEAD(self):   # same headers as GET, no body (send() skips it). Not for routes that do work: a Stripe session or a held connection.
+            if urlparse(self.path).path in ("/billing/checkout", "/billing/portal", "/v1/reminders/wait"): return self.send(405, b"", extra={"Allow": "GET"})
+            self.do_GET()
+
         def do_POST(self):
             path = urlparse(self.path).path
             fn = {"/mcp": self.mcp, "/register": self.register, "/authorize": self.consent, "/token": self.token,
