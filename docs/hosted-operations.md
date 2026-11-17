@@ -2,6 +2,8 @@
 
 Runs on the mini as `in.dextron04.agentvault-hosted` (port 8766, `https://vault.dextron04.in`). Code in `~/agentvault-hosted/app`, data in `~/agentvault-hosted/data` (`hosted.db` + `data/<user_id>/Vault`).
 
+> **Isolation.** [hosted-isolation.md](hosted-isolation.md) moves the service to its own macOS user, `_dexhosted`. After that move, the paths and commands below change: data is `/var/dexhosted/data`, and deploys and CLI calls use sudo as that file shows.
+
 ## Deploy (manual; the GitHub auto-deploy only covers the personal connector)
 ```
 cd memory
