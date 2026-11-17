@@ -67,6 +67,11 @@ class Auth:
         with self.store.conn() as c: r = c.execute("SELECT user_id, exp FROM sessions WHERE hash=?", (_h(sess or ""),)).fetchone()
         return r["user_id"] if r and r["exp"] > self.now() and self.store.status(r["user_id"]) not in (None, "deleted") else None
 
+    def connected(self, uid: str) -> bool:
+        """True while some assistant (Claude, ChatGPT) holds a live authorization for this user."""
+        with self.store.conn() as c:
+            return bool(c.execute("SELECT 1 FROM grants WHERE user_id=? AND kind='refresh' AND exp>? LIMIT 1", (uid, self.now())).fetchone())
+
     def end_session(self, sess: str) -> None:
         with self.store.conn() as c: c.execute("DELETE FROM sessions WHERE hash=?", (_h(sess or ""),))
 

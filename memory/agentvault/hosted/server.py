@@ -1,5 +1,5 @@
 """Hosted HTTP front: sign-in (magic link) + OAuth endpoints + billing + MCP over streamable HTTP, one vault per user. Stdlib only."""
-import html, json, os, sys, tempfile, threading, time, zipfile
+import json, os, sys, tempfile, threading, time, zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 from typing import Callable, Optional
@@ -7,8 +7,9 @@ from urllib.parse import parse_qs, urlencode, urlparse
 from .. import mcp_server
 from ..remote.server import MAX_BODY, client_key
 from ..remote.tools import REMEMBER, REMIND
-from . import billing, devices, tools
-from .ingest import MAX_BODY as INGEST_MAX, IngestError, ingest
+from ..index import session_files
+from . import billing, devices, pages, tools, ui
+from .ingest import MAX_BODY as INGEST_MAX, QUOTA_BYTES, IngestError, ingest, vault_bytes
 from .oauth import SESSION_TTL, Auth, AuthError
 from .store import Store
 
@@ -28,15 +29,9 @@ class Limiter:
         self.hits[key] = h
         return ok
 
-def page(title: str, body: str) -> str:
-    return ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>%s</title>"
-            "<body style='font:16px Georgia,serif;background:#000;color:#eee;max-width:26rem;margin:15vh auto;padding:0 1rem'>%s"
-            % (html.escape(title), body))
-
-INPUT = "width:100%;padding:.7rem;font-size:1rem;background:#111;color:#eee;border:1px solid #444;box-sizing:border-box"
-BTN = "margin-top:1rem;padding:.7rem 1.2rem;background:#ffb059;border:0;font-size:1rem;cursor:pointer"
-def hidden(d: dict) -> str:
-    return "".join('<input type="hidden" name="%s" value="%s">' % (html.escape(k), html.escape(v, True)) for k, v in d.items())
+STATIC_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".woff2": "font/woff2", ".svg": "image/svg+xml", ".png": "image/png"}
+CSP = ("default-src 'none'; style-src 'self'; script-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; "
+       "form-action 'self' https:; base-uri 'none'; frame-ancestors 'none'")  # nothing inline, nothing from anywhere else
 
 def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[str, str], None],
                 stripe: Optional[billing.Stripe] = None, stripe_webhook_secret: bytes = b"", port: int = 8766, host: str = "127.0.0.1",
@@ -60,8 +55,9 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             elif isinstance(body, str): body = body.encode()
             self.send_response(status)
             self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store"); self.send_header("X-Content-Type-Options", "nosniff")
-            if ctype.startswith("text/html"): self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https:")
+            if "Cache-Control" not in (extra or {}): self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "no-referrer")  # a sign-in link in the address bar must never travel as a referrer
+            if ctype.startswith("text/html"): self.send_header("Content-Security-Policy", CSP)
             for k, v in (extra or {}).items(): self.send_header(k, v)
             self.end_headers()
             if self.command != "HEAD": self.wfile.write(body)
@@ -93,7 +89,17 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if q.get("response_type") != "code": raise AuthError("response_type must be code")
             if q.get("code_challenge_method") != "S256" or not q.get("code_challenge"): raise AuthError("PKCE S256 required")
             return c
-        def bad(self, e): return self.send(400, "Invalid request: %s" % html.escape(str(e)), "text/plain")
+        def html(self, status, doc, extra=None): self.send(status, doc, "text/html; charset=utf-8", extra)
+        def fail(self, code, message=""): self.html(code, pages.error(code, message, self.user_email()))
+        def bad(self, e): return self.fail(400, str(e))
+        def user_email(self):
+            uid = self.user()
+            return store.email(uid) if uid else None
+        def static(self, rel):
+            p = (ui.STATIC / rel).resolve()
+            if not p.is_relative_to(ui.STATIC) or not p.is_file() or p.suffix not in STATIC_TYPES: return self.send(404, {"error": "not_found"})
+            cache = "public, max-age=31536000, immutable" if p.suffix in (".css", ".js", ".woff2") else "public, max-age=86400"   # css and js carry a version in their URL; fonts never change
+            self.send(200, p.read_bytes(), STATIC_TYPES[p.suffix], {"Cache-Control": cache})
         def redirect(self, url, extra=None): self.send(302, b"", "text/plain", dict({"Location": url}, **(extra or {})))
 
         # -- routes
@@ -107,25 +113,23 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                     "grant_types_supported": ["authorization_code", "refresh_token"], "code_challenge_methods_supported": ["S256"],
                     "token_endpoint_auth_methods_supported": ["none"], "scopes_supported": ["vault"]})
             if u.path == "/authorize": return self.authorize_page(q)
+            if u.path == "/": return self.html(200, pages.home(self.user_email()))
+            if u.path.startswith("/static/"): return self.static(u.path[8:])
+            if u.path == "/privacy": return self.redirect(ui.PRIVACY)
             if u.path == "/billing/checkout": return self.checkout()
             if u.path == "/billing/portal": return self.portal()
-            if u.path in ("/billing/success", "/billing/cancel"):
-                ok = u.path.endswith("success")
-                return self.send(200, page("Billing", "<h2 style='font-weight:400'>%s</h2>" % ("Thanks. Your plan activates in a few seconds; go back to Claude or ChatGPT and connect again." if ok
-                                                                                             else "No charge was made.")), "text/html; charset=utf-8")
+            if u.path in ("/billing/success", "/billing/cancel"): return self.html(200, pages.billing_done(u.path.endswith("success"), self.user_email()))
             if u.path == "/login/done": return self.redirect("/account")
-            if u.path == "/login": return self.send(200, page("Sign in", "<h2 style='font-weight:400'>Sign in</h2><form method=post>"
-                "<input type=email name=email placeholder=you@example.com autofocus required style='%s'><button style='%s'>Email me a sign-in link</button></form>" % (INPUT, BTN)), "text/html; charset=utf-8")
+            if u.path == "/login": return self.redirect("/account") if self.user() else self.html(200, pages.login())
             if u.path == "/account": return self.account()
             if u.path == "/healthz":
                 try: store.stats(); return self.send(200, {"ok": True})
                 except Exception: return self.send(503, {"ok": False})
-            if u.path == "/goodbye": return self.send(200, page("Account deleted", "<h2 style='font-weight:400'>Your account was deleted</h2><p style='color:#999'>Your notes, devices and sign-ins are gone. Backups are overwritten within 14 days.</p>"), "text/html; charset=utf-8")
+            if u.path == "/goodbye": return self.html(200, pages.goodbye())
             if u.path == "/v1/reminders/wait": return self.reminders_wait(q)
             if u.path == "/login/verify":  # a button, not an automatic sign-in: mail scanners that prefetch links must not burn the token
-                return self.send(200, page("Sign in", "<h2 style='font-weight:400'>Finish signing in</h2><form method=post>%s<button style='%s'>Continue</button></form>"
-                                           % (hidden({"t": q.get("t", "")}), BTN)), "text/html; charset=utf-8")
-            self.send(404, {"error": "not_found"})
+                return self.html(200, pages.verify(q.get("t", "")))
+            self.fail(404)
 
         def do_POST(self):
             path = urlparse(self.path).path
@@ -143,18 +147,9 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             except AuthError as e: return self.bad(e)
             fields = {k: q.get(k, "") for k in OAUTH_FIELDS}
             uid = self.user()
-            if not uid:
-                return self.send(200, page("Sign in", "<h2 style='font-weight:400'>Sign in to let <b>%s</b> use your memory</h2>"
-                    "<form method=post action=/login>%s<input type=email name=email placeholder=you@example.com autofocus required style='%s'>"
-                    "<button style='%s'>Email me a sign-in link</button></form>" % (html.escape(c["name"]), hidden(fields), INPUT, BTN)), "text/html; charset=utf-8")
-            if not store.entitled(uid):
-                link = public + "/billing/checkout" if stripe else None
-                msg = ('<p><a style="color:#ffb059" href="%s">Subscribe to continue</a></p>' % html.escape(link, True)) if link else "<p style='color:#999'>Paid plans aren't open yet.</p>"
-                return self.send(402, page("Subscription needed", "<h2 style='font-weight:400'>A subscription is needed first</h2>" + msg), "text/html; charset=utf-8")
-            host = html.escape(urlparse(q["redirect_uri"]).hostname or "")
-            self.send(200, page("Authorize", "<h2 style='font-weight:400'>Let <b>%s</b> read and add to your memory?</h2><p style='color:#999'>Redirects to %s</p>"
-                "<form method=post>%s<button name=decision value=allow style='%s'>Allow</button> <button name=decision value=deny style='%s;background:#333;color:#eee'>Deny</button></form>"
-                % (html.escape(c["name"]), host, hidden(fields), BTN, BTN)), "text/html; charset=utf-8")
+            if not uid: return self.html(200, pages.login(client_name=c["name"], fields=fields))
+            if not store.entitled(uid): return self.html(402, pages.need_plan(store.email(uid), public + "/billing/checkout" if stripe else None))
+            self.html(200, pages.consent(c["name"], urlparse(q["redirect_uri"]).hostname or "", store.email(uid), fields))
 
         def login(self):
             f = self.form()
@@ -168,7 +163,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                 try: send_mail(email, "%s/login/verify?t=%s" % (public, auth.start_login(email, nxt)))
                 except AuthError: pass
                 except Exception as e: print("sign-in mail failed: %s" % type(e).__name__, file=sys.stderr, flush=True)  # the response must not reveal it, and the link must not be logged
-            self.send(200, page("Check your email", "<h2 style='font-weight:400'>Check your email</h2><p style='color:#999'>If the address is valid, a sign-in link is on its way. It works once, for 15 minutes.</p>"), "text/html; charset=utf-8")
+            self.html(200, pages.login_sent(email))
 
         def verify(self):
             f = self.form()
@@ -184,8 +179,8 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             try: self.validate(f)
             except AuthError as e: return self.bad(e)
             uid = self.user()
-            if not uid: return self.send(401, "Sign in first.", "text/plain")
-            if not store.entitled(uid): return self.send(402, "Subscription required.", "text/plain")
+            if not uid: return self.fail(401)
+            if not store.entitled(uid): return self.fail(402)
             q = {"error": "access_denied"} if f.get("decision") != "allow" else {"code": auth.issue_code(f["client_id"], uid, f["redirect_uri"], f["code_challenge"])}
             if f.get("state"): q["state"] = f["state"]
             self.redirect(f["redirect_uri"] + ("&" if "?" in f["redirect_uri"] else "?") + urlencode(q))
@@ -194,43 +189,33 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
         def account(self):
             uid = self.user()
             if not uid: return self.redirect("/login")
-            rows = "".join("<li>%s <span style='color:#999'>added %s, last seen %s</span><form method=post action=/account/devices/revoke style=display:inline>%s<button style='background:none;border:0;color:#ffb059;cursor:pointer'>remove</button></form></li>"
-                           % (html.escape(d["name"]), time.strftime("%Y-%m-%d", time.gmtime(d["created_at"])),
-                              time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(d["last_seen"])) if d["last_seen"] else "never", hidden({"id": d["id"]})) for d in devices.listing(store, uid))
-            st = store.status(uid)
-            bill = ('<p><a style="color:#ffb059" href="/billing/%s">%s</a></p>' % (("portal", "Manage your subscription") if store.entitled(uid) else ("checkout", "Subscribe"))) if stripe else ""
-            self.send(200, page("Account", "<h2 style='font-weight:400'>%s</h2><p style='color:#999'>Plan status: %s</p>%s<h3 style='font-weight:400'>Your Macs</h3><ul>%s</ul>"
-                "<form method=post action=/account/devices><input name=name placeholder='This Mac' maxlength=60 style='%s'><button style='%s'>Add this Mac</button></form>"
-                "<form method=post action=/account/export><button style='%s;background:#333;color:#eee'>Download my data</button></form>"
-                "<form method=post action=/logout style=display:inline><button style='%s;background:#333;color:#eee'>Sign out</button></form> "
-                "<form method=post action=/account/signout-all style=display:inline><button style='%s;background:#333;color:#eee'>Sign out everywhere</button></form>"
-                "<h3 style='font-weight:400;margin-top:2.5rem'>Delete account</h3><p style='color:#999'>Cancels your subscription and permanently erases your notes. This cannot be undone.</p>"
-                "<form method=post action=/account/delete><input name=confirm placeholder='type your email to confirm' autocomplete=off style='%s'><button style='%s;background:#7a2a1a;color:#eee'>Delete my account</button></form>"
-                % (html.escape(store.email(uid) or ""), html.escape(st or ""), bill, rows or "<li style='color:#999'>none yet</li>", INPUT, BTN, BTN, BTN, BTN, INPUT, BTN)), "text/html; charset=utf-8")
+            vault = store.root / "data" / uid / "Vault"
+            self.html(200, pages.account(email=store.email(uid), status=store.status(uid), entitled=store.entitled(uid), stripe=bool(stripe), devices=devices.listing(store, uid),
+                                         mcp_url=public + "/mcp", connected=auth.connected(uid), used_bytes=vault_bytes(vault) if vault.is_dir() else 0, quota_bytes=QUOTA_BYTES,
+                                         notes=len(session_files(vault)) if vault.is_dir() else 0, now=now()))
 
         def add_device(self):
             f = self.form()
             if f is None: return
             uid = self.user()
-            if not uid: return self.send(401, "Sign in first.", "text/plain")
+            if not uid: return self.fail(401)
             try: _, tok = devices.create(store, uid, f.get("name", ""))
             except ValueError as e: return self.bad(e)
-            self.send(200, page("Your device token", "<h2 style='font-weight:400'>Paste this into Dex Notch</h2><p style='color:#999'>It is shown once. Anyone holding it can upload notes to your account; remove the Mac from your account page if it leaks.</p>"
-                "<pre style='white-space:pre-wrap;word-break:break-all;background:#111;padding:1rem;border:1px solid #444'>%s</pre><p><a style='color:#ffb059' href=/account>Back to account</a></p>" % html.escape(tok)), "text/html; charset=utf-8")
+            self.html(200, pages.device_token(tok, f.get("name", ""), public + "/mcp", store.email(uid)))
 
         def revoke_device(self):
             f = self.form()
             if f is None: return
             uid = self.user()
-            if not uid: return self.send(401, "Sign in first.", "text/plain")
+            if not uid: return self.fail(401)
             devices.revoke(store, uid, f.get("id", "")); self.redirect("/account")
 
         def export(self):
             """Everything we hold about the account as one zip: every note, plus account.json. Allowed for canceled accounts: your data is yours."""
             if self.form() is None: return
             uid = self.user()
-            if not uid: return self.send(401, "Sign in first.", "text/plain")
-            if uid in exporting or not export_slots.acquire(blocking=False): return self.send(429, "An export is already running. Try again in a minute.", "text/plain")
+            if not uid: return self.fail(401)
+            if uid in exporting or not export_slots.acquire(blocking=False): return self.fail(429, "An export is already running. Try again in a minute.")
             exporting.add(uid)
             try:
                 vault = store.root / "data" / uid / "Vault"
@@ -253,12 +238,12 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             f = self.form()
             if f is None: return
             uid = self.user()
-            if not uid: return self.send(401, "Sign in first.", "text/plain")
-            if (f.get("confirm") or "").strip().lower() != (store.email(uid) or "\0"): return self.send(400, "Type your email address exactly to confirm.", "text/plain")
+            if not uid: return self.fail(401)
+            if (f.get("confirm") or "").strip().lower() != (store.email(uid) or "\0"): return self.fail(400, "Type your email address exactly to confirm.")
             sub = billing.subscription_of(store, uid)
             if stripe and sub and store.entitled(uid):  # stop the billing first; if Stripe won't confirm, keep the account so nobody is charged for nothing
                 try: stripe.cancel(sub)
-                except billing.BillingError: return self.send(502, "We couldn't cancel your subscription, so nothing was deleted. Cancel it from the billing page, then try again.", "text/plain")
+                except billing.BillingError: return self.fail(502, "We couldn't cancel your subscription, so nothing was deleted. Cancel it from the billing page, then try again.")
             store.delete_account(uid)
             self.redirect("/goodbye", {"Set-Cookie": "%s=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0%s" % (COOKIE, secure)})
 
@@ -311,19 +296,19 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
         def checkout(self):
             uid = self.user()
             if not stripe: return self.send(404, {"error": "not_found"})
-            if not uid: return self.send(401, "Sign in first.", "text/plain")
+            if not uid: return self.fail(401)
             if store.entitled(uid): return self.portal()
             try: self.redirect(stripe.checkout_url(uid, store.email(uid), billing.customer_of(store, uid)))
-            except billing.BillingError: self.send(502, "Payments are unavailable right now. Try again shortly.", "text/plain")
+            except billing.BillingError: self.fail(502)
 
         def portal(self):
             uid, cus = self.user(), None
             if not stripe: return self.send(404, {"error": "not_found"})
-            if not uid: return self.send(401, "Sign in first.", "text/plain")
+            if not uid: return self.fail(401)
             cus = billing.customer_of(store, uid)
-            if not cus: return self.send(404, "No subscription on this account.", "text/plain")
+            if not cus: return self.fail(404, "There's no subscription on this account.")
             try: self.redirect(stripe.portal_url(cus))
-            except billing.BillingError: self.send(502, "Payments are unavailable right now. Try again shortly.", "text/plain")
+            except billing.BillingError: self.fail(502)
 
         def stripe_hook(self):
             raw = self.body()

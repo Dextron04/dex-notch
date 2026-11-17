@@ -1,0 +1,3 @@
+Instrument Serif (c) The Instrument Serif Project Authors, SIL Open Font License 1.1: https://github.com/Instrument/instrument-serif
+Geist and Geist Mono (c) Vercel, SIL Open Font License 1.1: https://github.com/vercel/geist-font
+Served from this server (no third-party font requests). Files from the @fontsource packages.

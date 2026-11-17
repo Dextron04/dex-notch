@@ -113,7 +113,8 @@ class HostedServerTests(unittest.TestCase):
         self.sign_in("a@x.io"); n = len(self.mail)
         known = call("POST", self.base + "/login", {"email": "a@x.io"}, form=True)
         unknown = call("POST", self.base + "/login", {"email": "nobody@x.io"}, form=True)
-        self.assertEqual(known[2], unknown[2]); self.assertEqual(len(self.mail), n + 2)
+        mask = lambda body, who: body.replace(who, "ADDRESS")   # the page repeats what the visitor typed; nothing else may differ between a known and an unknown address
+        self.assertEqual(mask(known[2], "a@x.io"), mask(unknown[2], "nobody@x.io")); self.assertEqual(len(self.mail), n + 2)
         for _ in range(5): call("POST", self.base + "/login", {"email": "flood@x.io"}, form=True)
         self.assertEqual(len([m for m in self.mail if m[0] == "flood@x.io"]), 3)  # per-address cap
         self.t[0] += 901; call("POST", self.base + "/login", {"email": "flood@x.io"}, form=True)

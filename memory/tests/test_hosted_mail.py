@@ -1,6 +1,8 @@
 import sys, tempfile, threading, unittest, urllib.parse, urllib.request
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import argparse
+from agentvault.hosted.__main__ import build_sender, smtp_args
 from agentvault.hosted.mail import smtp_sender
 from agentvault.hosted.oauth import Auth, AuthError
 from agentvault.hosted.server import make_server
@@ -48,5 +50,19 @@ class MailTests(unittest.TestCase):
                 body = r.read().decode()
             self.assertEqual(r.status, 200); self.assertIn("Check your email", body)
             self.assertIn("OSError", err.getvalue()); self.assertNotIn("login/verify", err.getvalue()); self.assertNotIn("smtp down", err.getvalue())
+
+class CliTests(unittest.TestCase):
+    def args(self, *a):
+        p = argparse.ArgumentParser(); smtp_args(p); return p.parse_args(list(a))
+
+    def test_build_sender(self):
+        self.assertIsNone(build_sender(self.args()))                                                         # no SMTP host: the dev fallback
+        with self.assertRaisesRegex(SystemExit, "mail-from"): build_sender(self.args("--smtp-host", "smtp.test"))
+        with self.assertRaisesRegex(SystemExit, "can't read"): build_sender(self.args("--smtp-host", "smtp.test", "--mail-from", "a@x.io", "--smtp-password-file", "/nonexistent/key"))
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "k"; f.write_text("\n")
+            with self.assertRaisesRegex(SystemExit, "empty"): build_sender(self.args("--smtp-host", "smtp.test", "--mail-from", "a@x.io", "--smtp-password-file", str(f)))
+            f.write_text("re_secret\n")
+            self.assertTrue(callable(build_sender(self.args("--smtp-host", "smtp.test", "--smtp-port", "465", "--smtp-user", "resend", "--mail-from", "Dex <l@x.io>", "--smtp-password-file", str(f)))))
 
 if __name__ == "__main__": unittest.main()
