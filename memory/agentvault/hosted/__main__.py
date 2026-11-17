@@ -29,6 +29,7 @@ def main() -> None:
     smtp_args(s)
     s.add_argument("--invite-only", action="store_true", help="closed beta: only existing accounts and invited emails can sign in")
     s.add_argument("--max-users", type=int, default=0, help="stop creating accounts once this many exist (0 = no cap)")
+    s.add_argument("--no-encryption", action="store_true", help="do not ask accounts to lock their vault with a passphrase (tests and local trials only)")
     s.add_argument("--admin", action="append", default=[], metavar="EMAIL", help="may open /admin to manage the waitlist and send invitations (repeatable)")
     iv = sub.add_parser("invite", help="closed beta: let these emails create an account"); iv.add_argument("--root", required=True); iv.add_argument("emails", nargs="+")
     ui = sub.add_parser("uninvite", help="withdraw an invite (an account already created stays)"); ui.add_argument("--root", required=True); ui.add_argument("emails", nargs="+")
@@ -83,7 +84,7 @@ def main() -> None:
         if len(wh) < 20: raise SystemExit("stripe webhook secret looks too short")
         stripe = Stripe(Path(a.stripe_key_file).expanduser().read_text().strip(), a.stripe_price, a.public_url)
     srv = make_server(store, Auth(store, invite_only=a.invite_only, max_users=a.max_users), a.public_url, send_mail, stripe, wh, port=a.port,
-                      send_invite=build_sender(a, invite=True), admins=a.admin, send_welcome=build_sender(a, welcome=True))
+                      send_invite=build_sender(a, invite=True), admins=a.admin, send_welcome=build_sender(a, welcome=True), encrypt=not a.no_encryption)
     print("agentvault hosted on 127.0.0.1:%d as %s" % (a.port, a.public_url), flush=True)
     srv.serve_forever()
 

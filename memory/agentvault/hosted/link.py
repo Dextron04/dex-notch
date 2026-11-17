@@ -32,13 +32,13 @@ def peek(store: Store, code: str, now: float = None) -> Optional[str]:
     with store.conn() as c: r = c.execute("SELECT name FROM links WHERE code=? AND exp>? AND user_id IS NULL", (normalize(code), now or time.time())).fetchone()
     return r["name"] if r else None
 
-def approve(store: Store, code: str, uid: str, now: float = None) -> str:
+def approve(store: Store, code: str, uid: str, now: float = None, key: bytes = None) -> str:
     """Creates the device and parks its token for the app to collect. Returns the Mac's name."""
     now = now or time.time()
     with store.conn() as c:
         r = c.execute("SELECT name FROM links WHERE code=? AND exp>? AND user_id IS NULL", (normalize(code), now)).fetchone()
         if not r: raise LinkError("this link has expired or was already used")
-    try: _, tok = devices.create(store, uid, r["name"], now)
+    try: _, tok = devices.create(store, uid, r["name"], now, key)
     except ValueError as e: raise LinkError(str(e))
     with store.conn() as c:
         if not c.execute("UPDATE links SET user_id=?, token=?, exp=? WHERE code=? AND user_id IS NULL", (uid, tok, now + 120, normalize(code))).rowcount:

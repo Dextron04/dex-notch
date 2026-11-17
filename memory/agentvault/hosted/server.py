@@ -8,7 +8,8 @@ from .. import mcp_server
 from ..remote.server import MAX_BODY, client_key
 from ..remote.tools import REMEMBER, REMIND
 from ..index import session_files
-from . import billing, devices, link, pages, story, tools, ui
+from .. import seal
+from . import billing, devices, keys, link, pages, story, tools, ui
 from .ingest import MAX_BODY as INGEST_MAX, IngestError, ingest, vault_bytes
 from .oauth import SESSION_TTL, Auth, AuthError
 from .store import EMAIL, Store
@@ -35,8 +36,9 @@ CSP = ("default-src 'none'; style-src 'self'; script-src 'self'; font-src 'self'
 
 def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[str, str], None],
                 stripe: Optional[billing.Stripe] = None, stripe_webhook_secret: bytes = b"", port: int = 8766, host: str = "127.0.0.1",
-                now=time.time, wait_seconds: float = 25, send_invite: Optional[Callable[[str, str], None]] = None, admins=(), send_welcome: Optional[Callable[[str, str], None]] = None) -> ThreadingHTTPServer:
-    """`send_mail(email, link)` delivers the sign-in link (see mail.py). Without `stripe`, billing is off and only the `grant` CLI can mark users paid."""
+                now=time.time, wait_seconds: float = 25, send_invite: Optional[Callable[[str, str], None]] = None, admins=(), send_welcome: Optional[Callable[[str, str], None]] = None, encrypt: bool = False) -> ThreadingHTTPServer:
+    """`send_mail(email, link)` delivers the sign-in link (see mail.py). Without `stripe`, billing is off and only the `grant` CLI can mark users paid.
+    `encrypt`: an account must lock its vault with a passphrase (keys.py) before it can link a Mac or connect an assistant."""
     public = public_url.rstrip("/")
     admins = {a.strip().lower() for a in admins}   # the operator: these signed-in emails see /admin; everyone else gets a plain 404
     secure = "; Secure" if public.startswith("https://") else ""
@@ -50,6 +52,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                 except Exception as ex: print("welcome mail failed: %s" % type(ex).__name__, file=sys.stderr, flush=True)
             threading.Thread(target=go, daemon=True).start()
         auth.on_new_user = _welcome
+    unlock_tries = Limiter(8, 900, now)   # passphrase attempts per account per 15 minutes
     wait_ip = Limiter(5, 3600, now)   # waitlist sign-ups per address per hour
     link_ip, poll_ip = Limiter(20, 3600, now), Limiter(240, 60, now)   # Mac link codes started per hour, and polls for the answer per minute, per address
     exporting, export_slots = set(), threading.BoundedSemaphore(2)  # a zip of a whole vault is heavy: one per user, two at a time
@@ -116,6 +119,18 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
         def user_email(self):
             uid = self.user()
             return store.email(uid) if uid else None
+        def bearer(self):
+            a = self.headers.get("Authorization") or ""
+            return a[7:] if a.startswith("Bearer ") else ""
+        def open_vault(self, uid, f):
+            """(key, error): the account's data key opened with the passphrase in the form. (None, "") for an account that is not encrypted."""
+            if not store.encrypted(uid): return None, ""
+            if not unlock_tries.allow(uid): return None, "Too many tries. Wait a few minutes."
+            key = keys.unlock(store, uid, f.get("passphrase", ""))
+            return (key, "") if key else (None, "That passphrase isn't right.")
+        def next_path(self, f):
+            n = f.get("next", "")
+            return n if n == "/account" or n.startswith(("/link?", "/authorize?")) else "/account"
         def static(self, rel):
             p = (ui.STATIC / rel).resolve()
             if not p.is_relative_to(ui.STATIC) or not p.is_file() or p.suffix not in STATIC_TYPES: return self.send(404, {"error": "not_found"})
@@ -138,6 +153,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if u.path == "/": return self.html(200, pages.home(self.user_email(), auth.invite_only))
             if u.path.startswith("/static/"): return self.static(u.path[8:])
             if u.path in ("/privacy", "/terms"): return self.html(200, story.legal(u.path[1:], self.user_email()))
+            if u.path == "/connect": return self.connect_page()
             if u.path == "/about": return self.html(200, story.about(self.user_email(), auth.invite_only))
             if u.path == "/waitlist": return self.html(200, pages.waitlist_form(user=self.user_email())) if auth.invite_only else self.redirect("/login")
             if u.path == "/admin": return self.admin_page(q)
@@ -170,7 +186,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                   "/account/devices": self.add_device, "/account/devices/revoke": self.revoke_device, "/account/signout-all": self.signout_all,
                   "/logout": self.logout, "/v1/ingest": self.v1_ingest, "/account/export": self.export, "/account/delete": self.delete,
                   "/waitlist": self.waitlist_join, "/admin/invite": self.admin_invite, "/admin/waitlist/remove": self.admin_remove,
-                  "/link": self.link_approve, "/v1/link/start": self.v1_link_start, "/v1/link/poll": self.v1_link_poll}.get(path)
+                  "/account/vault": self.vault_setup, "/account/vault/passphrase": self.vault_passphrase, "/link": self.link_approve, "/v1/link/start": self.v1_link_start, "/v1/link/poll": self.v1_link_poll}.get(path)
             fn() if fn else self.send(404, {"error": "not_found"})
 
         def do_DELETE(self): self.plain_http() or self.send(405, {"error": "no sessions"}) if urlparse(self.path).path == "/mcp" else self.send(404, {"error": "not_found"})
@@ -183,7 +199,8 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             uid = self.user()
             if not uid: return self.html(200, pages.login(beta=auth.invite_only, client_name=c["name"], fields=fields))
             if not store.may_use(uid): return self.html(402, pages.need_plan(store.email(uid), public + "/billing/checkout" if stripe else None))
-            self.html(200, pages.consent(c["name"], urlparse(q["redirect_uri"]).hostname or "", store.email(uid), fields))
+            if encrypt and not store.encrypted(uid): return self.html(200, pages.vault_setup(store.email(uid), "/authorize?" + urlencode(fields)))
+            self.html(200, pages.consent(c["name"], urlparse(q["redirect_uri"]).hostname or "", store.email(uid), fields, ask=store.encrypted(uid)))
 
         def login(self):
             f = self.form()
@@ -216,12 +233,17 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
         def consent(self):
             f = self.form()
             if f is None: return
-            try: self.validate(f)
+            try: c = self.validate(f)
             except AuthError as e: return self.bad(e)
             uid = self.user()
             if not uid: return self.fail(401)
             if not store.may_use(uid): return self.fail(402)
-            q = {"error": "access_denied"} if f.get("decision") != "allow" else {"code": auth.issue_code(f["client_id"], uid, f["redirect_uri"], f["code_challenge"])}
+            key = None
+            if f.get("decision") == "allow":
+                if encrypt and not store.encrypted(uid): return self.fail(400, "Lock your vault first.")
+                key, why = self.open_vault(uid, f)
+                if why: return self.html(200, pages.consent(c["name"], urlparse(f["redirect_uri"]).hostname or "", store.email(uid), {k: f.get(k, "") for k in OAUTH_FIELDS}, ask=True, error=why))
+            q = {"error": "access_denied"} if f.get("decision") != "allow" else {"code": auth.issue_code(f["client_id"], uid, f["redirect_uri"], f["code_challenge"], key)}
             if f.get("state"): q["state"] = f["state"]
             self.redirect(f["redirect_uri"] + ("&" if "?" in f["redirect_uri"] else "?") + urlencode(q))
 
@@ -277,7 +299,8 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if not name: return self.fail(400, "This link has expired. Go back to Dex Notch and start again.")
             uid, code = self.user(), link.normalize(q["code"])
             if not uid: return self.html(200, pages.login(beta=auth.invite_only, link_name=name, fields={"link": code}))
-            self.html(200, pages.link_confirm(store.email(uid), name, code))
+            if encrypt and not store.encrypted(uid): return self.html(200, pages.vault_setup(store.email(uid), "/link?" + urlencode({"code": code})))
+            self.html(200, pages.link_confirm(store.email(uid), name, code, ask=store.encrypted(uid)))
 
         def link_approve(self):
             f = self.form()
@@ -285,9 +308,47 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             uid = self.user()
             if not uid: return self.fail(401)
             if f.get("decision") != "allow": return self.redirect("/account")
-            try: name = link.approve(store, f.get("code", ""), uid, now())
+            if encrypt and not store.encrypted(uid): return self.fail(400, "Lock your vault first.")
+            key, why = self.open_vault(uid, f)
+            if why:
+                nm = link.peek(store, f.get("code", ""), now())
+                if not nm: return self.fail(400, "This link has expired. Go back to Dex Notch and start again.")
+                return self.html(200, pages.link_confirm(store.email(uid), nm, link.normalize(f.get("code", "")), ask=True, error=why))
+            try: name = link.approve(store, f.get("code", ""), uid, now(), key)
             except link.LinkError as e: return self.bad(e)
             self.html(200, pages.link_done(name, store.email(uid)))
+
+        def connect_page(self):
+            uid = self.user()
+            self.html(200, pages.connect(public + "/mcp", store.email(uid) if uid else None, auth.assistants(uid) if uid else None, encrypted=encrypt))
+
+        # -- the vault passphrase
+        def vault_setup(self):
+            f = self.form()
+            if f is None: return
+            uid = self.user()
+            if not uid: return self.fail(401)
+            nxt, email = self.next_path(f), store.email(uid)
+            def again(why):
+                if nxt == "/account": return self.account(flash=why)
+                self.html(200, pages.vault_setup(email, nxt, error=why))
+            if f.get("passphrase") != f.get("confirm"): return again("The two passphrases don't match.")
+            try: code = keys.setup(store, uid, f.get("passphrase", ""))
+            except keys.KeyError_ as e: return again(str(e))
+            self.html(200, pages.vault_recovery(email, code, nxt))
+
+        def vault_passphrase(self):
+            f = self.form()
+            if f is None: return
+            uid = self.user()
+            if not uid: return self.fail(401)
+            if not store.encrypted(uid): return self.redirect("/account")
+            if not unlock_tries.allow(uid): return self.account(flash="Too many tries. Wait a few minutes.")
+            key = keys.unlock(store, uid, f.get("passphrase", ""), (f.get("recovery") or "").strip())
+            if not key: return self.account(flash="That passphrase or recovery code isn't right.")
+            try: keys.change_passphrase(store, uid, key, f.get("new", ""))
+            except keys.KeyError_ as e: return self.account(flash=str(e))
+            self.redirect("/account")
 
         def v1_link_start(self):
             raw = self.body(4096)
@@ -314,16 +375,17 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             d = devices.check(store, a[7:] if a.startswith("Bearer ") else "", now())
             if not d: return self.send(401, {"error": "unauthorized"})
             if not by_device.allow(d[1]): return self.send(429, {"error": "slow_down"})
-            self.send(200, {"email": store.email(d[0]), "status": store.status(d[0]), "entitled": store.entitled(d[0]), "device": d[1]})
+            self.send(200, {"email": store.email(d[0]), "status": store.status(d[0]), "entitled": store.entitled(d[0]), "device": d[1], "assistants": auth.assistants(d[0])})
 
         # -- account page: sign-out and the Macs allowed to upload
-        def account(self):
+        def account(self, flash=""):
             uid = self.user()
             if not uid: return self.redirect("/login")
             vault = store.root / "data" / uid / "Vault"
             self.html(200, pages.account(email=store.email(uid), status=store.status(uid), entitled=store.entitled(uid), stripe=bool(stripe), devices=devices.listing(store, uid),
                                          mcp_url=public + "/mcp", connected=auth.connected(uid), used_bytes=vault_bytes(vault) if vault.is_dir() else 0, quota_bytes=store.quota(uid), usable=store.may_use(uid),
-                                         notes=len(session_files(vault)) if vault.is_dir() else 0, now=now()))
+                                         notes=len(session_files(vault)) if vault.is_dir() else 0, now=now(),
+                                         encrypted=store.encrypted(uid), can_encrypt=encrypt, flash=flash))
 
         def add_device(self):
             f = self.form()
@@ -343,9 +405,12 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
 
         def export(self):
             """Everything we hold about the account as one zip: every note, plus account.json. Allowed for canceled accounts: your data is yours."""
-            if self.form() is None: return
+            f = self.form()
+            if f is None: return
             uid = self.user()
             if not uid: return self.fail(401)
+            key, why = self.open_vault(uid, f)
+            if why: return self.account(flash=why)
             if uid in exporting or not export_slots.acquire(blocking=False): return self.fail(429, "An export is already running. Try again in a minute.")
             exporting.add(uid)
             try:
@@ -357,7 +422,9 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                         for root, _, files in os.walk(vault):
                             for fn in files:
                                 p = os.path.join(root, fn)
-                                if not os.path.islink(p): z.write(p, os.path.join("Vault", os.path.relpath(p, vault)))   # a symlink is never followed out of the vault
+                                if os.path.islink(p): continue   # a symlink is never followed out of the vault
+                                arc = os.path.join("Vault", os.path.relpath(p, vault))
+                                with seal.unlocked(key): z.writestr(arc, seal.read_bytes(p))   # the zip holds readable notes: you opened the vault with your passphrase to get it
                     n = tmp.tell(); tmp.seek(0)
                     self.send_response(200); self.send_header("Content-Type", "application/zip"); self.send_header("Content-Length", str(n))
                     self.send_header("Content-Disposition", 'attachment; filename="dex-notch-export.zip"'); self.send_header("Cache-Control", "no-store"); self.end_headers()
@@ -394,7 +461,8 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if raw is None: return
             d = self.device()
             if not d: return
-            try: self.send(200, ingest(store, d[0], json.loads(raw), len(raw)))
+            try:
+                with seal.unlocked(devices.key(store, self.bearer())): self.send(200, ingest(store, d[0], json.loads(raw), len(raw)))
             except (IngestError, ValueError) as e: self.send(413 if "quota" in str(e) else 400, {"error": str(e)[:200]})
 
         def reminders_wait(self, q):
@@ -417,10 +485,11 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                 time.sleep(0.3)
             files = []
             if token != after:
-                for f, m in fs:
-                    if m > seen:
-                        try: files.append({"name": f.name, "content": f.read_text(encoding="utf-8")[:4096]})
-                        except OSError: pass
+                with seal.unlocked(devices.key(store, self.bearer())):
+                    for f, m in fs:
+                        if m > seen:
+                            try: files.append({"name": f.name, "content": seal.read_text(f)[:4096]})
+                            except (OSError, seal.Locked): pass
             self.send(200, {"token": token, "files": files})
 
         # -- billing
@@ -488,7 +557,8 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             except ValueError: return self.send(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}})
             extra = ([REMEMBER, REMIND], lambda name, args: tools.call(store, uid, name, args))
             batch = req if isinstance(req, list) else [req]
-            out = [r for r in (mcp_server.handle(x, store.user_vault(uid), extra) for x in batch if isinstance(x, dict)) if r is not None]
+            with seal.unlocked(auth.key(a[7:])):
+                out = [r for r in (mcp_server.handle(x, store.user_vault(uid), extra) for x in batch if isinstance(x, dict)) if r is not None]
             if not out: return self.send(202)
             self.send(200, out if isinstance(req, list) else out[0])
 

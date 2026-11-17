@@ -208,6 +208,7 @@
   /* copyable mono block */
   .copybox { display: flex; align-items: stretch; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--bg-sunk); overflow: hidden; }
   .copybox code, .copybox output { flex: 1; min-inline-size: 0; padding: 0.9rem 1rem; font-size: 0.9rem; overflow-wrap: anywhere; user-select: all; align-self: center; }
+  .copybox pre { flex: 1; min-inline-size: 0; margin: 0; padding: 0.9rem 1rem; font: 0.85rem/1.55 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
   .copybox .btn { border-radius: 0; border-block: 0; border-inline-end: 0; border-inline-start: 1px solid var(--line-strong); min-inline-size: 6.5rem; }
   .copybox .btn[data-copied] { background: var(--ok); color: #06210b; }
 
@@ -340,10 +341,10 @@
   .standfirst { font: 400 var(--step-1)/1.45 var(--font-display); color: var(--text-dim); max-inline-size: 38rem; text-wrap: pretty; }
   .byline { font: 500 var(--step--1)/1.4 var(--font-mono); color: var(--text-dim); }
   .toc ol { list-style: none; padding: 0; margin: 0.6rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; counter-reset: toc; }
-  .toc li { counter-increment: toc; font-size: var(--step--1); }
+  .toc li { counter-increment: toc; font-size: var(--step--1); display: flex; align-items: baseline; gap: 0.5rem; }
   .toc a { color: var(--text-dim); text-decoration: none; display: inline-block; padding-block: 0.35rem; }
   .toc a:hover { color: var(--text); text-decoration: underline; }
-  .toc li::before { content: counter(toc, decimal-leading-zero); font: 500 0.72rem/1 var(--font-mono); color: var(--accent-text); margin-inline-end: 0.5rem; }
+  .toc li::before { content: counter(toc, decimal-leading-zero); font: 500 0.72rem/1 var(--font-mono); color: var(--accent-text); }
   @media (min-width: 64rem) {
     .longread.has-toc { grid-template-columns: 13rem minmax(0, 1fr); column-gap: clamp(2rem, 5vw, 5rem); align-items: start; }
     .longread.has-toc > .read-head { grid-column: 1 / -1; }

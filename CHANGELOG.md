@@ -6,6 +6,34 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.9.0: Locked vaults, an assistant checklist, and a page to connect them all
+
+*17 November 2026*
+
+- **Your notes are locked with a passphrase.** Before a Mac or an assistant can use your memory, you choose a passphrase (at least 10 characters) and get a recovery code. Notes are then encrypted on the server's disk with a key only your passphrase, your recovery code, or a Mac or assistant you approved can open, so a stolen backup or a copy of the disk is unreadable. It is **not end-to-end encrypted**: the service opens your notes while it answers you, and the names of notes (which assistant, which month, which project) stay readable. Lose your passphrase and your recovery code and the notes cannot be recovered. [PRIVACY.md](PRIVACY.md) has the details.
+
+  <p align="center">
+    <img src="docs/assets/shot-vault-lock.png" alt="The account page: Vault encryption is off, with fields to choose a passphrase and a Lock my vault button" width="62%">
+    <img src="docs/assets/shot-recovery.png" alt="The recovery code page: Save your recovery code, shown once, with a Copy button" width="62%">
+  </p>
+
+- **Macs and assistants linked before you lock your vault must be linked again.** Dex Notch notices and returns to its sign-in window on its next launch or hourly check. Claude and ChatGPT ask you to sign in once more, with your passphrase.
+- **Dex Notch checks that your assistants are connected.** **Settings → Memory → Connections** shows Claude, ChatGPT, Claude Code and Codex, each Connected, not signed in, or not connected, with a button to fix it. It asks your account which web assistants are connected, and asks the `claude` and `codex` tools about the terminal ones. If something this Mac has is missing, the notch tells you once (not again for three days), and **Remind me at the notch** turns that off.
+- **One button saves every conversation.** **Settings → Memory → Save every conversation** adds a short instruction to the global files that Claude Code, Codex and Gemini read, so they save a summary to your memory when a conversation ends. The first time, a copy of each original file is kept next to it. The same text is on the connect page for ChatGPT's custom instructions and Claude's preferences. An assistant decides for itself when a conversation is over, so you can always say "save this to my memory".
+- **A page to connect every assistant.** The new **Connect** page on the website has the address to paste, and the steps for Claude, ChatGPT, Claude Code and Codex, with a status for the ones you have connected.
+
+  <p align="center">
+    <img src="docs/assets/shot-connect.png" alt="The Connect page: Connect your assistants, with the address to copy and the steps for Claude" width="62%">
+  </p>
+
+- **Privacy, terms and a long read, on the website.** The privacy notes and terms now open on the site instead of GitHub, and a new long read explains the problem Dex solves, how it can grow, and the plan for many people sharing one AI session.
+
+  <p align="center">
+    <img src="docs/assets/gif-longread.gif" alt="The long read page scrolling: three threads of particles braid into one amber ring as you read" width="62%">
+  </p>
+
+  [Watch it as a video](docs/assets/gif-longread.mp4)
+
 ## v0.8.2: Closed beta, and a way to report problems
 
 *17 November 2026*

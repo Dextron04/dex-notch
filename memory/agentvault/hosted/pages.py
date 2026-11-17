@@ -121,7 +121,7 @@ def home(user: Optional[str] = None, beta: bool = False) -> str:
 <div class="section-head reveal"><span class="eyebrow">Plainly</span><h2 id="trust-title">What this is, and what it isn't.</h2></div>
 <dl class="ledger">
 <div class="reveal"><dt>What we keep</dt><dd>Your email address, the names of your Macs, a plan status, and the conversations you choose to upload. No analytics, no ads, no trackers.</dd></div>
-<div class="reveal"><dt>Who can read it</dt><dd>The person who runs this server can, technically. Notes are encrypted on the way here but are not end-to-end encrypted, because search has to read them. Other users never can.</dd></div>
+<div class="reveal"><dt>Who can read it</dt><dd>Your notes are encrypted on disk with a key only your passphrase opens, so a stolen backup is unreadable. Search has to read them, though, so the service opens them while you use it, and whoever controls the running service could technically watch that happen. Other users never can.</dd></div>
 <div class="reveal"><dt>Secrets</dt><dd>Keys and passwords are pattern-matched out before storage. That can't catch everything, so don't rely on it for anything you couldn't afford to leak.</dd></div>
 <div class="reveal"><dt>Leaving</dt><dd>Download your data or delete your account at any time. Backups clear within 14 days. <a href="{PRIVACY}">Read the full privacy notes.</a></dd></div>
 </dl>
@@ -199,7 +199,56 @@ def verify(token: str, user: Optional[str] = None) -> str:
 
 # ---------------------------------------------------------------- OAuth consent
 
-def consent(client_name: str, host: str, email: str, fields: dict) -> str:
+
+def _pass_field(error: str = "") -> str:
+    err = '<p class="form-error" role="alert">%s</p>' % esc(error) if error else ""
+    return (err + '<div class="field"><label for="passphrase">Your vault passphrase</label>'
+            '<input type="password" id="passphrase" name="passphrase" required autocomplete="current-password" spellcheck="false" autocapitalize="none">'
+            '<p class="hint">It unlocks your notes. Dex Notch never sees it after this page.</p></div>')
+
+def vault_setup(email: str, nxt: str, error: str = "", available_for: str = "") -> str:
+    err = '<p class="form-error" role="alert">%s</p>' % esc(error) if error else ""
+    body = f"""
+<div class="wrap auth">
+<div class="auth-aside">
+<span class="eyebrow">Before anything is saved</span>
+<h1>Lock your <em>vault.</em></h1>
+<p class="lede">Your notes are encrypted with a key that only your passphrase can open. The server keeps the notes and the wrapped key, never the passphrase, so a copy of the disk or a backup is unreadable.</p>
+<p class="dim">While a Mac or an assistant you approved is using your memory, the service opens your notes for that request, as it has to in order to search them. The <a href="{PRIVACY}">privacy notes</a> say exactly what that means.</p>
+</div>
+<div class="card auth-card">
+<h2>Choose a passphrase</h2>
+<p class="sub">Signed in as <b class="mono">{esc(email)}</b>. Next you'll get a recovery code. Keep both: without them, nobody can recover your notes.</p>
+{err}
+<form method="post" action="/account/vault" data-once>
+{hidden({"next": nxt})}
+<div class="field"><label for="p1">Passphrase</label>
+<input type="password" id="p1" name="passphrase" required minlength="10" autocomplete="new-password" spellcheck="false" autocapitalize="none" autofocus>
+<p class="hint">At least 10 characters. Three or four unrelated words work well.</p></div>
+<div class="field"><label for="p2">Again</label>
+<input type="password" id="p2" name="confirm" required minlength="10" autocomplete="new-password" spellcheck="false" autocapitalize="none"></div>
+<button class="btn" type="submit">Lock my vault</button>
+</form>
+</div>
+</div>
+"""
+    return layout("Lock your vault", body, user=email)
+
+def vault_recovery(email: str, code: str, nxt: str) -> str:
+    body = f"""
+<div class="wrap-narrow auth-single">
+<div class="card token-card">
+<div><span class="eyebrow">Your vault is locked</span><h1>Save your recovery code</h1></div>
+<div class="notice"><span>Shown once. If you forget your passphrase, this code is the only other way back in. We can't reset it for you, because we can't read your notes.</span></div>
+<div class="copybox"><code id="recovery-code">{esc(code)}</code><button class="btn btn-ghost btn-sm" type="button" data-copy-from="recovery-code">Copy</button></div>
+<p class="dim">Put it in your password manager, or print it. Don't keep it next to your passphrase in a note on this Mac.</p>
+<div class="row-actions"><a class="btn" href="{esc(nxt)}">I've saved it, continue</a></div>
+</div>
+</div>
+"""
+    return layout("Recovery code", body, user=email)
+
+def consent(client_name: str, host: str, email: str, fields: dict, ask: bool = False, error: str = "") -> str:
     body = f"""
 <div class="wrap-narrow auth-single">
 <div class="card auth-card consent">
@@ -214,6 +263,7 @@ def consent(client_name: str, host: str, email: str, fields: dict) -> str:
 </ul>
 <form method="post" action="/authorize">
 {hidden(fields)}
+{_pass_field(error) if ask else ""}
 <div class="consent-actions">
 <button class="btn btn-ghost" type="submit" name="decision" value="deny">Deny</button>
 <button class="btn" type="submit" name="decision" value="allow">Allow</button>
@@ -225,7 +275,7 @@ def consent(client_name: str, host: str, email: str, fields: dict) -> str:
 """
     return layout("Connect " + client_name, body, user=email)
 
-def link_confirm(email: str, name: str, code: str) -> str:
+def link_confirm(email: str, name: str, code: str, ask: bool = False, error: str = "") -> str:
     body = f"""
 <div class="wrap-narrow auth-single">
 <div class="card auth-card consent">
@@ -240,6 +290,7 @@ def link_confirm(email: str, name: str, code: str) -> str:
 </ul>
 <form method="post" action="/link">
 {hidden({"code": code})}
+{_pass_field(error) if ask else ""}
 <div class="consent-actions">
 <button class="btn btn-ghost" type="submit" name="decision" value="deny">Cancel</button>
 <button class="btn" type="submit" name="decision" value="allow">Add this Mac</button>
@@ -262,7 +313,7 @@ def need_plan(user: str, checkout_link: Optional[str]) -> str:
 # ---------------------------------------------------------------- account
 
 def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: List[dict], mcp_url: str, connected: bool, used_bytes: int, quota_bytes: int, notes: int,
-            now: Optional[float] = None, usable: Optional[bool] = None) -> str:
+            now: Optional[float] = None, usable: Optional[bool] = None, encrypted: bool = False, can_encrypt: bool = False, flash: str = "") -> str:
     now = now or time.time()
     usable = entitled if usable is None else usable
     tone, label = {"active": ("ok", "Active"), "past_due": ("warn", "Payment issue"), "canceled": ("warn", "Canceled"), "pending": ("ok", "Free plan")}.get(status, ("warn", status.title()))
@@ -302,6 +353,7 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
 <div class="copybox"><code id="mcp-url">{esc(mcp_url)}</code><button class="btn btn-ghost btn-sm" type="button" data-copy-from="mcp-url">Copy</button></div>
 <p>Claude then opens this site. Sign in as <span class="mono">{esc(email)}</span> and tap <b>Allow</b>. That's all: ask Claude "what did I decide about…" and it searches your memory.</p>
 <details><summary>Already have an older Dex connector?</summary><p>Remove it in the same Connectors list first, then add this one. The old one points at a previous vault that no longer updates.</p></details>
+<p><a href="/connect">Step-by-step for Claude, ChatGPT, Claude Code and Codex</a></p>
 <details><summary>ChatGPT</summary><p>Settings → Connectors, then create a connector (it may need developer mode). Use the same address and the same sign-in.</p></details></div></li>
 </ol>
 </section>
@@ -317,10 +369,27 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
 <p class="hint">{used} used{", no limit." if quota_bytes is None else " of %d MB." % (quota_bytes // 1048576)}</p>
 </section>
 
+
+{('<section class="card" aria-labelledby="vault-title"><div class="card-head"><h2 id="vault-title">Vault encryption</h2><p><span class="chip" data-tone="ok"><i></i>On</span></p></div>'
+  '<p class="dim">Your notes are encrypted at rest. Change the passphrase here; you need your current passphrase or your recovery code.</p>'
+  + ('<p class="form-error" role="alert">%s</p>' % esc(flash) if flash else '') +
+  '<form method="post" action="/account/vault/passphrase" data-once><div class="form-row">'
+  '<div class="field"><label for="cur">Current passphrase</label><input type="password" id="cur" name="passphrase" autocomplete="current-password" spellcheck="false"></div>'
+  '<div class="field"><label for="rec">or recovery code</label><input type="text" id="rec" name="recovery" autocomplete="off" spellcheck="false" autocapitalize="characters"></div></div>'
+  '<div class="field"><label for="new">New passphrase</label><input type="password" id="new" name="new" required minlength="10" autocomplete="new-password" spellcheck="false"></div>'
+  '<button class="btn btn-ghost btn-sm" type="submit">Change passphrase</button></form></section>') if encrypted else
+ ('<section class="card" aria-labelledby="vault-title"><div class="card-head"><h2 id="vault-title">Vault encryption</h2><p><span class="chip" data-tone="warn"><i></i>Off</span></p></div>'
+  '<p class="dim">Encrypt your notes with a key that only your passphrase opens. Your Macs and assistants will need to sign in again afterwards.</p>'
+  + ('<p class="form-error" role="alert">%s</p>' % esc(flash) if flash else '') +
+  '<form method="post" action="/account/vault" data-once>' + hidden({"next": "/account"}) +
+  '<div class="field"><label for="p1">Passphrase</label><input type="password" id="p1" name="passphrase" required minlength="10" autocomplete="new-password" spellcheck="false"></div>'
+  '<div class="field"><label for="p2">Again</label><input type="password" id="p2" name="confirm" required minlength="10" autocomplete="new-password" spellcheck="false"></div>'
+  '<button class="btn btn-sm" type="submit">Lock my vault</button></form></section>' if can_encrypt else '')}
+
 <section class="card" aria-labelledby="data-title">
 <div class="card-head"><h2 id="data-title">Your data</h2></div>
 <div class="row-actions">
-<form method="post" action="/account/export"><button class="btn btn-ghost btn-sm" type="submit">Download my data</button></form>
+<form method="post" action="/account/export">{'<input type="password" name="passphrase" required autocomplete="current-password" placeholder="Vault passphrase" aria-label="Vault passphrase" spellcheck="false"> ' if encrypted else ''}<button class="btn btn-ghost btn-sm" type="submit">Download my data</button></form>
 <form method="post" action="/account/signout-all"><button class="btn btn-ghost btn-sm" type="submit">Sign out everywhere</button></form>
 </div>
 <p class="hint">The download is a zip of every note and a small account file.</p>
@@ -391,6 +460,94 @@ def error(code: int, message: str = "", user: Optional[str] = None) -> str:
     action = '<a class="btn" href="/login">Sign in</a>' if code == 401 else '<a class="btn btn-ghost" href="%s">%s</a>' % (("/account", "Your account") if user else ("/", "Back to the start"))
     return _centered(heading, heading, esc(message) if message else hint, action, code=str(code), user=user)
 
+
+
+# ---------------------------------------------------------------- connecting assistants
+
+AGENT_SNIPPET = """<!-- dex-memory:begin -->
+## Dex memory
+At the end of a conversation, save it to the user's Dex memory so their other assistants can find it.
+- When the work is finished, or the user says thanks, goodbye or that they are done, call the `remember` tool once. It belongs to the Dex memory connector (`dex-memory`).
+- `title`: a few words. `content`: a short summary in markdown, not a transcript: what was decided, what was built or changed, facts worth keeping, and open questions. `source`: `claude` if you are Claude, `chatgpt` if you are ChatGPT, otherwise `other`.
+- Never include passwords, API keys, tokens or personal data.
+- Skip it if the user asked you not to save, if the conversation was trivial, or if you have no `remember` tool. Do not mention the tool unless it fails. When it works, say "Saved to your memory." in one line.
+<!-- dex-memory:end -->"""   # the same words the Mac app writes into the agents' instruction files (tests keep the two equal)
+
+def _cmd(cid: str, text: str) -> str:
+    return '<div class="copybox"><code id="%s">%s</code><button class="btn btn-ghost btn-sm" type="button" data-copy-from="%s">Copy</button></div>' % (cid, esc(text), cid)
+
+def _state(on: Optional[bool]) -> str:
+    return "" if on is None else ('<span class="chip" data-tone="ok"><i></i>Connected</span>' if on else '<span class="chip" data-tone="warn"><i></i>Not connected yet</span>')
+
+def connect(mcp_url: str, user: Optional[str] = None, assistants: Optional[dict] = None, encrypted: bool = False) -> str:
+    a = assistants or {}
+    who = ("Signed in as <b class=\"mono\">%s</b>. " % esc(user)) if user else '<a href="/login">Sign in</a> to see which are connected. '
+    unlock = " You'll be asked for your vault passphrase on the way." if encrypted else ""
+    body = f"""
+<div class="wrap">
+<header class="page-head">
+<span class="eyebrow">Cross-context memory</span>
+<h1>Connect your <em>assistants</em></h1>
+<p class="dim">One memory, every assistant. Connect each one once, and Claude, ChatGPT and your coding agents can all search what the others learned: decide something in a terminal, ask about it from your phone. They all use the same address.</p>
+</header>
+<div class="stack">
+<section class="card" aria-labelledby="url-title">
+<div class="card-head"><h2 id="url-title">Your address</h2><p>{who}</p></div>
+{_cmd("mcp-url", mcp_url)}
+<p class="hint">Each assistant opens this site, you sign in, and you press <b>Allow</b>.{unlock} They can search and read your saved conversations, and save notes and reminders when you ask. They cannot delete or change anything, and cannot see any other account. Remove any of them later from your account page.</p>
+</section>
+
+<section class="card" id="claude" aria-labelledby="claude-title">
+<div class="card-head"><h2 id="claude-title">Claude</h2><p>claude.ai, the desktop app and your phone {_state(a.get("claude") if user else None)}</p></div>
+<ol class="checklist">
+<li><span class="dot" aria-hidden="true"></span><h3>Add the connector</h3><div class="body"><p>Open <b>Settings → Connectors → Add custom connector</b>, name it Dex Memory, and paste the address above.</p></div></li>
+<li><span class="dot" aria-hidden="true"></span><h3>Sign in and allow</h3><div class="body"><p>Claude opens this site. Sign in with your email link and press <b>Allow</b>.</p></div></li>
+<li><span class="dot" aria-hidden="true"></span><h3>Try it</h3><div class="body"><p>Ask Claude <i>"what did I decide about the schema last week?"</i> It searches your memory. Claude Code on your Mac usually picks the same connector up on its own.</p></div></li>
+</ol>
+</section>
+
+<section class="card" id="chatgpt" aria-labelledby="chatgpt-title">
+<div class="card-head"><h2 id="chatgpt-title">ChatGPT</h2><p>chatgpt.com and the apps {_state(a.get("chatgpt") if user else None)}</p></div>
+<ol class="checklist">
+<li><span class="dot" aria-hidden="true"></span><h3>Add the connector</h3><div class="body"><p>Open <b>Settings → Connectors</b> and create a connector. ChatGPT may ask you to turn on developer mode first. Name it Dex Memory, paste the address above, and choose <b>OAuth</b> for authentication.</p></div></li>
+<li><span class="dot" aria-hidden="true"></span><h3>Sign in and allow</h3><div class="body"><p>ChatGPT opens this site. Sign in and press <b>Allow</b>.</p></div></li>
+<li><span class="dot" aria-hidden="true"></span><h3>Use it across assistants</h3><div class="body"><p>Tell Claude <i>"remember this conversation"</i>, then ask ChatGPT about it. Both read and write the same memory.</p></div></li>
+</ol>
+</section>
+
+<section class="card" id="claude-code" aria-labelledby="cc-title">
+<div class="card-head"><h2 id="cc-title">Claude Code</h2><p>in the terminal</p></div>
+{_cmd("cmd-claude", "claude mcp add --transport http --scope user dex-memory " + mcp_url)}
+<p class="hint">Then start <code>claude</code>, type <code>/mcp</code>, choose <b>dex-memory</b> and sign in. Dex Notch on your Mac can run the first command for you: Settings → Memory → Connections.</p>
+</section>
+
+<section class="card" id="codex" aria-labelledby="codex-title">
+<div class="card-head"><h2 id="codex-title">Codex</h2><p>in the terminal</p></div>
+{_cmd("cmd-codex", "codex mcp add dex-memory --url " + mcp_url)}
+{_cmd("cmd-codex-login", "codex mcp login dex-memory")}
+<p class="hint">The second command opens your browser to sign in. Dex Notch on your Mac can do both for you: Settings → Memory → Connections.</p>
+</section>
+
+<section class="card" id="save" aria-labelledby="save-title">
+<div class="card-head"><h2 id="save-title">Save every conversation</h2><p>for all of them</p></div>
+<p class="dim">Add this to the place each assistant keeps its standing instructions, and it saves a short summary to your memory when a conversation ends.</p>
+<div class="copybox"><pre id="agent-snippet">{esc(AGENT_SNIPPET)}</pre><button class="btn btn-ghost btn-sm" type="button" data-copy-from="agent-snippet">Copy</button></div>
+<ul class="plain" role="list">
+<li><b>ChatGPT:</b> Settings → Personalization → Custom instructions.</li>
+<li><b>Claude:</b> your personal preferences, or a project's instructions.</li>
+<li><b>Claude Code, Codex, Gemini:</b> <code>~/.claude/CLAUDE.md</code>, <code>~/.codex/AGENTS.md</code>, <code>~/.gemini/GEMINI.md</code>. Dex Notch on your Mac adds it to all three with one button: Settings → Memory.</li>
+</ul>
+<p class="hint">An assistant decides for itself when a conversation is over, so this isn't guaranteed. You can always say "save this to my memory".</p>
+</section>
+
+<section class="card" aria-labelledby="watch-title">
+<div class="card-head"><h2 id="watch-title">Dex Notch keeps watch</h2></div>
+<p class="dim">The Mac app looks for Claude and Codex on your Mac and checks that each is connected to your memory. If one isn't, the notch tells you once, with a button to fix it. You can turn the reminders off in Settings → Memory.</p>
+</section>
+</div>
+</div>
+"""
+    return layout("Connect an assistant", body, user=user, current="connect", description="Add Dex Memory to Claude, ChatGPT, Claude Code or Codex so every assistant can search and add to the same memory.")
 
 # ---------------------------------------------------------------- closed beta: waitlist and the operator's page
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, List, Optional
 from .index import session_files
+from . import seal
 from .notes import read_frontmatter
 
 @dataclass
@@ -21,7 +22,8 @@ def _hit(vault: Path, p: Path, fm: dict, snippet: str = "") -> Hit:
 
 def _rows(vault: Path, agent: Optional[str], since: Optional[str]):
     for p in session_files(vault):
-        fm = read_frontmatter(p)
+        try: fm = read_frontmatter(p)
+        except seal.Locked: continue   # a note this request cannot open (damaged, or no key) is not listed
         if agent and fm.get("agent") != agent: continue
         if since and fm.get("updated", "") < since: continue
         yield p, fm
@@ -34,7 +36,8 @@ def search(vault: Path, query: str, agent: Optional[str] = None, since: Optional
     rx = re.compile("|".join(terms), re.IGNORECASE)
     scored = []
     for p, fm in _rows(vault, agent, since):
-        text = p.read_text(encoding="utf-8", errors="replace")
+        try: text = seal.read_text(p)
+        except seal.Locked: continue
         body = text.split("\n---\n", 1)[-1]
         found = list(rx.finditer(body))
         if not found: continue
@@ -70,7 +73,7 @@ def read(vault: Path, rel_path: str, offset: int = 0, limit: int = READ_LIMIT) -
     if not p.is_relative_to(root): raise ValueError("path escapes the vault")
     rp = p.relative_to(root)
     if p.suffix != ".md" or rp.parts[0].startswith(".") or not p.is_file(): raise ValueError("not a vault note")
-    text = p.read_text(encoding="utf-8", errors="replace")
+    text = seal.read_text(p)
     offset, limit = max(0, int(offset)), max(1, min(int(limit), READ_LIMIT))
     chunk = text[offset:offset + limit]
     more = len(text) - (offset + len(chunk))

@@ -37,5 +37,7 @@ Add `--invite-only --max-users 20 --admin YOU@EMAIL` to the plist's `serve` argu
 
 ## Known gaps
 - Sign-in emails need `--smtp-*` flags; without them the link is printed to the log (only the operator can sign in).
-- Disk encryption of the mini is not verified here; the privacy text says notes are readable by the operator and not end-to-end encrypted.
+- Notes are sealed on disk (`agentvault/seal.py`) with a per-account key wrapped by the person's passphrase, a recovery code, and each device or assistant token (`hosted/keys.py`). The server stores only wrapped copies, so the database and backups are ciphertext. A request opens the key for its own duration, so the operator is **not** locked out of a running service: say that, not more. `--no-encryption` turns the passphrase requirement off for local trials. Lose the passphrase and the recovery code and the notes are gone: there is no operator reset.
+- Macs and assistants linked before an account locks its vault stop working at that moment and must be linked again (the app does this on its next launch or hourly check).
+- Note names (agent, month, project, short id) stay readable on disk.
 - No automatic purge schedule, no off-machine backup by default, no alerting beyond `/healthz`.

@@ -6,7 +6,7 @@ from typing import Optional
 STATIC = Path(__file__).resolve().parent / "static"
 REPO = "https://github.com/Dextron04/dex-notch"
 RELEASES = REPO + "/releases/latest"
-PRIVACY, TERMS, STORY = "/privacy", "/terms", "/about"   # read on this site: the documents live in content/
+PRIVACY, TERMS, STORY, CONNECT = "/privacy", "/terms", "/about", "/connect"   # read on this site: the documents live in content/
 DESCRIPTION = "Dex Notch turns your Mac's notch into a quiet place for mail, iPhone alerts and reminders. Dex Memory keeps every AI conversation you've had where Claude and ChatGPT can search it."
 
 def esc(s) -> str:
@@ -33,11 +33,11 @@ FX = f'<script type="module" src="/static/fx.js?v={VERSION}"></script>'   # the 
 def layout(title: str, body: str, *, user: Optional[str] = None, current: str = "", description: str = DESCRIPTION, full_title: bool = False, fx: bool = False) -> str:
     """`user` is the signed-in email (or None). `title` is unique per page: the part before the name is what a tab or a screen reader leads with."""
     if user:
-        nav = ('<a href="/account"%s>Account</a><form method="post" action="/logout"><button class="btn btn-quiet btn-sm" type="submit">Sign out</button></form>'
-               % (' aria-current="page"' if current == "account" else ""))
+        nav = ('<a href="/account"%s>Account</a><a class="nav-hide" href="/connect"%s>Connect</a><form method="post" action="/logout"><button class="btn btn-quiet btn-sm" type="submit">Sign out</button></form>'
+               % (' aria-current="page"' if current == "account" else "", ' aria-current="page"' if current == "connect" else ""))
     else:
-        nav = ('<a class="nav-hide" href="/#how">How it works</a><a class="nav-hide" href="%s"%s>The long read</a><a class="nav-hide" href="%s"%s>Privacy</a>'
-               '<a class="btn btn-ghost btn-sm" href="/login"%s>Sign in</a>' % (STORY, ' aria-current="page"' if current == "about" else "", PRIVACY, ' aria-current="page"' if current == "privacy" else "",
+        nav = ('<a class="nav-hide" href="/#how">How it works</a><a class="nav-hide" href="%s"%s>Connect</a><a class="nav-hide" href="%s"%s>The long read</a><a class="nav-hide" href="%s"%s>Privacy</a>'
+               '<a class="btn btn-ghost btn-sm" href="/login"%s>Sign in</a>' % (CONNECT, ' aria-current="page"' if current == "connect" else "", STORY, ' aria-current="page"' if current == "about" else "", PRIVACY, ' aria-current="page"' if current == "privacy" else "",
                                                                              ' aria-current="page"' if current == "login" else ""))
     page_title = title if full_title else "%s · Dex Notch" % title
     return f"""<!doctype html>
@@ -76,6 +76,7 @@ def layout(title: str, body: str, *, user: Optional[str] = None, current: str = 
 <div class="wrap">
 <p>Dex Notch is open source and made for the Mac.<br>Early access: expect rough edges.</p>
 <nav aria-label="Footer"><ul>
+<li><a href="{CONNECT}">Connect an assistant</a></li>
 <li><a href="{STORY}">The long read</a></li>
 <li><a href="{PRIVACY}">Privacy</a></li>
 <li><a href="{TERMS}">Terms</a></li>

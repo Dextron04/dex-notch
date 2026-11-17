@@ -94,14 +94,14 @@ def about(user: Optional[str] = None, beta: bool = False) -> str:
 
 <h2 id="trust">What you have to trust</h2>
 <p>Conversations are sensitive, so here is the honest version. Dex is open source, and by default everything stays on your Mac with no account at all. The hosted vault is optional and off until you sign in.</p>
-<p>When it is on, secrets are stripped on your Mac and stripped again on the server. That is pattern matching and cannot catch everything. Notes are protected in transit but are <strong>not end-to-end encrypted</strong>, because the server has to read them to search them, and the person who runs the server can technically read them. Other users cannot. The <a href="{PRIVACY}">privacy notes</a> list exactly what is kept, and you can export or erase all of it from your account page.</p>
+<p>When it is on, secrets are stripped on your Mac and stripped again on the server. That is pattern matching and cannot catch everything. Notes are encrypted on disk with a key that only your passphrase opens, so a copy of the disk or a backup is unreadable. They are <strong>not end-to-end encrypted</strong>: the server has to open them to search, so while you or an assistant you approved is using your memory, whoever controls the running service could technically read them. The names of notes (which assistant, which month, which project) are not encrypted. Other users cannot read your notes. The <a href="{PRIVACY}">privacy notes</a> list exactly what is kept, and you can export or erase all of it from your account page.</p>
 
 <h2 id="scale">How it grows</h2>
 <p>The closed beta is deliberately small: invite only, capped at twenty people, 100 MB each, on a single machine. That is a choice, not a limit of the design. The plan is to grow by adding isolation before adding features.</p>
 <ol class="steps">
 <li><strong>Harden the base.</strong> A dedicated service account, off-site encrypted backups, uptime monitoring, and signed, notarized releases so app updates stop asking for permissions again.</li>
 <li><strong>Move off one machine.</strong> Managed hosting, a database that handles many writers, and object storage for notes. Search gets an index instead of reading files, with optional semantic search.</li>
-<li><strong>Take the operator out of the trust path.</strong> Per-user keys so that, by default, not even the person running the service can read your notes. Search over encrypted data is hard, so this one is research, not a promise.</li>
+<li><strong>Take the operator out of the trust path.</strong> The first half is done: notes are encrypted at rest with a key only your passphrase opens. The second half is research, not a promise: keys the service never holds at all, even while it answers you, and encrypted note names. Searching data you cannot read is hard.</li>
 <li><strong>Run it yourself.</strong> The server is in the open repository, so a team that cannot send conversations to anyone else can host its own.</li>
 </ol>
 
@@ -125,11 +125,12 @@ def about(user: Optional[str] = None, beta: bool = False) -> str:
 <li><span class="chip is-done">Shipped</span><div><strong>Recorder and vault.</strong> Claude Code, Codex and Gemini conversations saved as notes, with secrets removed.</div></li>
 <li><span class="chip is-done">Shipped</span><div><strong>Hosted memory and connector.</strong> Sign in by emailed link, a private vault per person, and a connector for Claude and ChatGPT.</div></li>
 <li><span class="chip is-done">Shipped</span><div><strong>The notch.</strong> Mail that needs you, iPhone alerts, and reminders from a chat.</div></li>
+<li><span class="chip is-done">Shipped</span><div><strong>Encrypted vault.</strong> Notes sealed on disk with a key your passphrase opens, and a recovery code for when you forget it.</div></li>
 <li><span class="chip is-now">Now</span><div><strong>Closed beta.</strong> Twenty invited people, feedback through the app, and hardening the service.</div></li>
 <li><span class="chip is-next">Next</span><div><strong>Signed releases and managed hosting.</strong> Off-site backups, notarized builds, and a home that is not one machine.</div></li>
 <li><span class="chip is-next">Next</span><div><strong>Delete and edit single notes.</strong> Control over one conversation, not only the whole account.</div></li>
 <li><span class="chip is-later">Planned</span><div><strong>Shared vaults and multiplayer sessions.</strong> Roles, attributed turns, agent permissions and an audit trail.</div></li>
-<li><span class="chip is-later">Planned</span><div><strong>Per-user encryption and self-hosting for teams.</strong></div></li>
+<li><span class="chip is-later">Planned</span><div><strong>Keys the service never sees, and self-hosting for teams.</strong></div></li>
 </ul>
 <p class="prose-foot">This is a plan, not a promise. Order and scope will change as people use it.</p>
 </article>

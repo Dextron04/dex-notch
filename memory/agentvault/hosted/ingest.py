@@ -4,6 +4,7 @@ import os, re, threading
 from pathlib import Path
 from typing import List
 from ..model import SessionMeta, Turn
+from .. import seal
 from ..notes import add_turns
 from .store import Store
 
@@ -13,6 +14,9 @@ MAX_BODY = 8 * 1024 * 1024
 MAX_SESSIONS, MAX_TURNS, MAX_TEXT = 100, 5000, 200_000
 ROLES = {"user", "assistant", "tool"}
 _locks, _guard = {}, threading.Lock()
+
+def user_lock(uid: str) -> threading.Lock:
+    with _guard: return _locks.setdefault(uid, threading.Lock())
 
 class IngestError(ValueError):
     pass
@@ -53,8 +57,8 @@ def ingest(store: Store, uid: str, payload: dict, body_bytes: int = 0) -> dict:
     vault = store.user_vault(uid)
     limit = store.quota(uid)
     if limit is not None and vault_bytes(vault) + body_bytes > limit: raise IngestError("storage quota reached (%d MB)" % (limit >> 20))
-    with _guard: lock = _locks.setdefault(uid, threading.Lock())
     new = 0
-    with lock:  # two Macs uploading the same session must not interleave the read-modify-write of its note
+    with user_lock(uid):  # two Macs uploading the same session must not interleave the read-modify-write of its note
+        if store.encrypted(uid) and seal.current() is None: raise IngestError("this Mac must be linked again (the vault is now encrypted)")   # never write plain text into an encrypted vault
         for meta, turns in parsed: new += add_turns(vault, meta, turns)[1]
     return {"sessions": len(parsed), "new_turns": new}

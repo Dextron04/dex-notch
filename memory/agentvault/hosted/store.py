@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS login_links(hash TEXT PRIMARY KEY, email TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS links(code TEXT PRIMARY KEY, secret_hash TEXT NOT NULL UNIQUE, name TEXT NOT NULL, user_id TEXT, token TEXT, exp REAL NOT NULL);  -- see link.py
 CREATE TABLE IF NOT EXISTS waitlist(email TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '', created REAL NOT NULL, invited_at REAL);
 CREATE TABLE IF NOT EXISTS invites(email TEXT PRIMARY KEY, added REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS vault_keys(user_id TEXT PRIMARY KEY REFERENCES users(id), salt BLOB NOT NULL, by_passphrase BLOB NOT NULL, by_recovery BLOB NOT NULL, created REAL NOT NULL);  -- see keys.py: wrapped copies of the account's data key, never the key
 CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), exp REAL NOT NULL);
 """
 STATUSES = {"pending", "active", "past_due", "canceled", "deleted"}
@@ -42,6 +43,8 @@ class Store:
             c.executescript(SCHEMA)
             try: os.chmod(self.db, 0o600)   # the account database is for this user only
             except OSError: pass
+            for t, col in (("devices", "wrapped_key"), ("grants", "wrapped")):   # the data key, wrapped under that credential's own token
+                if col not in [r["name"] for r in c.execute("PRAGMA table_info(%s)" % t)]: c.execute("ALTER TABLE %s ADD COLUMN %s BLOB" % (t, col))
             if "status_at" not in [r["name"] for r in c.execute("PRAGMA table_info(users)")]: c.execute("ALTER TABLE users ADD COLUMN status_at REAL")  # databases from before retention existed
 
     def conn(self):
@@ -82,7 +85,7 @@ class Store:
         with self.conn() as c:
             r = c.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
             if not r: raise KeyError(uid)
-            for t in ("devices", "grants", "sessions", "links"): c.execute("DELETE FROM %s WHERE user_id=?" % t, (uid,))
+            for t in ("devices", "grants", "sessions", "links", "vault_keys"): c.execute("DELETE FROM %s WHERE user_id=?" % t, (uid,))
             for t in ("login_links", "waitlist", "invites"): c.execute("DELETE FROM %s WHERE email=?" % t, (r["email"],))   # the address itself goes too, not only the account
             c.execute("UPDATE users SET status='deleted', status_at=?, email=? WHERE id=?", (time.time(), "deleted-%s@invalid" % uid, uid))
         shutil.rmtree(self.root / "data" / uid, ignore_errors=True)
@@ -156,6 +159,19 @@ class Store:
         self.set_status(uid, "active")
         with self.conn() as c:
             c.execute("INSERT INTO billing(user_id,plan) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan", (uid, plan))
+
+    # -- vault encryption: only wrapped copies of an account's data key live here
+    def encrypted(self, uid: str) -> bool:
+        with self.conn() as c: return bool(c.execute("SELECT 1 FROM vault_keys WHERE user_id=?", (uid,)).fetchone())
+
+    def vault_keys(self, uid: str):
+        with self.conn() as c: r = c.execute("SELECT salt, by_passphrase, by_recovery FROM vault_keys WHERE user_id=?", (uid,)).fetchone()
+        return dict(r) if r else None
+
+    def put_vault_keys(self, uid: str, salt: bytes, by_passphrase: bytes, by_recovery: bytes) -> None:
+        with self.conn() as c:
+            c.execute("INSERT INTO vault_keys VALUES(?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET salt=excluded.salt, by_passphrase=excluded.by_passphrase, by_recovery=excluded.by_recovery",
+                      (uid, salt, by_passphrase, by_recovery, time.time()))
 
     def user_vault(self, uid: str) -> Path:
         """The only way to reach a user's notes. Every tool handler gets this Path as its `vault` and never sees another."""

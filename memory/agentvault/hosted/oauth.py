@@ -3,6 +3,7 @@ single-use codes) but every grant belongs to a user. Secrets are only ever store
 import base64, hashlib, hmac, json, secrets, time
 from typing import Callable, List, Optional, Tuple
 from urllib.parse import urlparse
+from .. import seal
 from .store import EMAIL, Store
 
 CODE_TTL, ACCESS_TTL, REFRESH_TTL, LINK_TTL, SESSION_TTL = 300, 3600, 30 * 86400, 900, 7 * 86400
@@ -13,6 +14,8 @@ class AuthError(Exception):
 
 def _h(v: str) -> str:
     return hashlib.sha256(v.encode()).hexdigest()
+
+def _kek(token: str) -> bytes: return seal.kek_from_secret(token, b"oauth")
 
 def _pop(c, table: str, h: str, kind: Optional[str] = None):
     """Take a row exactly once: when two requests race, only the one whose DELETE removes the row gets it."""
@@ -85,6 +88,12 @@ class Auth:
         with self.store.conn() as c:
             return bool(c.execute("SELECT 1 FROM grants WHERE user_id=? AND kind='refresh' AND exp>? LIMIT 1", (uid, self.now())).fetchone())
 
+    def assistants(self, uid: str) -> dict:
+        """Which assistants hold a live authorization: {"claude": bool, "chatgpt": bool}. From the name each one registered under; shown to the person and to their Mac, nothing more."""
+        with self.store.conn() as c:
+            names = [r["name"].lower() for r in c.execute("SELECT DISTINCT c.name FROM grants g JOIN clients c ON c.id=g.client_id WHERE g.user_id=? AND g.kind='refresh' AND g.exp>?", (uid, self.now()))]
+        return {"claude": any("claude" in n for n in names), "chatgpt": any("chatgpt" in n or "openai" in n for n in names)}
+
     def end_session(self, sess: str) -> None:
         with self.store.conn() as c: c.execute("DELETE FROM sessions WHERE hash=?", (_h(sess or ""),))
 
@@ -94,19 +103,21 @@ class Auth:
             c.execute("DELETE FROM sessions WHERE user_id=?", (uid,)); c.execute("DELETE FROM grants WHERE user_id=?", (uid,))
 
     # -- OAuth grants
-    def issue_code(self, cid: str, uid: str, redirect_uri: str, challenge: str) -> str:
+    def issue_code(self, cid: str, uid: str, redirect_uri: str, challenge: str, key: bytes = None) -> str:
         if redirect_uri not in self.client(cid)["redirect_uris"]: raise AuthError("redirect_uri mismatch")
         if not challenge: raise AuthError("code_challenge required")
         code = secrets.token_urlsafe(32)
         with self.store.conn() as c:
             self._gc(c)
-            c.execute("INSERT INTO grants VALUES(?,?,?,?,?,?)", (_h(code), "code", uid, cid, json.dumps({"redir": redirect_uri, "ch": challenge}), self.now() + CODE_TTL))
+            c.execute("INSERT INTO grants(hash,kind,user_id,client_id,data,exp,wrapped) VALUES(?,?,?,?,?,?,?)",
+                      (_h(code), "code", uid, cid, json.dumps({"redir": redirect_uri, "ch": challenge}), self.now() + CODE_TTL, seal.wrap(_kek(code), key) if key else None))
         return code
 
-    def _tokens(self, c, uid: str, cid: str) -> dict:
+    def _tokens(self, c, uid: str, cid: str, key: bytes = None) -> dict:
+        """`key`: the account's data key. It is kept only wrapped under each new token, so a grant can open the vault only while its holder presents the token."""
         a, r, t = secrets.token_urlsafe(32), secrets.token_urlsafe(32), self.now()
-        c.execute("INSERT INTO grants VALUES(?,?,?,?,NULL,?)", (_h(a), "access", uid, cid, t + ACCESS_TTL))
-        c.execute("INSERT INTO grants VALUES(?,?,?,?,NULL,?)", (_h(r), "refresh", uid, cid, t + REFRESH_TTL))
+        for tok, kind, ttl in ((a, "access", ACCESS_TTL), (r, "refresh", REFRESH_TTL)):
+            c.execute("INSERT INTO grants(hash,kind,user_id,client_id,data,exp,wrapped) VALUES(?,?,?,?,NULL,?,?)", (_h(tok), kind, uid, cid, t + ttl, seal.wrap(_kek(tok), key) if key else None))
         return {"access_token": a, "token_type": "Bearer", "expires_in": ACCESS_TTL, "refresh_token": r}
 
     def exchange(self, code: str, cid: str, redirect_uri: str, verifier: str) -> dict:
@@ -117,14 +128,23 @@ class Auth:
         if rec["client_id"] != cid or d["redir"] != redirect_uri: raise AuthError("code does not match client")
         want = base64.urlsafe_b64encode(hashlib.sha256((verifier or "").encode()).digest()).rstrip(b"=").decode()
         if not hmac.compare_digest(want, d["ch"]): raise AuthError("PKCE verification failed")
-        with self.store.conn() as c: return self._tokens(c, rec["user_id"], cid)
+        key = seal.unwrap(_kek(code), rec["wrapped"]) if rec["wrapped"] else None
+        with self.store.conn() as c: return self._tokens(c, rec["user_id"], cid, key)
 
     def refresh(self, refresh_token: str, cid: str) -> dict:
         with self.store.conn() as c: rec = _pop(c, "grants", _h(refresh_token or ""), "refresh")
         if not rec or rec["exp"] <= self.now() or rec["client_id"] != cid: raise AuthError("invalid refresh token")
-        with self.store.conn() as c: return self._tokens(c, rec["user_id"], cid)
+        key = seal.unwrap(_kek(refresh_token), rec["wrapped"]) if rec["wrapped"] else None
+        with self.store.conn() as c: return self._tokens(c, rec["user_id"], cid, key)
 
     def check(self, access_token: str) -> Optional[str]:
         """The user id behind a valid access token, else None. Entitlement is a separate check (Store.entitled)."""
-        with self.store.conn() as c: r = c.execute("SELECT user_id, exp FROM grants WHERE hash=? AND kind='access'", (_h(access_token or ""),)).fetchone()
+        with self.store.conn() as c:
+            r = c.execute("SELECT user_id, exp, wrapped FROM grants WHERE hash=? AND kind='access'", (_h(access_token or ""),)).fetchone()
+            if r and r["wrapped"] is None and c.execute("SELECT 1 FROM vault_keys WHERE user_id=?", (r["user_id"],)).fetchone(): return None   # connected before the vault was encrypted: connect again
         return r["user_id"] if r and r["exp"] > self.now() else None
+
+    def key(self, access_token: str) -> Optional[bytes]:
+        """The account's data key, unwrapped with this access token for one request. None for an account that is not encrypted."""
+        with self.store.conn() as c: r = c.execute("SELECT wrapped FROM grants WHERE hash=? AND kind='access'", (_h(access_token or ""),)).fetchone()
+        return seal.unwrap(_kek(access_token), r["wrapped"]) if r and r["wrapped"] else None

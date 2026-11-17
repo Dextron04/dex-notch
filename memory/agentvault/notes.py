@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Tuple
 from .model import Turn, SessionMeta
 from .redact import redact
+from . import seal
 
 _KEYS = ["agent", "project", "cwd", "session_id", "title", "started", "updated", "turns", "source_path"]
 
@@ -18,10 +19,7 @@ def note_path(vault: Path, meta: SessionMeta) -> Path:
     return Path(vault) / "Sessions" / slug(meta.agent) / date[:7] / name
 
 def write_atomic(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", dir=path.parent, prefix=".tmp-", delete=False, encoding="utf-8") as f:
-        f.write(text)
-    os.replace(f.name, path)
+    seal.write_bytes(path, text.encode("utf-8"))   # sealed when this request holds a key (hosted), plain text otherwise
 
 def _dump_fm(fm: Dict[str, Any]) -> str:
     return "---\n" + "".join("%s: %s\n" % (k, json.dumps(fm[k], ensure_ascii=False)) for k in _KEYS if k in fm) + "---\n"
@@ -36,13 +34,12 @@ def _parse_fm_lines(lines) -> Dict[str, Any]:
 
 def read_frontmatter(path: Path) -> Dict[str, Any]:
     """Reads only the header of a note (cheap)."""
-    lines = []
-    with open(path, encoding="utf-8", errors="replace") as f:
-        if f.readline().strip() != "---": return {}
-        for ln in f:
-            if ln.strip() == "---": break
-            lines.append(ln.rstrip("\n"))
-            if len(lines) > 40: break
+    lines, it = [], iter(seal.read_text(path, head=True).split("\n"))
+    if next(it, "").strip() != "---": return {}
+    for ln in it:
+        if ln.strip() == "---": break
+        lines.append(ln)
+        if len(lines) > 40: break
     return _parse_fm_lines(lines)
 
 _MARK = re.compile(r"<!-- t:([0-9a-f]{10}) -->")
@@ -67,7 +64,7 @@ def add_turns(vault: Path, meta: SessionMeta, turns: List[Turn]) -> Tuple[Path, 
     That makes state loss, crashes between note write and state save, and copies of a session harmless."""
     p = note_path(vault, meta)
     if p.exists():
-        raw = p.read_text(encoding="utf-8")
+        raw = seal.read_text(p)
         head, _, body = raw[4:].partition("\n---\n")
         fm = _parse_fm_lines(head.split("\n"))
         have = set(_MARK.findall(body))
@@ -99,7 +96,7 @@ _SECTION = re.compile(r"^## (user|assistant) · (\S+)\n\n(.*?)\n\n<!-- t:[0-9a-f
 
 def read_note(path: Path) -> Tuple[Dict[str, Any], List[Turn]]:
     """The inverse of add_turns: a note's frontmatter and its turns, in order. Used to upload an existing vault note to the hosted service."""
-    raw = Path(path).read_text(encoding="utf-8")
+    raw = seal.read_text(path)
     head, _, body = raw[4:].partition("\n---\n")
     turns = [Turn(m.group(1), m.group(3), m.group(2)) if m.group(1) else Turn("tool", m.group(5), m.group(4)) for m in _SECTION.finditer(body)]
     return _parse_fm_lines(head.split("\n")), turns
