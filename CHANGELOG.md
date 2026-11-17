@@ -6,6 +6,14 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.8.1: A free plan, and clearer setup on the website
+
+*16 November 2026*
+
+- **Free accounts can use memory.** A free account now gets **100 MB** of memory: uploads from your Mac and the Claude/ChatGPT connector both work, with no payment. Paid plans (not open yet) will have more room. The Mac app itself is unchanged.
+- **The account page says where you stand.** It shows your plan, how much of your space is used, and, for the owner account, that there is no limit.
+- **Connecting Claude is spelled out.** Which menu to open, what to paste, who to sign in as, and what to do if you still have an older Dex connector. The steps for adding a Mac now describe the sign-in that Dex Notch opens by itself, instead of pasting a token.
+
 ## v0.8.0: Sign up, then start
 
 *16 November 2026*
