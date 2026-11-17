@@ -2,7 +2,7 @@
 Copy rule: say what happens, in the order it happens, without drama."""
 import time
 from typing import List, Optional
-from .ui import CHECK, CROSS, MAIL, PRIVACY, RELEASES, REPO, esc, hidden, layout
+from .ui import CHECK, CROSS, MAIL, PRIVACY, RELEASES, TERMS, REPO, esc, hidden, layout
 
 def _ago(ts: Optional[float], now: float) -> str:
     if not ts: return "never"
@@ -19,8 +19,9 @@ def _centered(title: str, heading: str, text: str, actions: str = "", *, eyebrow
 
 # ---------------------------------------------------------------- home
 
-def home(user: Optional[str] = None) -> str:
-    primary = '<a class="btn" href="/account">Open your account</a>' if user else '<a class="btn" href="/login">Create your account</a>'
+def home(user: Optional[str] = None, beta: bool = False) -> str:
+    primary = ('<a class="btn" href="/account">Open your account</a>' if user else '<a class="btn" href="/waitlist">Join the beta waitlist</a>' if beta
+               else '<a class="btn" href="/login">Create your account</a>')
     body = f"""
 <section class="hero" aria-labelledby="hero-title">
 <div class="wrap">
@@ -142,7 +143,7 @@ def home(user: Optional[str] = None) -> str:
 
 # ---------------------------------------------------------------- sign in
 
-def login(*, client_name: Optional[str] = None, fields: Optional[dict] = None, email: str = "", error: str = "", user: Optional[str] = None, link_name: Optional[str] = None) -> str:
+def login(*, beta: bool = False, client_name: Optional[str] = None, fields: Optional[dict] = None, email: str = "", error: str = "", user: Optional[str] = None, link_name: Optional[str] = None) -> str:
     heading = ("Let %s use your memory" % esc(client_name) if client_name else "Add <em>%s</em> to Dex Notch" % esc(link_name) if link_name else "One link. <em>No password.</em>")
     lede = ("Sign in to connect it. New here? This creates your account." if client_name or link_name
             else "Enter your email and we'll send a link that signs you in. New here? It creates your account.")
@@ -166,7 +167,8 @@ def login(*, client_name: Optional[str] = None, fields: Optional[dict] = None, e
 </div>
 <button class="btn" type="submit">Email me a sign-in link</button>
 </form>
-<p class="fine">By continuing you accept the <a href="{PRIVACY}">privacy notes</a>. We email you only this link.</p>
+{'<p class="fine">No invite yet? <a href="/waitlist">Join the waitlist</a>.</p>' if beta else ''}
+<p class="fine">Dex Notch is a closed beta. By continuing you accept the <a href="{TERMS}">terms</a> and <a href="{PRIVACY}">privacy notes</a>. We email you only this link.</p>
 </div>
 </div>
 """
@@ -388,3 +390,76 @@ def error(code: int, message: str = "", user: Optional[str] = None) -> str:
     heading, hint = _ERRORS.get(code, ("Something went wrong", "Try again in a moment."))
     action = '<a class="btn" href="/login">Sign in</a>' if code == 401 else '<a class="btn btn-ghost" href="%s">%s</a>' % (("/account", "Your account") if user else ("/", "Back to the start"))
     return _centered(heading, heading, esc(message) if message else hint, action, code=str(code), user=user)
+
+
+# ---------------------------------------------------------------- closed beta: waitlist and the operator's page
+
+def waitlist_form(*, error: str = "", email: str = "", user: Optional[str] = None) -> str:
+    err = '<p class="form-error" role="alert">%s</p>' % esc(error) if error else ""
+    body = f"""
+<div class="wrap auth">
+<div class="auth-aside">
+<span class="eyebrow">Closed beta</span>
+<h1>Ask for <em>an invite.</em></h1>
+<p class="lede">Dex Notch is being tested with a small group. Leave your email and, when there is room, you'll get an invitation with the download and the sign-in.</p>
+</div>
+<div class="card auth-card">
+<h2>Join the waitlist</h2>
+<p class="sub">We email you once: the invitation. No newsletter.</p>
+{err}
+<form method="post" action="/waitlist" data-once>
+<div class="field">
+<label for="email">Email address</label>
+<input type="email" id="email" name="email" value="{esc(email)}" required autocomplete="email" inputmode="email" spellcheck="false" autocapitalize="none" placeholder="you@example.com" autofocus>
+</div>
+<div class="field">
+<label for="note">What would you use it for? <span class="dim">(optional)</span></label>
+<input type="text" id="note" name="note" maxlength="300" autocomplete="off">
+</div>
+<div class="field" hidden><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
+<button class="btn" type="submit">Join the waitlist</button>
+</form>
+<p class="fine">It needs a Mac on macOS 14 or later. See the <a href="{TERMS}">terms</a> and <a href="{PRIVACY}">privacy notes</a>. Already invited? <a href="/login">Sign in</a>.</p>
+</div>
+</div>
+"""
+    return layout("Waitlist", body, user=user)
+
+def waitlist_done(user: Optional[str] = None) -> str:
+    return _centered("You're on the list", "You're <em>on the list</em>", "If that address is valid, it is on the waitlist. When there is room you'll get one email with the invitation.",
+                     '<a class="btn btn-ghost" href="/">Back to the start</a>', eyebrow="Waitlist", user=user)
+
+def admin(*, email: str, waiting: List[dict], invited: List[dict], members: int, cap: int, mail_ok: bool, flash: str = "", now: float = 0) -> str:
+    def row(w, button):
+        return ('<li><div><div class="name">%s</div><div class="meta">%s%s</div></div><div class="row-actions">%s'
+                '<form method="post" action="/admin/waitlist/remove">%s<button class="btn btn-quiet btn-sm" type="submit">Remove<span class="sr-only"> %s</span></button></form></div></li>'
+                % (esc(w["email"]), "joined %s" % _ago(w["created"], now), (" · " + esc(w["note"])) if w["note"] else "", button, hidden({"email": w["email"]}), esc(w["email"])))
+    inv_btn = lambda w, label: ('<form method="post" action="/admin/invite">%s<button class="btn btn-ghost btn-sm" type="submit">%s<span class="sr-only"> %s</span></button></form>'
+                                % (hidden({"email": w["email"]}), label, esc(w["email"])))
+    wr = "".join(row(w, inv_btn(w, "Invite")) for w in waiting)
+    ir = "".join(row(w, inv_btn(w, "Resend")) for w in invited)
+    note = "" if mail_ok else '<p class="form-error" role="alert">Email is not set up on this server, so invitations are only written to the log.</p>'
+    fl = '<p class="hint" role="status">%s</p>' % esc(flash) if flash else ""
+    body = f"""
+<div class="wrap">
+<header class="page-head"><span class="eyebrow">Operator</span><h1>Closed beta</h1>
+<div class="who"><span class="mono">{esc(email)}</span><span class="chip" data-tone="ok"><i></i>{members} of {cap or "unlimited"} places used</span></div></header>
+<div class="stack">
+{note}{fl}
+<section class="card" aria-labelledby="w-title">
+<div class="card-head"><h2 id="w-title">Waiting ({len(waiting)})</h2>
+<form method="post" action="/admin/invite">{hidden({"all": "1"})}<button class="btn btn-sm" type="submit"{"" if waiting else " disabled"}>Invite everyone waiting</button></form></div>
+{('<ul class="devices plain" role="list">' + wr + '</ul>') if wr else '<p class="empty">Nobody is waiting.</p>'}
+</section>
+<section class="card" aria-labelledby="i-title">
+<div class="card-head"><h2 id="i-title">Invite an address</h2><p>Doesn't need to be on the waitlist.</p></div>
+<form method="post" action="/admin/invite"><div class="form-row"><div class="field"><label for="a-email">Email address</label>
+<input type="email" id="a-email" name="email" required spellcheck="false" autocapitalize="none"></div></div><button class="btn" type="submit">Send invitation</button></form>
+</section>
+<section class="card" aria-labelledby="s-title">
+<div class="card-head"><h2 id="s-title">Invited ({len(invited)})</h2></div>
+{('<ul class="devices plain" role="list">' + ir + '</ul>') if ir else '<p class="empty">No invitations sent yet.</p>'}
+</section>
+</div></div>
+"""
+    return layout("Closed beta", body, user=email)

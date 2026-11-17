@@ -21,8 +21,17 @@ def _pop(c, table: str, h: str, kind: Optional[str] = None):
     return r if r and c.execute("DELETE FROM %s %s" % (table, q), a).rowcount else None
 
 class Auth:
-    def __init__(self, store: Store, now: Callable[[], float] = time.time, allowed_hosts=ALLOWED_REDIRECT_HOSTS):
-        self.store, self.now, self.allowed = store, now, tuple(allowed_hosts)
+    def __init__(self, store: Store, now: Callable[[], float] = time.time, allowed_hosts=ALLOWED_REDIRECT_HOSTS, invite_only: bool = False, max_users: int = 0):
+        """`invite_only`: only existing accounts and invited emails may sign in. `max_users` (0 = no cap): stops new accounts once that many exist."""
+        self.store, self.now, self.allowed, self.invite_only, self.max_users = store, now, tuple(allowed_hosts), invite_only, max_users
+        self.on_new_user: Optional[Callable[[str], None]] = None   # called with the email when a verified sign-in creates an account (the welcome mail)
+
+    def may_join(self, email: str) -> Optional[str]:
+        """None if this address may sign in (existing account, or room and an invite), else the reason in words."""
+        if self.store.by_email(email): return None
+        if self.invite_only and not self.store.invited(email): return "Dex Notch is in a closed beta and this address isn't on the list yet."
+        if self.max_users and self.store.user_count() >= self.max_users: return "The beta is full right now."
+        return None
 
     def _gc(self, c) -> None:
         for t in ("grants", "login_links", "sessions"): c.execute("DELETE FROM %s WHERE exp<=?" % t, (self.now(),))
@@ -58,7 +67,11 @@ class Auth:
         with self.store.conn() as c:
             r = _pop(c, "login_links", _h(token or ""))
             if not r or r["exp"] <= self.now(): raise AuthError("this sign-in link is invalid or expired")
-        uid = self.store.by_email(r["email"]) or self.store.create_user(r["email"])
+        uid = self.store.by_email(r["email"])
+        if not uid:
+            if self.may_join(r["email"]): raise AuthError("this address can't create an account right now")  # re-checked: an invite may have been withdrawn, or the beta filled, since the mail went out
+            uid = self.store.create_user(r["email"])
+            if self.on_new_user: self.on_new_user(r["email"])
         sess = secrets.token_urlsafe(32)
         with self.store.conn() as c: c.execute("INSERT INTO sessions VALUES(?,?,?)", (_h(sess), uid, self.now() + SESSION_TTL))
         return sess, uid, r["next"]

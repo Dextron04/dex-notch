@@ -38,7 +38,7 @@ If you switch it on:
 
 ## Hosted memory (optional, off until you connect it)
 
-An optional Dex account keeps your recorded AI conversations on a server so Claude and ChatGPT can search them from anywhere. Nothing is uploaded unless you create an account, add this Mac, and paste its device token into Settings → Memory.
+An optional Dex account keeps your recorded AI conversations on a server so Claude and ChatGPT can search them from anywhere. Nothing is uploaded unless you sign in to a Dex account in the welcome window and leave **Keep my AI conversations in my account** on (change it in Settings → Memory).
 
 - **What is uploaded:** the conversations the recorder has written on your Mac (Claude Code, Codex, Gemini and any other agent it records): the text of your messages, the assistant's replies, tool-use lines, project names and folder paths. The recorder removes passwords and API keys when it writes a note, and the server removes them again before storing. That is pattern-based and cannot catch everything, so don't rely on it for secrets. The first connection uploads your whole history; after that, only new turns.
 - **What we keep about you:** your email address; when you signed in; the names you gave your Macs; a hashed copy of each device token (the token itself is shown once and kept only in your Keychain); and your plan status. When paid plans open, payments are handled by Stripe: we store Stripe's customer and subscription ids, never card numbers.
@@ -46,7 +46,7 @@ An optional Dex account keeps your recorded AI conversations on a server so Clau
 - **Services involved:** the network provider that carries traffic to the server (Cloudflare), the email provider that delivers your sign-in links (once configured), and Stripe for payments (once paid plans open). No analytics or advertising of any kind.
 - **Your controls:** on your account page you can see your Macs and remove one (it stops uploading at once), sign out everywhere, **Download my data** (a zip of every note), and **Delete my account**, which cancels your subscription first and then permanently erases your notes, devices and sign-ins. Backups made before a deletion are overwritten within 14 days. Disconnecting in Settings → Memory stops uploads from this Mac but does not delete what was uploaded.
 - **If you stop paying:** your notes stay available for export. Canceled accounts are erased periodically, no sooner than 30 days after the subscription ended; download your data before then.
-- **Limits:** 500 MB of notes per account.
+- **Limits:** 100 MB of notes per free account (500 MB on a paid plan, when those open).
 
 ## Updates
 

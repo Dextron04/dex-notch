@@ -7,6 +7,7 @@ STATIC = Path(__file__).resolve().parent / "static"
 REPO = "https://github.com/Dextron04/dex-notch"
 RELEASES = REPO + "/releases/latest"
 PRIVACY = REPO + "/blob/master/PRIVACY.md"
+TERMS = REPO + "/blob/master/docs/terms.md"
 DESCRIPTION = "Dex Notch turns your Mac's notch into a quiet place for mail, iPhone alerts and reminders. Dex Memory keeps every AI conversation you've had where Claude and ChatGPT can search it."
 
 def esc(s) -> str:
@@ -74,6 +75,7 @@ def layout(title: str, body: str, *, user: Optional[str] = None, current: str = 
 <p>Dex Notch is open source and made for the Mac.<br>Early access: expect rough edges.</p>
 <nav aria-label="Footer"><ul>
 <li><a href="{PRIVACY}">Privacy</a></li>
+<li><a href="{TERMS}">Terms</a></li>
 <li><a href="{REPO}">Source</a></li>
 <li><a href="{RELEASES}">Download</a></li>
 </ul></nav>

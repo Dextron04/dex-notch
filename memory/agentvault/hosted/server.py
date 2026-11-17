@@ -11,7 +11,7 @@ from ..index import session_files
 from . import billing, devices, link, pages, tools, ui
 from .ingest import MAX_BODY as INGEST_MAX, IngestError, ingest, vault_bytes
 from .oauth import SESSION_TTL, Auth, AuthError
-from .store import Store
+from .store import EMAIL, Store
 
 OAUTH_FIELDS = ("response_type", "client_id", "redirect_uri", "code_challenge", "code_challenge_method", "state")
 COOKIE = "av_session"
@@ -35,13 +35,22 @@ CSP = ("default-src 'none'; style-src 'self'; script-src 'self'; font-src 'self'
 
 def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[str, str], None],
                 stripe: Optional[billing.Stripe] = None, stripe_webhook_secret: bytes = b"", port: int = 8766, host: str = "127.0.0.1",
-                now=time.time, wait_seconds: float = 25) -> ThreadingHTTPServer:
+                now=time.time, wait_seconds: float = 25, send_invite: Optional[Callable[[str, str], None]] = None, admins=(), send_welcome: Optional[Callable[[str, str], None]] = None) -> ThreadingHTTPServer:
     """`send_mail(email, link)` delivers the sign-in link (see mail.py). Without `stripe`, billing is off and only the `grant` CLI can mark users paid."""
     public = public_url.rstrip("/")
+    admins = {a.strip().lower() for a in admins}   # the operator: these signed-in emails see /admin; everyone else gets a plain 404
     secure = "; Secure" if public.startswith("https://") else ""
     by_ip, by_email, reg_ip = Limiter(10, 3600, now), Limiter(3, 900, now), Limiter(20, 3600, now)
     by_device = Limiter(120, 60, now)  # uploads and reminder polls per device per minute
     by_user = Limiter(120, 60, now)    # MCP calls per user per minute
+    if send_welcome:
+        def _welcome(email):   # in the background and never fatal: a mail problem must not stop someone signing in
+            def go():
+                try: send_welcome(email, public + "/account")
+                except Exception as ex: print("welcome mail failed: %s" % type(ex).__name__, file=sys.stderr, flush=True)
+            threading.Thread(target=go, daemon=True).start()
+        auth.on_new_user = _welcome
+    wait_ip = Limiter(5, 3600, now)   # waitlist sign-ups per address per hour
     link_ip, poll_ip = Limiter(20, 3600, now), Limiter(240, 60, now)   # Mac link codes started per hour, and polls for the answer per minute, per address
     exporting, export_slots = set(), threading.BoundedSemaphore(2)  # a zip of a whole vault is heavy: one per user, two at a time
 
@@ -114,16 +123,19 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                     "grant_types_supported": ["authorization_code", "refresh_token"], "code_challenge_methods_supported": ["S256"],
                     "token_endpoint_auth_methods_supported": ["none"], "scopes_supported": ["vault"]})
             if u.path == "/authorize": return self.authorize_page(q)
-            if u.path == "/": return self.html(200, pages.home(self.user_email()))
+            if u.path == "/": return self.html(200, pages.home(self.user_email(), auth.invite_only))
             if u.path.startswith("/static/"): return self.static(u.path[8:])
             if u.path == "/privacy": return self.redirect(ui.PRIVACY)
+            if u.path == "/waitlist": return self.html(200, pages.waitlist_form(user=self.user_email())) if auth.invite_only else self.redirect("/login")
+            if u.path == "/admin": return self.admin_page(q)
+            if u.path == "/terms": return self.redirect(ui.TERMS)
             if u.path == "/billing/checkout": return self.checkout()
             if u.path == "/billing/portal": return self.portal()
             if u.path in ("/billing/success", "/billing/cancel"): return self.html(200, pages.billing_done(u.path.endswith("success"), self.user_email()))
             if u.path == "/login/done": return self.redirect("/account")
             if u.path == "/link": return self.link_page(q)
             if u.path == "/v1/me": return self.v1_me()
-            if u.path == "/login": return self.redirect("/account") if self.user() else self.html(200, pages.login())
+            if u.path == "/login": return self.redirect("/account") if self.user() else self.html(200, pages.login(beta=auth.invite_only, ))
             if u.path == "/account": return self.account()
             if u.path == "/healthz":
                 try: store.stats(); return self.send(200, {"ok": True})
@@ -144,6 +156,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                   "/login": self.login, "/login/verify": self.verify, "/hooks/stripe": self.stripe_hook,
                   "/account/devices": self.add_device, "/account/devices/revoke": self.revoke_device, "/account/signout-all": self.signout_all,
                   "/logout": self.logout, "/v1/ingest": self.v1_ingest, "/account/export": self.export, "/account/delete": self.delete,
+                  "/waitlist": self.waitlist_join, "/admin/invite": self.admin_invite, "/admin/waitlist/remove": self.admin_remove,
                   "/link": self.link_approve, "/v1/link/start": self.v1_link_start, "/v1/link/poll": self.v1_link_poll}.get(path)
             fn() if fn else self.send(404, {"error": "not_found"})
 
@@ -155,7 +168,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             except AuthError as e: return self.bad(e)
             fields = {k: q.get(k, "") for k in OAUTH_FIELDS}
             uid = self.user()
-            if not uid: return self.html(200, pages.login(client_name=c["name"], fields=fields))
+            if not uid: return self.html(200, pages.login(beta=auth.invite_only, client_name=c["name"], fields=fields))
             if not store.may_use(uid): return self.html(402, pages.need_plan(store.email(uid), public + "/billing/checkout" if stripe else None))
             self.html(200, pages.consent(c["name"], urlparse(q["redirect_uri"]).hostname or "", store.email(uid), fields))
 
@@ -169,6 +182,9 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if f.get("link"):  # started from a Mac asking to be linked: come back to that page, rebuilt from a code that is still open
                 if not link.peek(store, f["link"], now()): return self.fail(400, "This link has expired. Go back to Dex Notch and start again.")
                 nxt = "/link?" + urlencode({"code": link.normalize(f["link"])})
+            if EMAIL.fullmatch(email):
+                why = auth.may_join(email)   # closed beta: say so plainly instead of silently sending nothing
+                if why: return self.html(200, pages.login(beta=auth.invite_only, error=why, email=email, fields={k: f[k] for k in OAUTH_FIELDS + ("link",) if f.get(k)}))
             # the answer never says whether the address is known, or whether a mail went out
             if by_ip.allow(self.ip()) and by_email.allow(email):
                 try: send_mail(email, "%s/login/verify?t=%s" % (public, auth.start_login(email, nxt)))
@@ -196,12 +212,58 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if f.get("state"): q["state"] = f["state"]
             self.redirect(f["redirect_uri"] + ("&" if "?" in f["redirect_uri"] else "?") + urlencode(q))
 
+        # -- closed beta: a public waitlist, and the operator's page that turns a waiting address into an invitation
+        def waitlist_join(self):
+            f = self.form()
+            if f is None: return
+            if not auth.invite_only: return self.redirect("/login")
+            email = (f.get("email") or "").strip().lower()
+            if f.get("website"): return self.html(200, pages.waitlist_done())   # a bot filled the hidden field: look like success, store nothing
+            if not wait_ip.allow(self.ip()): return self.fail(429, "Too many tries from this address. Try again in an hour.")
+            if not EMAIL.fullmatch(email) or len(email) > 254: return self.html(200, pages.waitlist_form(error="That doesn't look like an email address.", email=email))
+            if not store.join_waitlist(email, f.get("note", "")): return self.html(200, pages.waitlist_form(error="The waitlist is full right now. Please check back later.", email=email))
+            self.html(200, pages.waitlist_done())
+
+        def admin_uid(self):
+            """The signed-in operator's email, else answers 404 itself (the page's existence is not advertised) and returns None."""
+            e = self.user_email()
+            if e and e.lower() in admins: return e
+            self.send(404, {"error": "not_found"}); return None
+
+        def admin_page(self, q):
+            e = self.admin_uid()
+            if not e: return
+            wl = store.waitlist()
+            self.html(200, pages.admin(email=e, waiting=[w for w in wl if not w["invited_at"]], invited=[w for w in wl if w["invited_at"]], members=store.user_count(),
+                                       cap=auth.max_users, mail_ok=send_invite is not None, flash=q.get("m", ""), now=now()))
+
+        def admin_invite(self):
+            f = self.form()
+            if f is None: return
+            if not self.admin_uid(): return
+            todo = [w["email"] for w in store.waitlist() if not w["invited_at"]] if f.get("all") else [(f.get("email") or "").strip().lower()]
+            sent, failed = 0, []
+            for e in todo:
+                try: store.invite(e); store.join_waitlist(e); store.mark_invited(e)   # the allowlist first: a sign-in must work the moment the mail lands
+                except ValueError: failed.append(e); continue
+                try:
+                    (send_invite or (lambda a, l: print("INVITE for %s: %s" % (a, l), file=sys.stderr, flush=True)))(e, public + "/login"); sent += 1
+                except Exception as ex: failed.append(e); print("invite mail failed: %s" % type(ex).__name__, file=sys.stderr, flush=True)
+            msg = "Invited %d." % sent + (" Could not send to %d: %s." % (len(failed), ", ".join(failed)) if failed else "")
+            self.redirect("/admin?" + urlencode({"m": msg}))
+
+        def admin_remove(self):
+            f = self.form()
+            if f is None: return
+            if not self.admin_uid(): return
+            store.remove_waitlist(f.get("email", "")); self.redirect("/admin?" + urlencode({"m": "Removed."}))
+
         # -- linking a Mac: the app starts it, the browser approves it, the app collects its device token
         def link_page(self, q):
             name = link.peek(store, q.get("code", ""), now())
             if not name: return self.fail(400, "This link has expired. Go back to Dex Notch and start again.")
             uid, code = self.user(), link.normalize(q["code"])
-            if not uid: return self.html(200, pages.login(link_name=name, fields={"link": code}))
+            if not uid: return self.html(200, pages.login(beta=auth.invite_only, link_name=name, fields={"link": code}))
             self.html(200, pages.link_confirm(store.email(uid), name, code))
 
         def link_approve(self):

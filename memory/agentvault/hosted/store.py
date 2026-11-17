@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS grants(hash TEXT PRIMARY KEY, kind TEXT NOT NULL, use
 CREATE INDEX IF NOT EXISTS grants_user ON grants(user_id);
 CREATE TABLE IF NOT EXISTS login_links(hash TEXT PRIMARY KEY, email TEXT NOT NULL, next TEXT, exp REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS links(code TEXT PRIMARY KEY, secret_hash TEXT NOT NULL UNIQUE, name TEXT NOT NULL, user_id TEXT, token TEXT, exp REAL NOT NULL);  -- see link.py
+CREATE TABLE IF NOT EXISTS waitlist(email TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '', created REAL NOT NULL, invited_at REAL);
+CREATE TABLE IF NOT EXISTS invites(email TEXT PRIMARY KEY, added REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), exp REAL NOT NULL);
 """
 STATUSES = {"pending", "active", "past_due", "canceled", "deleted"}
@@ -86,6 +88,46 @@ class Store:
     def canceled_before(self, ts: float) -> list:
         """Users whose subscription ended before `ts` (unix) and who never came back: candidates for the retention purge."""
         with self.conn() as c: return [r["id"] for r in c.execute("SELECT id FROM users WHERE status='canceled' AND status_at IS NOT NULL AND status_at<?", (ts,))]
+
+    # -- closed beta: who may create an account
+    def invite(self, email: str) -> str:
+        email = (email or "").strip().lower()
+        if not EMAIL.fullmatch(email) or len(email) > 254: raise ValueError("invalid email")
+        with self.conn() as c: c.execute("INSERT OR IGNORE INTO invites VALUES(?,?)", (email, time.time()))
+        return email
+
+    def uninvite(self, email: str) -> None:
+        with self.conn() as c: c.execute("DELETE FROM invites WHERE email=?", ((email or "").strip().lower(),))
+
+    def invited(self, email: str) -> bool:
+        with self.conn() as c: return bool(c.execute("SELECT 1 FROM invites WHERE email=?", ((email or "").strip().lower(),)).fetchone())
+
+    def invites(self) -> list:
+        with self.conn() as c: return [r["email"] for r in c.execute("SELECT email FROM invites ORDER BY added")]
+
+    WAITLIST_CAP = 2000   # a public form must not be able to fill the disk
+
+    def join_waitlist(self, email: str, note: str = "") -> bool:
+        """True if the address is on the list afterwards (already there counts). False only when the list is full."""
+        email = (email or "").strip().lower()
+        if not EMAIL.fullmatch(email) or len(email) > 254: raise ValueError("invalid email")
+        with self.conn() as c:
+            if c.execute("SELECT 1 FROM waitlist WHERE email=?", (email,)).fetchone(): return True
+            if c.execute("SELECT COUNT(*) FROM waitlist").fetchone()[0] >= self.WAITLIST_CAP: return False
+            c.execute("INSERT INTO waitlist(email,note,created) VALUES(?,?,?)", (email, " ".join((note or "").split())[:300], time.time()))
+        return True
+
+    def waitlist(self) -> list:
+        with self.conn() as c: return [dict(r) for r in c.execute("SELECT email,note,created,invited_at FROM waitlist ORDER BY created")]
+
+    def mark_invited(self, email: str) -> None:
+        with self.conn() as c: c.execute("UPDATE waitlist SET invited_at=? WHERE email=?", (time.time(), (email or "").strip().lower()))
+
+    def remove_waitlist(self, email: str) -> None:
+        with self.conn() as c: c.execute("DELETE FROM waitlist WHERE email=?", ((email or "").strip().lower(),))
+
+    def user_count(self) -> int:
+        with self.conn() as c: return c.execute("SELECT COUNT(*) FROM users WHERE status!='deleted'").fetchone()[0]
 
     def stats(self) -> dict:
         with self.conn() as c:

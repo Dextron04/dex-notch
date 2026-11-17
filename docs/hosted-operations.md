@@ -26,6 +26,13 @@ Restore (stop the service first): `scripts/hosted-restore.sh ARCHIVE EMPTY_DIR`,
 - Erase long-canceled accounts: `python3 -m agentvault.hosted purge --root DIR --days 30` (dry run), then add `--yes`.
 - A user can delete themselves from their account page; that cancels Stripe first and refuses if Stripe won't confirm.
 
+## Closed beta
+Add `--invite-only --max-users 20 --admin YOU@EMAIL` to the plist's `serve` arguments (bootout, then bootstrap). Then:
+- Only existing accounts and invited emails can sign in. Everyone else sees the waitlist form at `/waitlist` (linked from the home and sign-in pages).
+- A waiting address is **not** an invitation. The operator signs in, opens `/admin` (a 404 for everyone else), and presses **Invite** (or **Invite everyone waiting**). That adds the address to the allowlist and emails the download and sign-in link.
+- CLI equivalents: `python3 -m agentvault.hosted invite|uninvite|invites --root DIR EMAIL...`.
+- `--max-users` counts live accounts; a deleted account frees its place. Without `--smtp-*`, invitations are only written to the log.
+
 ## Known gaps
 - Sign-in emails need `--smtp-*` flags; without them the link is printed to the log (only the operator can sign in).
 - Disk encryption of the mini is not verified here; the privacy text says notes are readable by the operator and not end-to-end encrypted.
