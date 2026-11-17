@@ -398,6 +398,14 @@
   .w > span { display: inline-block; }
   .fx-on .read-head > * { animation: none; }
 
+
+  /* passkey buttons: hidden until the browser can do passkeys, then given room */
+  .btn[data-passkey] { margin-block: 0.4rem 1.2rem; }
+  .auth-card .btn[data-passkey="login"] { inline-size: 100%; }
+  .row-actions { align-items: flex-start; }
+  form[action="/account/export"] { display: grid; gap: 0.6rem; justify-items: start; }
+  form[action="/account/export"] input[type="password"] { inline-size: min(100%, 22rem); }
+
   /* ===== auth / account / flows ===== */
   .auth { padding-block: clamp(2rem, 7vw, 5rem) 0; display: grid; gap: clamp(2rem, 6vw, 4rem); align-items: center; }
   @media (min-width: 56rem) { .auth { grid-template-columns: 1.05fr 0.95fr; } }

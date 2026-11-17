@@ -24,6 +24,10 @@ CREATE TABLE IF NOT EXISTS links(code TEXT PRIMARY KEY, secret_hash TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS waitlist(email TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '', created REAL NOT NULL, invited_at REAL);
 CREATE TABLE IF NOT EXISTS invites(email TEXT PRIMARY KEY, added REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS vault_keys(user_id TEXT PRIMARY KEY REFERENCES users(id), salt BLOB NOT NULL, by_passphrase BLOB NOT NULL, by_recovery BLOB NOT NULL, created REAL NOT NULL);  -- see keys.py: wrapped copies of the account's data key, never the key
+CREATE TABLE IF NOT EXISTS passkeys(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), name TEXT NOT NULL, public_key BLOB NOT NULL,
+  sign_count INTEGER NOT NULL DEFAULT 0, created REAL NOT NULL, last_used REAL, wrapped BLOB);  -- see webauthn.py; `wrapped` is the data key under this passkey's PRF secret (null: it can sign in but not unlock)
+CREATE INDEX IF NOT EXISTS passkeys_user ON passkeys(user_id);
+CREATE TABLE IF NOT EXISTS nudges(user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL, at REAL NOT NULL, PRIMARY KEY(user_id, kind));
 CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), exp REAL NOT NULL);
 """
 STATUSES = {"pending", "active", "past_due", "canceled", "deleted"}
@@ -43,7 +47,7 @@ class Store:
             c.executescript(SCHEMA)
             try: os.chmod(self.db, 0o600)   # the account database is for this user only
             except OSError: pass
-            for t, col in (("devices", "wrapped_key"), ("grants", "wrapped")):   # the data key, wrapped under that credential's own token
+            for t, col in (("devices", "wrapped_key"), ("grants", "wrapped"), ("sessions", "wrapped")):   # the data key, wrapped under that credential's own token
                 if col not in [r["name"] for r in c.execute("PRAGMA table_info(%s)" % t)]: c.execute("ALTER TABLE %s ADD COLUMN %s BLOB" % (t, col))
             if "status_at" not in [r["name"] for r in c.execute("PRAGMA table_info(users)")]: c.execute("ALTER TABLE users ADD COLUMN status_at REAL")  # databases from before retention existed
 
@@ -85,7 +89,7 @@ class Store:
         with self.conn() as c:
             r = c.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
             if not r: raise KeyError(uid)
-            for t in ("devices", "grants", "sessions", "links", "vault_keys"): c.execute("DELETE FROM %s WHERE user_id=?" % t, (uid,))
+            for t in ("devices", "grants", "sessions", "links", "vault_keys", "passkeys", "nudges"): c.execute("DELETE FROM %s WHERE user_id=?" % t, (uid,))
             for t in ("login_links", "waitlist", "invites"): c.execute("DELETE FROM %s WHERE email=?" % t, (r["email"],))   # the address itself goes too, not only the account
             c.execute("UPDATE users SET status='deleted', status_at=?, email=? WHERE id=?", (time.time(), "deleted-%s@invalid" % uid, uid))
         shutil.rmtree(self.root / "data" / uid, ignore_errors=True)
@@ -172,6 +176,36 @@ class Store:
         with self.conn() as c:
             c.execute("INSERT INTO vault_keys VALUES(?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET salt=excluded.salt, by_passphrase=excluded.by_passphrase, by_recovery=excluded.by_recovery",
                       (uid, salt, by_passphrase, by_recovery, time.time()))
+
+    def unlocked_users(self, kind: str, older_than: float) -> list:
+        """(id, email) of live accounts whose vault is not locked yet and who were not sent this reminder since `older_than` (unix)."""
+        with self.conn() as c:
+            return [(r["id"], r["email"]) for r in c.execute(
+                "SELECT u.id, u.email FROM users u WHERE u.status IN ('pending','active','past_due') AND NOT EXISTS (SELECT 1 FROM vault_keys v WHERE v.user_id=u.id) "
+                "AND NOT EXISTS (SELECT 1 FROM nudges n WHERE n.user_id=u.id AND n.kind=? AND n.at>?) ORDER BY u.created_at", (kind, older_than))]
+
+    def nudged(self, uid: str, kind: str) -> None:
+        with self.conn() as c: c.execute("INSERT INTO nudges VALUES(?,?,?) ON CONFLICT(user_id,kind) DO UPDATE SET at=excluded.at", (uid, kind, time.time()))
+
+    # -- passkeys
+    def add_passkey(self, uid: str, cred_id: str, name: str, public_key: bytes, sign_count: int, wrapped: bytes = None) -> None:
+        with self.conn() as c:
+            if c.execute("SELECT COUNT(*) FROM passkeys WHERE user_id=?", (uid,)).fetchone()[0] >= 10: raise ValueError("passkey limit reached; remove one first")
+            c.execute("INSERT INTO passkeys(id,user_id,name,public_key,sign_count,created,wrapped) VALUES(?,?,?,?,?,?,?)",
+                      (cred_id, uid, " ".join((name or "").split())[:60] or "Passkey", public_key, sign_count, time.time(), wrapped))
+
+    def passkey(self, cred_id: str):
+        with self.conn() as c: r = c.execute("SELECT * FROM passkeys WHERE id=?", (cred_id or "",)).fetchone()
+        return dict(r) if r else None
+
+    def passkeys(self, uid: str) -> list:
+        with self.conn() as c: return [dict(r) for r in c.execute("SELECT id,name,created,last_used,wrapped IS NOT NULL AS unlocks FROM passkeys WHERE user_id=? ORDER BY created", (uid,))]
+
+    def passkey_used(self, cred_id: str, sign_count: int) -> None:
+        with self.conn() as c: c.execute("UPDATE passkeys SET sign_count=?, last_used=? WHERE id=?", (sign_count, time.time(), cred_id))
+
+    def remove_passkey(self, uid: str, cred_id: str) -> bool:
+        with self.conn() as c: return bool(c.execute("DELETE FROM passkeys WHERE id=? AND user_id=?", (cred_id, uid)).rowcount)   # user_id in the WHERE: only your own
 
     def user_vault(self, uid: str) -> Path:
         """The only way to reach a user's notes. Every tool handler gets this Path as its `vault` and never sees another."""

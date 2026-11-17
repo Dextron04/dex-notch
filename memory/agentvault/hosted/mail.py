@@ -32,14 +32,27 @@ Your account page also lets you download everything or delete your account at an
 It is a closed beta, so expect rough edges. In Dex Notch, Settings → Memory → "Copy diagnostics" and "Report a problem" are there for when something breaks.
 """
 
-def smtp_sender(host: str, port: int, sender: str, user: str = "", password: str = "", smtp_factory: Optional[Callable] = None, invite: bool = False, welcome: bool = False,
+VAULT_BODY = """Dex Notch now encrypts the conversations you've saved, with a key only you can open. Until you lock your vault, your Mac and your Claude or ChatGPT connection are paused, and your saved notes are not encrypted yet.
+
+It takes about a minute:
+
+1. Sign in: {account}
+2. Choose Touch ID (a passkey) or a passphrase, and save the recovery code it shows you once.
+3. Your Mac signs in again by itself the next time Dex Notch opens, and your assistants ask you to approve them once more.
+
+Your notes are kept. If you'd rather not continue, you can download everything or delete your account from the same page.
+
+You get this email once a week at most, and only while your vault is not locked.
+"""
+
+def smtp_sender(host: str, port: int, sender: str, user: str = "", password: str = "", smtp_factory: Optional[Callable] = None, invite: bool = False, welcome: bool = False, vault: bool = False,
                 download: str = "https://github.com/Dextron04/dex-notch/releases/latest") -> Callable[[str, str], None]:
     """Returns send(email, link). Port 465 = TLS from the start, anything else = STARTTLS (required: we never send a link or a password in clear).
     `smtp_factory` is for tests."""
     def send(email: str, link: str) -> None:
         m = EmailMessage()  # raises ValueError on a newline in any header, so an address can't smuggle in extra headers
-        m["From"], m["To"], m["Subject"] = sender, email, ("Welcome to Dex Notch" if welcome else "You're invited to the Dex Notch beta" if invite else "Your sign-in link")
-        m.set_content(WELCOME_BODY.format(email=email, download=download, account=link) if welcome else INVITE_BODY.format(link=link, email=email, download=download) if invite
+        m["From"], m["To"], m["Subject"] = sender, email, ("Lock your Dex Notch vault" if vault else "Welcome to Dex Notch" if welcome else "You're invited to the Dex Notch beta" if invite else "Your sign-in link")
+        m.set_content(VAULT_BODY.format(account=link) if vault else WELCOME_BODY.format(email=email, download=download, account=link) if welcome else INVITE_BODY.format(link=link, email=email, download=download) if invite
                       else BODY.format(link=link))
         ctx = ssl.create_default_context()
         if smtp_factory: s = smtp_factory(host, port)

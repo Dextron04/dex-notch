@@ -1,6 +1,6 @@
 """Every page the hosted service shows to a person. Plain functions that return HTML; the server decides which one, this decides how it reads.
 Copy rule: say what happens, in the order it happens, without drama."""
-import time
+import json, time
 from typing import List, Optional
 from .ui import CHECK, CROSS, MAIL, PRIVACY, RELEASES, STORY, TERMS, REPO, esc, hidden, layout
 
@@ -156,6 +156,7 @@ def login(*, beta: bool = False, client_name: Optional[str] = None, fields: Opti
 <p class="lede">{lede}</p>
 </div>
 <div class="card auth-card">
+{_passkey("login", "Sign in with a passkey", fields=fields)}
 <h2>Email me a link</h2>
 <p class="sub">It works once and expires in 15 minutes.</p>
 {err}
@@ -200,9 +201,20 @@ def verify(token: str, user: Optional[str] = None) -> str:
 # ---------------------------------------------------------------- OAuth consent
 
 
-def _pass_field(error: str = "") -> str:
+def _passkey(kind: str, label: str, *, creds=(), fields=None, nxt: str = "", submit: str = "") -> str:
+    """A passkey button. It stays hidden until the page's script finds this browser can do passkeys; without script nothing here shows."""
+    data = {"data-passkey": kind}
+    if creds: data["data-creds"] = json.dumps(list(creds))
+    if fields: data["data-fields"] = json.dumps({k: v for k, v in fields.items() if v})
+    if nxt: data["data-next"] = nxt
+    if submit: data["data-submit"] = submit
+    attrs = " ".join('%s="%s"' % (k, esc(v)) for k, v in data.items())
+    return '<button class="btn btn-ghost" type="button" hidden %s>%s</button><p class="form-error" role="alert" data-passkey-msg hidden></p>' % (attrs, esc(label))
+
+def _pass_field(error: str = "", creds=(), submit: str = "") -> str:
     err = '<p class="form-error" role="alert">%s</p>' % esc(error) if error else ""
-    return (err + '<div class="field"><label for="passphrase">Your vault passphrase</label>'
+    pk = (_passkey("unlock", "Use my passkey", creds=creds, submit=submit) + '<input type="hidden" name="credential"><input type="hidden" name="prf">') if creds else ""
+    return (pk + err + '<div class="field"><label for="passphrase">Your vault passphrase</label>'
             '<input type="password" id="passphrase" name="passphrase" required autocomplete="current-password" spellcheck="false" autocapitalize="none">'
             '<p class="hint">It unlocks your notes. Dex Notch never sees it after this page.</p></div>')
 
@@ -220,6 +232,7 @@ def vault_setup(email: str, nxt: str, error: str = "", available_for: str = "") 
 <h2>Choose a passphrase</h2>
 <p class="sub">Signed in as <b class="mono">{esc(email)}</b>. Next you'll get a recovery code. Keep both: without them, nobody can recover your notes.</p>
 {err}
+{_passkey("setup", "Use Touch ID or a passkey instead", nxt=nxt)}
 <form method="post" action="/account/vault" data-once>
 {hidden({"next": nxt})}
 <div class="field"><label for="p1">Passphrase</label>
@@ -248,7 +261,7 @@ def vault_recovery(email: str, code: str, nxt: str) -> str:
 """
     return layout("Recovery code", body, user=email)
 
-def consent(client_name: str, host: str, email: str, fields: dict, ask: bool = False, error: str = "") -> str:
+def consent(client_name: str, host: str, email: str, fields: dict, ask: bool = False, error: str = "", creds=()) -> str:
     body = f"""
 <div class="wrap-narrow auth-single">
 <div class="card auth-card consent">
@@ -263,7 +276,7 @@ def consent(client_name: str, host: str, email: str, fields: dict, ask: bool = F
 </ul>
 <form method="post" action="/authorize">
 {hidden(fields)}
-{_pass_field(error) if ask else ""}
+{_pass_field(error, creds, 'button[value=allow]') if ask else ""}
 <div class="consent-actions">
 <button class="btn btn-ghost" type="submit" name="decision" value="deny">Deny</button>
 <button class="btn" type="submit" name="decision" value="allow">Allow</button>
@@ -275,7 +288,7 @@ def consent(client_name: str, host: str, email: str, fields: dict, ask: bool = F
 """
     return layout("Connect " + client_name, body, user=email)
 
-def link_confirm(email: str, name: str, code: str, ask: bool = False, error: str = "") -> str:
+def link_confirm(email: str, name: str, code: str, ask: bool = False, error: str = "", creds=()) -> str:
     body = f"""
 <div class="wrap-narrow auth-single">
 <div class="card auth-card consent">
@@ -290,7 +303,7 @@ def link_confirm(email: str, name: str, code: str, ask: bool = False, error: str
 </ul>
 <form method="post" action="/link">
 {hidden({"code": code})}
-{_pass_field(error) if ask else ""}
+{_pass_field(error, creds, 'button[value=allow]') if ask else ""}
 <div class="consent-actions">
 <button class="btn btn-ghost" type="submit" name="decision" value="deny">Cancel</button>
 <button class="btn" type="submit" name="decision" value="allow">Add this Mac</button>
@@ -313,7 +326,8 @@ def need_plan(user: str, checkout_link: Optional[str]) -> str:
 # ---------------------------------------------------------------- account
 
 def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: List[dict], mcp_url: str, connected: bool, used_bytes: int, quota_bytes: int, notes: int,
-            now: Optional[float] = None, usable: Optional[bool] = None, encrypted: bool = False, can_encrypt: bool = False, flash: str = "") -> str:
+            now: Optional[float] = None, usable: Optional[bool] = None, encrypted: bool = False, can_encrypt: bool = False, flash: str = "",
+            passkeys: Optional[List[dict]] = None, unlocked: bool = False, has_passphrase: bool = True) -> str:
     now = now or time.time()
     usable = entitled if usable is None else usable
     tone, label = {"active": ("ok", "Active"), "past_due": ("warn", "Payment issue"), "canceled": ("warn", "Canceled"), "pending": ("ok", "Free plan")}.get(status, ("warn", status.title()))
@@ -329,6 +343,17 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
         '<li><div><div class="name">%s</div><div class="meta">added %s · last seen %s</div></div>'
         '<form method="post" action="/account/devices/revoke">%s<button class="btn btn-quiet btn-sm" type="submit">Remove<span class="sr-only"> %s</span></button></form></li>'
         % (esc(d["name"]), time.strftime("%b %-d", time.gmtime(d["created_at"])), _ago(d["last_seen"], now), hidden({"id": d["id"]}), esc(d["name"])) for d in devices)
+    passkeys = passkeys or []
+    creds = [p["id"] for p in passkeys if p["unlocks"]]
+    pk_rows = "".join(
+        '<li><div><div class="name">%s</div><div class="meta">added %s · last used %s · %s</div></div>'
+        '<form method="post" action="/account/passkeys/remove">%s<button class="btn btn-quiet btn-sm" type="submit">Remove<span class="sr-only"> %s</span></button></form></li>'
+        % (esc(p["name"]), time.strftime("%b %-d", time.gmtime(p["created"])), _ago(p["last_used"], now), "opens your notes" if p["unlocks"] else "signs in only", hidden({"id": p["id"]}), esc(p["name"])) for p in passkeys)
+    pk_card = ('<section class="card" aria-labelledby="pk-title"><div class="card-head"><h2 id="pk-title">Passkeys</h2><p>Touch ID, your phone or a security key</p></div>'
+               + (('<ul class="devices plain" role="list">' + pk_rows + '</ul>') if pk_rows else '<p class="empty">No passkeys yet. Add one and a touch signs you in.</p>')
+               + ('<p class="hint">Your vault has no passphrase yet. The recovery code is your way back in if every passkey is lost.</p>' if encrypted and not has_passphrase else '')
+               + ('<div class="field"><label for="pk-pass">Vault passphrase <span class="dim">(needed once, to let this passkey open your notes)</span></label><input type="password" id="pk-pass" name="passphrase" autocomplete="current-password" spellcheck="false"></div>' if encrypted and not unlocked and has_passphrase else '')
+               + _passkey("add", "Add a passkey") + '</section>') if (encrypted or not can_encrypt) else ""
     pct = 0 if quota_bytes is None else min(100, used_bytes * 100 // max(quota_bytes, 1))
     used = "%.1f MB" % (used_bytes / 1048576) if used_bytes >= 104858 else "under 0.1 MB"
     step2 = "data-done" if devices else ""
@@ -340,6 +365,7 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
 <div class="who"><span class="mono">{esc(email)}</span><span class="chip" data-tone="{tone}"><i></i>{esc(label)}</span>{bill}</div>
 <p class="dim">{intro}</p>
 </header>
+{('<div class="notice" role="status"><span><b>Lock your vault to keep your Mac and assistants working.</b> Until you do, they are paused and your saved notes are not encrypted. <a href="#vault-title">Lock it now</a>.</span></div>') if can_encrypt and not encrypted else ""}
 <div class="stack">
 <section class="card" aria-labelledby="setup-title">
 <div class="card-head"><h2 id="setup-title">Get set up</h2><p>About two minutes</p></div>
@@ -381,15 +407,16 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
  ('<section class="card" aria-labelledby="vault-title"><div class="card-head"><h2 id="vault-title">Vault encryption</h2><p><span class="chip" data-tone="warn"><i></i>Off</span></p></div>'
   '<p class="dim">Encrypt your notes with a key that only your passphrase opens. Your Macs and assistants will need to sign in again afterwards.</p>'
   + ('<p class="form-error" role="alert">%s</p>' % esc(flash) if flash else '') +
-  '<form method="post" action="/account/vault" data-once>' + hidden({"next": "/account"}) +
+  '<form method="post" action="/account/vault" data-once>' + _passkey("setup", "Use Touch ID or a passkey instead", nxt="/account") + hidden({"next": "/account"}) +
   '<div class="field"><label for="p1">Passphrase</label><input type="password" id="p1" name="passphrase" required minlength="10" autocomplete="new-password" spellcheck="false"></div>'
   '<div class="field"><label for="p2">Again</label><input type="password" id="p2" name="confirm" required minlength="10" autocomplete="new-password" spellcheck="false"></div>'
   '<button class="btn btn-sm" type="submit">Lock my vault</button></form></section>' if can_encrypt else '')}
+{pk_card}
 
 <section class="card" aria-labelledby="data-title">
 <div class="card-head"><h2 id="data-title">Your data</h2></div>
 <div class="row-actions">
-<form method="post" action="/account/export">{'<input type="password" name="passphrase" required autocomplete="current-password" placeholder="Vault passphrase" aria-label="Vault passphrase" spellcheck="false"> ' if encrypted else ''}<button class="btn btn-ghost btn-sm" type="submit">Download my data</button></form>
+<form method="post" action="/account/export">{(_passkey("unlock", "Use my passkey", creds=creds, submit="button[type=submit]") + '<input type="hidden" name="credential"><input type="hidden" name="prf">' if creds else '') + '<input type="password" name="passphrase" required autocomplete="current-password" placeholder="Vault passphrase" aria-label="Vault passphrase" spellcheck="false"> ' if encrypted else ''}<button class="btn btn-ghost btn-sm" type="submit">Download my data</button></form>
 <form method="post" action="/account/signout-all"><button class="btn btn-ghost btn-sm" type="submit">Sign out everywhere</button></form>
 </div>
 <p class="hint">The download is a zip of every note and a small account file.</p>
@@ -586,7 +613,7 @@ def waitlist_done(user: Optional[str] = None) -> str:
     return _centered("You're on the list", "You're <em>on the list</em>", "If that address is valid, it is on the waitlist. When there is room you'll get one email with the invitation.",
                      '<a class="btn btn-ghost" href="/">Back to the start</a>', eyebrow="Waitlist", user=user)
 
-def admin(*, email: str, waiting: List[dict], invited: List[dict], members: int, cap: int, mail_ok: bool, flash: str = "", now: float = 0) -> str:
+def admin(*, email: str, waiting: List[dict], invited: List[dict], members: int, cap: int, mail_ok: bool, flash: str = "", now: float = 0, unlocked: Optional[int] = None, vault_mail: bool = False) -> str:
     def row(w, button):
         return ('<li><div><div class="name">%s</div><div class="meta">%s%s</div></div><div class="row-actions">%s'
                 '<form method="post" action="/admin/waitlist/remove">%s<button class="btn btn-quiet btn-sm" type="submit">Remove<span class="sr-only"> %s</span></button></form></div></li>'
@@ -613,6 +640,7 @@ def admin(*, email: str, waiting: List[dict], invited: List[dict], members: int,
 <form method="post" action="/admin/invite"><div class="form-row"><div class="field"><label for="a-email">Email address</label>
 <input type="email" id="a-email" name="email" required spellcheck="false" autocapitalize="none"></div></div><button class="btn" type="submit">Send invitation</button></form>
 </section>
+{('<section class="card" aria-labelledby="v-title"><div class="card-head"><h2 id="v-title">Vaults not locked yet (%d)</h2></div><p class="dim">Their Macs and assistants are paused until they lock their vault. This emails each of them once, and no one more than once a week.</p><form method="post" action="/admin/vault-reminders"><button class="btn" type="submit"%s>Email them</button></form></section>' % (unlocked, "" if unlocked and vault_mail else " disabled")) if unlocked is not None else ""}
 <section class="card" aria-labelledby="s-title">
 <div class="card-head"><h2 id="s-title">Invited ({len(invited)})</h2></div>
 {('<ul class="devices plain" role="list">' + ir + '</ul>') if ir else '<p class="empty">No invitations sent yet.</p>'}

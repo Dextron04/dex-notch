@@ -38,6 +38,7 @@ Add `--invite-only --max-users 20 --admin YOU@EMAIL` to the plist's `serve` argu
 ## Known gaps
 - Sign-in emails need `--smtp-*` flags; without them the link is printed to the log (only the operator can sign in).
 - Notes are sealed on disk (`agentvault/seal.py`) with a per-account key wrapped by the person's passphrase, a recovery code, and each device or assistant token (`hosted/keys.py`). The server stores only wrapped copies, so the database and backups are ciphertext. A request opens the key for its own duration, so the operator is **not** locked out of a running service: say that, not more. `--no-encryption` turns the passphrase requirement off for local trials. Lose the passphrase and the recovery code and the notes are gone: there is no operator reset.
+- **Accounts that haven't locked their vault** see a banner on their account page. `/admin` shows how many there are, with an **Email them** button (once a week per person at most); the same from the terminal: `python3 -m agentvault.hosted remind-vaults --root ... --public-url ... [--yes]` (a dry run without `--yes`; add the `--smtp-*` flags to send). Until someone locks their vault their notes stay plain files on disk.
 - Macs and assistants linked before an account locks its vault stop working at that moment and must be linked again (the app does this on its next launch or hourly check).
 - Note names (agent, month, project, short id) stay readable on disk.
 - No automatic purge schedule, no off-machine backup by default, no alerting beyond `/healthz`.

@@ -3,7 +3,7 @@
   - under a recovery code shown once, so a forgotten passphrase is not the end of the notes;
   - under each Mac's device token and each assistant's OAuth tokens (devices.py, oauth.py), so they can work unattended and nothing else can.
 A database dump, a backup or a copy of the disk therefore holds ciphertext and wrapped keys, none of which opens without the passphrase, the recovery code or a live token."""
-import base64, os, secrets
+import base64, os, secrets, sys, time
 from pathlib import Path
 from typing import Optional
 from .. import seal
@@ -28,6 +28,18 @@ def check_passphrase(p: str) -> str:
     if len(p) > MAX_PASSPHRASE: raise KeyError_("That passphrase is too long.")
     return p
 
+def remind_unlocked(store: Store, send, public_url: str, days: int = 7, dry: bool = False) -> list:
+    """Emails everyone whose vault is not locked yet, at most once in `days`. Returns the addresses (sent to, or that would be, on a dry run).
+    A failed send is not recorded as sent, so the next run tries again."""
+    due = store.unlocked_users("lock-vault", time.time() - days * 86400)
+    if dry: return [e for _, e in due]
+    sent = []
+    for uid, email in due:
+        try: send(email, public_url.rstrip("/") + "/account")
+        except Exception as ex: print("vault reminder failed: %s" % type(ex).__name__, file=sys.stderr, flush=True); continue
+        store.nudged(uid, "lock-vault"); sent.append(email)
+    return sent
+
 def migrate(vault: Path) -> int:
     """Seals every note that is still plain text, using the key set for this request. Safe to run again."""
     n = 0
@@ -39,21 +51,46 @@ def migrate(vault: Path) -> int:
             if not seal.is_sealed(raw): seal.write_bytes(Path(p), raw); n += 1
     return n
 
+def _install(store: Store, uid: str, key: bytes, salt: bytes, by_pass: bytes) -> str:
+    code = new_recovery()
+    store.put_vault_keys(uid, salt, by_pass, seal.wrap(_by_recovery(code), key))
+    with ingest.user_lock(uid), seal.unlocked(key): migrate(store.user_vault(uid))
+    return code
+
 def setup(store: Store, uid: str, passphrase: str) -> str:
     """Turns encryption on for an account and returns its recovery code (shown once). Notes already stored are sealed in place.
     The key row goes in first: from then on a Mac or assistant linked before has to link again, so nothing can write plain text while the notes are being sealed."""
     check_passphrase(passphrase)
     if store.encrypted(uid): raise KeyError_("This account already has a vault passphrase.")
-    key, salt, code = seal.new_key(), secrets.token_bytes(16), new_recovery()
-    store.put_vault_keys(uid, salt, seal.wrap(_by_passphrase(passphrase, salt), key), seal.wrap(_by_recovery(code), key))
-    with ingest.user_lock(uid), seal.unlocked(key): migrate(store.user_vault(uid))
-    return code
+    key, salt = seal.new_key(), secrets.token_bytes(16)
+    return _install(store, uid, key, salt, seal.wrap(_by_passphrase(passphrase, salt), key))
+
+def _by_prf(prf: str) -> bytes:
+    if not isinstance(prf, str) or not 20 <= len(prf) <= 200: raise KeyError_("This passkey can't unlock notes on this device.")
+    return seal.kek_from_secret(prf, b"passkey")
+
+def setup_passkey(store: Store, uid: str, prf: str):
+    """Like `setup`, with a passkey in place of the passphrase: (recovery code, data key, the key wrapped for that passkey). There is no passphrase until the person sets one."""
+    kek = _by_prf(prf)
+    if store.encrypted(uid): raise KeyError_("This account is already encrypted.")
+    key = seal.new_key()
+    return _install(store, uid, key, b"", b""), key, seal.wrap(kek, key)
+
+def wrap_for_passkey(key: bytes, prf: str) -> bytes: return seal.wrap(_by_prf(prf), key)
+
+def unlock_passkey(store: Store, uid: str, credential: str, prf: str) -> Optional[bytes]:
+    """The data key from a passkey's PRF secret, or None."""
+    row = store.passkey(credential)
+    if not row or row["user_id"] != uid or not row["wrapped"]: return None
+    try: return seal.unwrap(_by_prf(prf), row["wrapped"])
+    except KeyError_: return None
 
 def unlock(store: Store, uid: str, passphrase: str = "", recovery: str = "") -> Optional[bytes]:
     """The data key, or None if the passphrase (or recovery code) is wrong."""
     row = store.vault_keys(uid)
     if not row: return None
     if recovery: return seal.unwrap(_by_recovery(recovery), row["by_recovery"])
+    if not row["salt"]: return None            # a vault made with a passkey has no passphrase until one is set
     return seal.unwrap(_by_passphrase(passphrase or "", row["salt"]), row["by_passphrase"]) if passphrase else None
 
 def change_passphrase(store: Store, uid: str, key: bytes, new: str) -> None:

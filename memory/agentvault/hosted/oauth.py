@@ -7,6 +7,7 @@ from .. import seal
 from .store import EMAIL, Store
 
 CODE_TTL, ACCESS_TTL, REFRESH_TTL, LINK_TTL, SESSION_TTL = 300, 3600, 30 * 86400, 900, 7 * 86400
+UNLOCKED_TTL = 12 * 3600   # a session that holds the vault key forgets it sooner than one that does not
 ALLOWED_REDIRECT_HOSTS = ("chatgpt.com", "claude.ai", "claude.com")
 
 class AuthError(Exception):
@@ -75,9 +76,21 @@ class Auth:
             if self.may_join(r["email"]): raise AuthError("this address can't create an account right now")  # re-checked: an invite may have been withdrawn, or the beta filled, since the mail went out
             uid = self.store.create_user(r["email"])
             if self.on_new_user: self.on_new_user(r["email"])
+        return self.new_session(uid), uid, r["next"]
+
+    def new_session(self, uid: str, key: bytes = None) -> str:
+        """A browser session. `key`: the account's data key when a passkey just opened the vault; it is kept only wrapped under this session's cookie, like a device's."""
         sess = secrets.token_urlsafe(32)
-        with self.store.conn() as c: c.execute("INSERT INTO sessions VALUES(?,?,?)", (_h(sess), uid, self.now() + SESSION_TTL))
-        return sess, uid, r["next"]
+        with self.store.conn() as c:
+            c.execute("INSERT INTO sessions(hash,user_id,exp,wrapped) VALUES(?,?,?,?)", (_h(sess), uid, self.now() + (UNLOCKED_TTL if key else SESSION_TTL), seal.wrap(_kek(sess), key) if key else None))
+        return sess
+
+    def unlock_session(self, sess: str, key: bytes) -> None:
+        with self.store.conn() as c: c.execute("UPDATE sessions SET wrapped=?, exp=MIN(exp, ?) WHERE hash=?", (seal.wrap(_kek(sess), key), self.now() + UNLOCKED_TTL, _h(sess or "")))
+
+    def session_key(self, sess: str) -> Optional[bytes]:
+        with self.store.conn() as c: r = c.execute("SELECT wrapped, exp FROM sessions WHERE hash=?", (_h(sess or ""),)).fetchone()
+        return seal.unwrap(_kek(sess), r["wrapped"]) if r and r["wrapped"] and r["exp"] > self.now() else None
 
     def session_user(self, sess: str) -> Optional[str]:
         with self.store.conn() as c: r = c.execute("SELECT user_id, exp FROM sessions WHERE hash=?", (_h(sess or ""),)).fetchone()

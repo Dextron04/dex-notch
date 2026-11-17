@@ -76,6 +76,7 @@ class ConnectPageTests(unittest.TestCase):
         uid = self.store.create_user("a@x.io"); _, tok = devices.create(self.store, uid, "Mac")
         me = lambda: json.loads(call("GET", self.base + "/v1/me", headers={"Authorization": "Bearer " + tok})[2])["assistants"]
         self.assertEqual(me(), {"claude": False, "chatgpt": False})
+        self.assertFalse(json.loads(call("GET", self.base + "/v1/me", headers={"Authorization": "Bearer " + tok})[2])["vault_locked"])
         for name in ("Claude", "ChatGPT"):
             cid = self.auth.register(["https://claude.ai/cb"], name)
             with self.store.conn() as c: c.execute("INSERT INTO grants(hash,kind,user_id,client_id,exp) VALUES(?,?,?,?,?)", ("h" + name, "refresh", uid, cid, 9e12))

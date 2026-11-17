@@ -17,8 +17,15 @@ The newest version is at the top. Every release is on the [Releases page](https:
     <img src="docs/assets/shot-recovery.png" alt="The recovery code page: Save your recovery code, shown once, with a Copy button" width="62%">
   </p>
 
+- **Sign in and unlock with Touch ID.** Add a passkey (Touch ID, your phone, or a security key) and one touch signs you in and opens your vault: no email link and no passphrase. Choosing a passkey when you set up your vault means there is no passphrase at all; your recovery code is the way back in. A passkey that can't open notes still signs you in, and the emailed link and the passphrase keep working. Exporting your notes always asks again, even when you are signed in with a passkey.
+
+  <p align="center">
+    <img src="docs/assets/shot-passkey-login.png" alt="The sign-in page with a Sign in with a passkey button above the email link form" width="62%">
+    <img src="docs/assets/shot-passkeys.png" alt="The account page's Passkeys card: Touch ID on this Mac, opens your notes, with Remove and Add a passkey" width="62%">
+  </p>
+
 - **Macs and assistants linked before you lock your vault must be linked again.** Dex Notch notices and returns to its sign-in window on its next launch or hourly check. Claude and ChatGPT ask you to sign in once more, with your passphrase.
-- **Dex Notch checks that your assistants are connected.** **Settings → Memory → Connections** shows Claude, ChatGPT, Claude Code and Codex, each Connected, not signed in, or not connected, with a button to fix it. It asks your account which web assistants are connected, and asks the `claude` and `codex` tools about the terminal ones. If something this Mac has is missing, the notch tells you once (not again for three days), and **Remind me at the notch** turns that off.
+- **Dex Notch checks that your assistants are connected.** **Settings → Memory → Connections** shows whether your vault is locked and whether Claude, ChatGPT, Claude Code and Codex are connected, each with a button that takes you straight to the fix (**Lock my vault**, **Connect**, **Add to Claude Code**). It asks your account which web assistants are connected, and asks the `claude` and `codex` tools about the terminal ones. If something this Mac has is missing, the notch tells you once (not again for three days), and **Remind me at the notch** turns that off.
 - **One button saves every conversation.** **Settings → Memory → Save every conversation** adds a short instruction to the global files that Claude Code, Codex and Gemini read, so they save a summary to your memory when a conversation ends. The first time, a copy of each original file is kept next to it. The same text is on the connect page for ChatGPT's custom instructions and Claude's preferences. An assistant decides for itself when a conversation is over, so you can always say "save this to my memory".
 - **A page to connect every assistant.** The new **Connect** page on the website has the address to paste, and the steps for Claude, ChatGPT, Claude Code and Codex, with a status for the ones you have connected.
 

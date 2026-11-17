@@ -12,7 +12,7 @@ def smtp_args(p) -> None:
     p.add_argument("--smtp-host"); p.add_argument("--smtp-port", type=int, default=587); p.add_argument("--smtp-user", default="")
     p.add_argument("--smtp-password-file"); p.add_argument("--mail-from", help='e.g. "Dex Notch <login@yourdomain>"')
 
-def build_sender(a, invite: bool = False, welcome: bool = False):
+def build_sender(a, invite: bool = False, welcome: bool = False, vault: bool = False):
     """The SMTP sender from the command line, or None when no --smtp-host was given. Fails with a plain message, not a traceback."""
     if not a.smtp_host: return None
     if not a.mail_from: raise SystemExit("--smtp-host needs --mail-from")
@@ -21,7 +21,7 @@ def build_sender(a, invite: bool = False, welcome: bool = False):
         try: pw = Path(a.smtp_password_file).expanduser().read_text().strip()
         except OSError as e: raise SystemExit("can't read the SMTP password file %s: %s" % (a.smtp_password_file, e.strerror))
         if not pw: raise SystemExit("the SMTP password file %s is empty" % a.smtp_password_file)
-    return smtp_sender(a.smtp_host, a.smtp_port, a.mail_from, a.smtp_user, pw, invite=invite, welcome=welcome)
+    return smtp_sender(a.smtp_host, a.smtp_port, a.mail_from, a.smtp_user, pw, invite=invite, welcome=welcome, vault=vault)
 
 def main() -> None:
     ap = argparse.ArgumentParser(prog="agentvault.hosted"); sub = ap.add_subparsers(dest="cmd", required=True)
@@ -39,6 +39,8 @@ def main() -> None:
     st = sub.add_parser("stats", help="users by status, devices, database size, and the biggest vaults"); st.add_argument("--root", required=True)
     pg = sub.add_parser("purge", help="erase accounts canceled more than N days ago (a dry run unless --yes)"); pg.add_argument("--root", required=True)
     pg.add_argument("--days", type=int, default=30); pg.add_argument("--yes", action="store_true")
+    rv = sub.add_parser("remind-vaults", help="email everyone whose vault is not locked yet (a dry run unless --yes; once a week per person at most)"); rv.add_argument("--root", required=True)
+    rv.add_argument("--public-url", required=True); rv.add_argument("--days", type=int, default=7); rv.add_argument("--yes", action="store_true"); smtp_args(rv)
     g = sub.add_parser("grant", help="dev override: mark an account paid without Stripe"); g.add_argument("--root", required=True); g.add_argument("email"); g.add_argument("--plan", default="placeholder", help="use \"owner\" for an account with no storage limit")
     a = ap.parse_args()
     if a.cmd == "mail-test":
@@ -69,6 +71,14 @@ def main() -> None:
             print("erased")
         elif old: print("dry run: add --yes to erase them")
         return
+    if a.cmd == "remind-vaults":
+        send = build_sender(a, vault=True)
+        if a.yes and not send: raise SystemExit("give --smtp-host (and --mail-from) to send")
+        from . import keys
+        who = keys.remind_unlocked(store, send, a.public_url, a.days, dry=not a.yes)
+        print("%s %d account(s): %s" % ("emailed" if a.yes else "would email", len(who), ", ".join(who)))
+        if who and not a.yes: print("dry run: add --yes to send")
+        return
     if a.cmd == "grant":
         uid = store.by_email(a.email)
         if not uid: raise SystemExit("no such account (sign in once first)")
@@ -84,7 +94,7 @@ def main() -> None:
         if len(wh) < 20: raise SystemExit("stripe webhook secret looks too short")
         stripe = Stripe(Path(a.stripe_key_file).expanduser().read_text().strip(), a.stripe_price, a.public_url)
     srv = make_server(store, Auth(store, invite_only=a.invite_only, max_users=a.max_users), a.public_url, send_mail, stripe, wh, port=a.port,
-                      send_invite=build_sender(a, invite=True), admins=a.admin, send_welcome=build_sender(a, welcome=True), encrypt=not a.no_encryption)
+                      send_invite=build_sender(a, invite=True), admins=a.admin, send_welcome=build_sender(a, welcome=True), send_vault=build_sender(a, vault=True), encrypt=not a.no_encryption)
     print("agentvault hosted on 127.0.0.1:%d as %s" % (a.port, a.public_url), flush=True)
     srv.serve_forever()
 

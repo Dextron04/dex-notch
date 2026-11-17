@@ -14,7 +14,7 @@ def esc(s) -> str:
 
 def _version() -> str:
     h = hashlib.sha256()
-    for n in ("app.css", "app.js", "fx.js"): h.update((STATIC / n).read_bytes())
+    for n in ("app.css", "app.js", "passkey.js", "fx.js"): h.update((STATIC / n).read_bytes())
     return h.hexdigest()[:10]
 VERSION = _version()  # the stylesheet and script are cached for a year; their URL changes when they do
 
@@ -60,6 +60,7 @@ def layout(title: str, body: str, *, user: Optional[str] = None, current: str = 
 <link rel="stylesheet" href="/static/app.css?v={VERSION}">
 <link rel="expect" href="#main" blocking="render">
 <script src="/static/app.js?v={VERSION}" defer></script>
+<script src="/static/passkey.js?v={VERSION}" defer></script>
 {FX if fx else ""}</head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
