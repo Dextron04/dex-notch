@@ -514,7 +514,7 @@ struct SetupView: View {
     private var memoryPane: some View {
         VStack(alignment: .leading, spacing: 0) {
             header("Memory", "Your Dex account keeps your AI conversations, so Claude and ChatGPT can search them from anywhere.")
-            why("Dex Notch only runs while this Mac is linked to your account. When the switch below is on, the conversations recorded on this Mac (Claude Code, Codex, Gemini) are uploaded to your account with passwords and keys removed first. They are stored on the server operator's machine and are not end-to-end encrypted. Turning it off stops uploads; what was already uploaded stays until you delete it on your account page.")
+            why("Dex Notch only runs while this Mac is linked to your account. When the switch below is on, the conversations recorded on this Mac (Claude Code, Codex, Gemini) are uploaded to your account with passwords and keys removed first. They are encrypted on the server's disk with a passphrase you choose, but not end-to-end: the service opens them to search. Turning it off stops uploads; what was already uploaded stays until you delete it on your account page.")
             if let h = m.hostedConnected {
                 row(title: "Signed in", detail: [AccountGate.shared.email, h].compactMap { $0 }.joined(separator: " · "), mono: true,
                     lead: { Image(systemName: "checkmark.circle.fill").font(.system(size: 17)).foregroundStyle(Ink.ember) },
@@ -531,10 +531,40 @@ struct SetupView: View {
                         link("Copy diagnostics") { m.copyDiagnostics(center: center) }
                         link("Report a problem", dim: true) { NSWorkspace.shared.open(Diagnostics.issueURL) }
                     } })
+                connectionsSection
                 Text("Signing out removes this Mac's key and returns Dex Notch to the sign-in screen.")
                     .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
             }
         }
+    }
+
+    /// Whether each assistant is connected to the memory, with a button for the ones that aren't.
+    private var connectionsSection: some View {
+        let mon = ConnectionMonitor.shared
+        return VStack(alignment: .leading, spacing: 0) {
+            subhead("Connections").padding(.top, 8)
+            Text("Claude and ChatGPT can all search and add to the same memory once they're connected. Dex Notch checks, and tells you at the notch if one is missing.")
+                .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.bottom, 4)
+            ForEach(Surface.allCases, id: \.self) { s in
+                let c = mon.report?.state(s) ?? .unknown, here = mon.installed.contains(s)
+                row(title: s.name, detail: mon.report == nil ? "Checking…" : ConnectionLogic.detail(s, c, here: here),
+                    lead: { Image(systemName: c == .connected ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(c == .connected ? Ink.ember : Ink.dim) },
+                    trail: { if c != .connected && (here || !s.isCLI) {
+                        link(mon.busy == s ? "Working…" : s.isCLI ? (c == .needsSignIn ? "Sign in" : "Add to \(s.name)") : "Connect") { mon.connect(s) }
+                    } })
+            }
+            HStack(spacing: 18) {
+                link(mon.checking ? "Checking…" : "Check again") { Task { await mon.refresh(full: true) } }
+                Toggle("Remind me at the notch", isOn: Binding(get: { mon.remind }, set: { mon.setRemind($0) })).toggleStyle(.switch).controlSize(.small)
+                    .font(.system(size: 13)).foregroundStyle(Ink.dim)
+            }.padding(.top, 12)
+            let here = mon.agentsHere, on = mon.instructionsOn
+            row(title: "Save every conversation", detail: here.isEmpty ? "No Claude Code, Codex or Gemini found on this Mac." : (on ? "On" : "Off") + " for " + here.map(\.label).joined(separator: ", ") + ". They save a summary to your memory when a conversation ends.",
+                lead: { Image(systemName: on ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(on ? Ink.ember : Ink.dim) },
+                trail: { if !here.isEmpty { link(on ? "Turn off" : "Turn on", dim: on) { mon.toggleInstructions() } } })
+            if let n = mon.note { Text(n).font(.system(size: 13)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.top, 8) }
+        }
+        .task { mon.refreshInstructions(); await mon.refresh() }
     }
 
     private var finishPane: some View {
@@ -634,10 +664,13 @@ final class SetupWindow {
         return true
     }
 
-    func show(assistant: Assistant, guided: Bool = false) {
-        if let w = window { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
+    private var model: SetupModel?
+
+    func show(assistant: Assistant, guided: Bool = false, pane: SetupPane? = nil) {
+        if let w = window { if let pane { model?.pane = pane }; w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
         assistant.refreshAvailability()
-        let model = SetupModel(assistant: assistant)
+        let model = SetupModel(assistant: assistant); self.model = model
+        if let pane { model.pane = pane }
         if guided { model.pane = .welcome }
         else if let p = ProcessInfo.processInfo.environment["NOTCH_OPEN_SETTINGS"]?.lowercased(), let pane = SetupPane.allCases.first(where: { $0.rawValue.lowercased() == p }) { model.pane = pane }
         let h = min(600, (NSScreen.main?.visibleFrame.height ?? 900) - 40)

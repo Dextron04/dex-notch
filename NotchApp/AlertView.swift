@@ -80,7 +80,7 @@ struct AlertView: View {
     }
 
     private var actions: some View {
-        let update = c.current?.kind == "update", access = c.current?.kind == "phone-access", reconnect = c.current?.kind == "reconnect" || access, phone = c.current?.addon == "phone" || c.current?.addon == "mac"
+        let update = c.current?.kind == "update", access = c.current?.kind == "phone-access", connect = c.current?.kind == "connect", reconnect = c.current?.kind == "reconnect" || access || connect, phone = c.current?.addon == "phone" || c.current?.addon == "mac"
         return HStack(spacing: 22) {
             if c.current?.kind == "reminder" {
                 Button { c.open() } label: {
@@ -103,7 +103,7 @@ struct AlertView: View {
                 Spacer(minLength: 8)
             } else if reconnect {
                 Button { c.open() } label: {
-                    HStack(spacing: 6) { Text(access ? "Open Settings" : "Reconnect").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
+                    HStack(spacing: 6) { Text(access ? "Open Settings" : connect ? "Connect" : "Reconnect").font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ember); key("⌥↩") }.contentShape(Rectangle())
                 }
                 Button { c.dismiss() } label: {
                     HStack(spacing: 6) { Text("Later").font(.system(size: 14)).foregroundStyle(Ink.dim); key("⌥esc") }.contentShape(Rectangle())

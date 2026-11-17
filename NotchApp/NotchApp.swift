@@ -61,6 +61,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ]
         assistant.connect()
         AddonCenter.shared.start(assistant: assistant)
+        ConnectionMonitor.shared.onMissing = { s, c in AddonCenter.shared.queueConnectCard(s, c) }
+        ConnectionMonitor.shared.openSettings = { [assistant] in SetupWindow.shared.show(assistant: assistant, pane: .memory) }
+        ConnectionMonitor.shared.start()
         if walkthrough {      // first launch: walk through every permission and choice, don't make people hunt for a config file
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [assistant] in SetupWindow.shared.show(assistant: assistant, guided: true) }
         }

@@ -35,14 +35,23 @@ enum Gate {
 enum HostedAPI {
     static let confirmedKey = "hostedConfirmedAt", emailKey = "hostedEmail"
 
-    static func base(_ host: String) -> URL? { Settings.normalizeHost(host).flatMap { URL(string: "https://\($0)") } }
+    /// Always https. A Debug build also lets a server on this Mac (localhost or 127.0.0.1) use plain http, so the demo server needs no certificate. Release builds never do.
+    static func scheme(for host: String) -> String {
+        #if DEBUG
+        let name = host.split(separator: ":").first.map(String.init) ?? host
+        if name == "localhost" || name == "127.0.0.1" { return "http" }
+        #endif
+        return "https"
+    }
+
+    static func base(_ host: String) -> URL? { Settings.normalizeHost(host).flatMap { URL(string: "\(scheme(for: $0))://\($0)") } }
 
     /// The link page must be on the same host the app asked: a reply can't send the browser, or the person, anywhere else.
     static func parseStart(_ d: Data, host: String) -> LinkStart? {
         guard let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
               let code = o["code"] as? String, let secret = o["secret"] as? String, let s = o["url"] as? String, let url = URL(string: s),
               code.range(of: #"^[A-Z2-9]{4}-[A-Z2-9]{4}\z"#, options: .regularExpression) != nil, !secret.isEmpty,
-              url.scheme == "https", let b = base(host), url.host == b.host, url.path == "/link" else { return nil }
+              url.scheme == scheme(for: host), let b = base(host), url.host == b.host, url.path == "/link" else { return nil }
         return LinkStart(code: code, secret: secret, url: url, expiresIn: (o["expires_in"] as? Int) ?? 600)
     }
 
@@ -83,6 +92,15 @@ enum HostedAPI {
         guard let b = base(host) else { throw URLError(.badURL) }
         guard let p = parsePoll(try await post(b.appendingPathComponent("v1/link/poll"), ["secret": secret])) else { throw URLError(.cannotParseResponse) }
         return p
+    }
+
+    /// Which of Claude and ChatGPT hold a live authorization for this account (nil when the server can't be asked).
+    static func assistants(host: String, token: String) async -> (claude: Bool, chatgpt: Bool)? {
+        guard let b = base(host) else { return nil }
+        var r = URLRequest(url: b.appendingPathComponent("v1/me"), timeoutInterval: 10)
+        r.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+        guard let (d, resp) = try? await URLSession.shared.data(for: r), (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return ConnectionLogic.parseAssistants(d)
     }
 
     static func me(host: String, token: String) async -> ServerAnswer {

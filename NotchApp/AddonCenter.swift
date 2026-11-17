@@ -200,6 +200,17 @@ final class AddonCenter {
         state.save(to: stateURL); presentIfPossible()
     }
 
+    // MARK: connections
+
+    /// One of your assistants isn't connected to your memory. The monitor decides how often this happens; the button opens the fix.
+    func queueConnectCard(_ s: Surface, _ c: Conn) {
+        guard !state.pending.contains(where: { $0.kind == "connect" }) else { return }
+        let t = ConnectionLogic.cardText(s, c)
+        state.pending.append(AddonAlert(id: "connect|\(s.rawValue)|\(Int(Date().timeIntervalSince1970))", addon: "app", sender: "Dex Notch", address: "", headline: t.headline,
+            reason: t.reason, url: "", score: 10, created: Date(), account: nil, kind: "connect"))
+        state.save(to: stateURL); presentIfPossible()
+    }
+
     // MARK: updates
 
     /// A newer version exists: one card per version, and its notes are fetched now so "What's new" opens at once.
@@ -711,6 +722,7 @@ final class AddonCenter {
         if c.kind == "update" { retire(c.id); if AppUpdater.shared.readyVersion != nil { AppUpdater.shared.restartNow() } else { AppUpdater.shared.checkNow() }; return }
         if c.kind == "reminder" { retire(c.id, completed: true); return }
         if c.kind == "phone-access" { retire(c.id); NSWorkspace.shared.open(PhoneNotes.privacyPane); return }
+        if c.kind == "connect" { retire(c.id); ConnectionMonitor.shared.openFromCard(c.id); return }
         if c.kind == "reconnect" { retire(c.id); reconnectAll(); return }                 // this card's "Open" is "Reconnect"
         guard !c.url.isEmpty, let u = URL(string: c.url) else { retire(c.id); return }       // an iPhone card has nowhere to go: Done just closes it
         NSWorkspace.shared.open(u); retire(c.id)

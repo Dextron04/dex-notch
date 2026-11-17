@@ -28,6 +28,10 @@ enum AgentRunner {
         AgentStream.locate(name, inPATH: loginPATH) { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
+    /// Where a tool lives, found the way the notch finds `claude` and `codex` (a Finder-launched app has no PATH of its own).
+    static func locate(_ name: String) -> String? { find(name) }
+    static var environment: [String: String] { var e = ProcessInfo.processInfo.environment; e["PATH"] = loginPATH; return e }
+
     /// Which CLIs are installed. Logged-in is only discovered when one is run (the error then says so).
     static func available() -> Set<Backend> {
         if let o = AgentStream.parseCLIOverride(ProcessInfo.processInfo.environment["NOTCH_CLIS"]) { return o }

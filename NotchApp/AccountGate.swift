@@ -186,7 +186,7 @@ struct GateView: View {
             Toggle(isOn: $g.keepConversations) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Keep my AI conversations in my account").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Ink.text)
-                    Text("Conversations recorded on this Mac (Claude Code, Codex, Gemini) are uploaded with passwords and keys removed, so Claude and ChatGPT can search them. They are stored on the server operator's machine, not end-to-end encrypted. Change this any time in Settings → Memory.")
+                    Text("Conversations recorded on this Mac (Claude Code, Codex, Gemini) are uploaded with passwords and keys removed, so Claude and ChatGPT can search them. They are encrypted on the server's disk with a passphrase you choose, but not end-to-end: the service opens them to search. Change this any time in Settings → Memory.")
                         .font(.system(size: 12.5)).foregroundStyle(Ink.dim).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
                 }
             }
