@@ -54,3 +54,15 @@ final class AccountTests: XCTestCase {
         XCTAssertNil(HostedAPI.base("vault.example.com/x")); XCTAssertNil(HostedAPI.base("user@host"))
     }
 }
+
+final class DiagnosticsTests: XCTestCase {
+    func testReportHasSetupFactsAndNoPersonalData() {
+        let now = Date(timeIntervalSince1970: 10_000)
+        let r = Diagnostics.report(version: "0.8.2", macOS: "Version 15.1", host: "vault.example.test", uploads: false, lastConfirmed: now.addingTimeInterval(-600),
+                                   phoneAlerts: true, fullDiskAccess: false, macAlerts: false, mailAccounts: 2, now: now)
+        XCTAssertTrue(r.contains("Dex Notch 0.8.2 on macOS Version 15.1"))
+        XCTAssertTrue(r.contains("last confirmed 10 min ago")); XCTAssertTrue(r.contains("Full Disk Access: missing"))
+        XCTAssertTrue(r.contains("Mail accounts: 2")); XCTAssertFalse(r.contains("@"))
+        XCTAssertTrue(Diagnostics.report(version: "1", macOS: "x", host: nil, uploads: true, lastConfirmed: nil, phoneAlerts: false, fullDiskAccess: false, macAlerts: false, mailAccounts: 0).contains("not linked (last confirmed never)"))
+    }
+}

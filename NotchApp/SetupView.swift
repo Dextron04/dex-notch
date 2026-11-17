@@ -50,6 +50,14 @@ final class SetupModel {
         if let g = a.gemma { host = g.host; model = g.model; keychainService = g.keychainService; keychainAccount = g.keychainAccount; localOpen = true }
     }
 
+    func copyDiagnostics(center: AddonCenter) {
+        let text = Diagnostics.report(version: AppUpdater.shared.version, macOS: ProcessInfo.processInfo.operatingSystemVersionString, host: hostedConnected,
+                                      uploads: keepConversations, lastConfirmed: UserDefaults.standard.object(forKey: HostedAPI.confirmedKey) as? Date,
+                                      phoneAlerts: center.settings.phoneAlerts, fullDiskAccess: PhoneNotes.canRead(), macAlerts: center.settings.macAlerts, mailAccounts: center.accounts.count)
+        NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string)
+        message = "Diagnostics copied."
+    }
+
     var projectsSuggestion: String? {
         let p = home.appendingPathComponent("Projects").path
         return workspace == nil && isDir(p) ? p : nil
@@ -517,6 +525,12 @@ struct SetupView: View {
                 row(title: "Keep my conversations in my account", detail: m.keepConversations ? "On: new conversations are uploaded." : "Off: nothing is uploaded from this Mac.",
                     lead: { Image(systemName: "icloud.and.arrow.up").font(.system(size: 16)).foregroundStyle(Ink.dim) },
                     trail: { Toggle("", isOn: Binding(get: { m.keepConversations }, set: { m.setKeepConversations($0) })).labelsHidden().toggleStyle(.switch) })
+                row(title: "Something not working?", detail: "Copy diagnostics gives setup facts only: the version, what is switched on, and when the server last confirmed this Mac. No email, passwords or conversations. Paste it into your report.",
+                    lead: { Image(systemName: "ladybug").font(.system(size: 16)).foregroundStyle(Ink.dim) },
+                    trail: { HStack(spacing: 18) {
+                        link("Copy diagnostics") { m.copyDiagnostics(center: center) }
+                        link("Report a problem", dim: true) { NSWorkspace.shared.open(Diagnostics.issueURL) }
+                    } })
                 Text("Signing out removes this Mac's key and returns Dex Notch to the sign-in screen.")
                     .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
             }

@@ -93,3 +93,21 @@ enum HostedAPI {
         return parseMe(status: code, d)
     }
 }
+
+/// The text a tester pastes into a bug report. Facts about setup only: no email address, token, mail account name, folder path or conversation text.
+enum Diagnostics {
+    static let issueURL = URL(string: "https://github.com/Dextron04/dex-notch/issues/new")!
+
+    static func report(version: String, macOS: String, host: String?, uploads: Bool, lastConfirmed: Date?, phoneAlerts: Bool, fullDiskAccess: Bool,
+                       macAlerts: Bool, mailAccounts: Int, now: Date = Date()) -> String {
+        let seen = lastConfirmed.map { "\(max(0, Int(now.timeIntervalSince($0) / 60))) min ago" } ?? "never"
+        return """
+        Dex Notch \(version) on macOS \(macOS)
+        Server: \(host ?? "not linked") (last confirmed \(seen))
+        Uploading conversations: \(uploads ? "yes" : "no")
+        iPhone notifications: \(phoneAlerts ? "on" : "off"), Full Disk Access: \(fullDiskAccess ? "granted" : "missing")
+        Judging this Mac's notifications: \(macAlerts ? "on" : "off")
+        Mail accounts: \(mailAccounts)
+        """
+    }
+}
