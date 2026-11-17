@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS links(code TEXT PRIMARY KEY, secret_hash TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), exp REAL NOT NULL);
 """
 STATUSES = {"pending", "active", "past_due", "canceled", "deleted"}
+FREE_QUOTA, PAID_QUOTA = 100 * 1024 * 1024, 500 * 1024 * 1024
+OWNER_PLAN = "owner"   # set by `grant --plan owner`: no storage limit
+USABLE = {"pending", "active", "past_due"}   # a free account (pending) can use memory, within the free quota; canceled and deleted accounts cannot
 ENTITLED = {"active", "past_due"}  # past_due = Stripe is still retrying the card; it flips to canceled when the retries end
 USER_ID = re.compile(r"u_[A-Za-z0-9_-]{22}")
 EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
@@ -93,6 +96,16 @@ class Store:
     def entitled(self, uid: str) -> bool:
         """The gate every /mcp and /v1 call will check."""
         return self.status(uid) in ENTITLED
+
+    def may_use(self, uid: str) -> bool:
+        """The gate on uploads and the connector: free and paid accounts, not canceled or deleted ones. (`entitled` still means paid.)"""
+        return self.status(uid) in USABLE
+
+    def quota(self, uid: str) -> Optional[int]:
+        """Bytes of notes the account may hold; None = no limit."""
+        with self.conn() as c: r = c.execute("SELECT plan FROM billing WHERE user_id=?", (uid,)).fetchone()
+        if r and r["plan"] == OWNER_PLAN: return None
+        return PAID_QUOTA if self.entitled(uid) else FREE_QUOTA
 
     def grant(self, uid: str, plan: str = "placeholder") -> None:
         """Dev/manual override (the `grant` CLI): marks the user paid without Stripe. Real payments arrive through billing.apply_event."""

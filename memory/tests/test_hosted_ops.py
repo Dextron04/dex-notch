@@ -1,7 +1,7 @@
 import contextlib, io, json, os, sqlite3, subprocess, sys, tempfile, threading, time, unittest, urllib.error, urllib.parse, urllib.request, zipfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from agentvault.hosted import billing, devices, ingest, tools
+from agentvault.hosted import billing, devices, ingest, store as store_mod, tools
 from agentvault.hosted.billing import BillingError, Stripe, apply_event
 from agentvault.hosted.oauth import Auth
 from agentvault.hosted.server import make_server
@@ -50,13 +50,13 @@ class StoreOpsTests(unittest.TestCase):
         s = Store(p); self.assertEqual(s.status("u_" + "A" * 22), "active"); s.set_status("u_" + "A" * 22, "canceled")
 
     def test_write_paths_respect_quotas(self):
-        real = ingest.QUOTA_BYTES; self.addCleanup(setattr, ingest, "QUOTA_BYTES", real)
+        real = store_mod.PAID_QUOTA; self.addCleanup(setattr, store_mod, "PAID_QUOTA", real)
         tools.call(self.s, self.u, "remember", {"title": "t", "content": "c" * 3000, "source": "claude"})
-        ingest.QUOTA_BYTES = 1000
+        store_mod.PAID_QUOTA = 1000
         with self.assertRaisesRegex(PermissionError, "quota"): tools.call(self.s, self.u, "remember", {"title": "t2", "content": "more", "source": "claude"})
         with self.assertRaisesRegex(PermissionError, "quota"): tools.call(self.s, self.u, "remind", {"text": "x", "when": "2027-01-01T09:00:00+00:00", "source": "claude"})
         self.assertEqual(len(json.loads(tools.call(self.s, self.u, "vault_search", {"query": "c" * 50}))), 1)                  # reading still works over quota
-        ingest.QUOTA_BYTES = real; old, tools.MAX_PENDING_REMINDERS = tools.MAX_PENDING_REMINDERS, 2; self.addCleanup(setattr, tools, "MAX_PENDING_REMINDERS", old)
+        store_mod.PAID_QUOTA = real; old, tools.MAX_PENDING_REMINDERS = tools.MAX_PENDING_REMINDERS, 2; self.addCleanup(setattr, tools, "MAX_PENDING_REMINDERS", old)
         for i in range(2): tools.call(self.s, self.u, "remind", {"text": "r%d" % i, "when": "2027-01-01T09:00:00+00:00", "source": "claude"})
         with self.assertRaisesRegex(PermissionError, "too many"): tools.call(self.s, self.u, "remind", {"text": "r9", "when": "2027-01-01T09:00:00+00:00", "source": "claude"})
 

@@ -80,14 +80,16 @@ class HostedServerTests(unittest.TestCase):
     def test_entitlement_checked_on_every_call(self):
         ta = self.tokens("a@x.io"); uid = self.store.by_email("a@x.io")
         self.assertEqual(self.mcp(ta["access_token"], "ping")[0], 200)
-        for st in ("canceled", "deleted", "pending"):
+        for st in ("canceled", "deleted"):
             self.store.set_status(uid, st); self.assertEqual(self.mcp(ta["access_token"], "ping")[0], 402, st)
         self.store.grant(uid); self.assertEqual(self.mcp(ta["access_token"], "ping")[0], 200)
         self.assertEqual(self.mcp("garbage", "ping")[0], 401)
         self.auth.revoke_all(uid); self.assertEqual(self.mcp(ta["access_token"], "ping")[0], 401)
 
-    def test_unpaid_user_cannot_authorize(self):
+    def test_free_account_can_connect_but_a_canceled_one_cannot(self):
         ck, _ = self.sign_in("a@x.io")
+        self.assertIn("Allow", call("GET", self.base + "/authorize?" + urllib.parse.urlencode(self.oauth_q()), headers=ck)[2])      # pending = the free plan
+        self.store.set_status(self.store.by_email("a@x.io"), "canceled")
         st, _, body = call("GET", self.base + "/authorize?" + urllib.parse.urlencode(self.oauth_q()), headers=ck)
         self.assertEqual(st, 402); self.assertIn("aren't open yet", body)
         self.assertEqual(call("POST", self.base + "/authorize", dict(self.oauth_q(), decision="allow"), ck, form=True)[0], 402)

@@ -9,11 +9,12 @@ MAX_PENDING_REMINDERS = 1000
 EXTRA = [REMEMBER, REMIND]
 
 def call(store: Store, uid: str, name: str, args: dict) -> str:
-    """Raises PermissionError for an unknown or unpaid user, before any file is touched."""
-    if not store.entitled(uid): raise PermissionError("subscription required")
+    """Raises PermissionError for an unknown, canceled or deleted user, before any file is touched."""
+    if not store.may_use(uid): raise PermissionError("subscription required")
     vault = store.user_vault(uid)
     if name in ("remember", "remind"):  # the write paths that ingest's quota doesn't cover
-        if ingest.vault_bytes(vault) > ingest.QUOTA_BYTES: raise PermissionError("storage quota reached (%d MB); export or delete something first" % (ingest.QUOTA_BYTES >> 20))
+        limit = store.quota(uid)
+        if limit is not None and ingest.vault_bytes(vault) > limit: raise PermissionError("storage quota reached (%d MB); export or delete something first" % (limit >> 20))
         if name == "remind" and len(list((vault / "Reminders").glob("*.md"))) >= MAX_PENDING_REMINDERS: raise PermissionError("too many reminders (%d)" % MAX_PENDING_REMINDERS)
     if name == "remember": return remember(vault, args)
     if name == "remind": return remind(vault, args)

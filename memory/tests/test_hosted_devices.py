@@ -1,7 +1,7 @@
 import json, sys, tempfile, threading, time, unittest, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from agentvault.hosted import devices, ingest, tools
+from agentvault.hosted import devices, ingest, store as store_mod, tools
 from agentvault.hosted.oauth import Auth
 from agentvault.hosted.server import make_server
 from agentvault.hosted.store import Store
@@ -69,8 +69,8 @@ class IngestTests(unittest.TestCase):
         self.assertTrue(all(str(p).startswith(str(root / "data" / self.u)) or p == root / "hosted.db" or "hosted.db" in p.name for p in root.rglob("*") if p.is_file()))
 
     def test_quota(self):
-        real, ingest.QUOTA_BYTES = ingest.QUOTA_BYTES, 1000
-        self.addCleanup(setattr, ingest, "QUOTA_BYTES", real)
+        real, store_mod.PAID_QUOTA = store_mod.PAID_QUOTA, 1000
+        self.addCleanup(setattr, store_mod, "PAID_QUOTA", real)
         ingest.ingest(self.s, self.u, {"sessions": [sess("a")]})
         with self.assertRaisesRegex(ingest.IngestError, "quota"): ingest.ingest(self.s, self.u, {"sessions": [sess("b", [{"role": "user", "text": "x" * 5000, "ts": "2026-11-14T10:00:00Z"}])]}, body_bytes=5000)
 
@@ -98,7 +98,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Your Macs", call("GET", self.base + "/account", headers=ck)[2])
         self.assertEqual(call("GET", self.base + "/account")[1]["location"], "/login")
         tok = self.new_token(ck)
-        self.assertEqual(self.up(tok, {"sessions": [sess()]})[0], 402)                         # signed up but not paid
+        self.store.set_status(uid, "canceled"); self.assertEqual(self.up(tok, {"sessions": [sess()]})[0], 402)   # a free account uploads; a canceled one does not
         self.store.grant(uid)
         st, _, body = self.up(tok, {"sessions": [sess()]}); self.assertEqual((st, json.loads(body)), (200, {"sessions": 1, "new_turns": 1}))
         self.assertIn("pineapple", tools.call(self.store, uid, "vault_search", {"query": "pineapple"}))

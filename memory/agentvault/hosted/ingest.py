@@ -11,7 +11,6 @@ AGENT = re.compile(r"[a-z0-9][a-z0-9-]{0,29}")
 TS = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z")
 MAX_BODY = 8 * 1024 * 1024
 MAX_SESSIONS, MAX_TURNS, MAX_TEXT = 100, 5000, 200_000
-QUOTA_BYTES = 500 * 1024 * 1024
 ROLES = {"user", "assistant", "tool"}
 _locks, _guard = {}, threading.Lock()
 
@@ -52,7 +51,8 @@ def parse(payload) -> List[tuple]:
 def ingest(store: Store, uid: str, payload: dict, body_bytes: int = 0) -> dict:
     parsed = parse(payload)
     vault = store.user_vault(uid)
-    if vault_bytes(vault) + body_bytes > QUOTA_BYTES: raise IngestError("storage quota reached (%d MB)" % (QUOTA_BYTES >> 20))
+    limit = store.quota(uid)
+    if limit is not None and vault_bytes(vault) + body_bytes > limit: raise IngestError("storage quota reached (%d MB)" % (limit >> 20))
     with _guard: lock = _locks.setdefault(uid, threading.Lock())
     new = 0
     with lock:  # two Macs uploading the same session must not interleave the read-modify-write of its note

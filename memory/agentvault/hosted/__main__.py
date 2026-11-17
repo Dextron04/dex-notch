@@ -32,7 +32,7 @@ def main() -> None:
     st = sub.add_parser("stats", help="users by status, devices, database size, and the biggest vaults"); st.add_argument("--root", required=True)
     pg = sub.add_parser("purge", help="erase accounts canceled more than N days ago (a dry run unless --yes)"); pg.add_argument("--root", required=True)
     pg.add_argument("--days", type=int, default=30); pg.add_argument("--yes", action="store_true")
-    g = sub.add_parser("grant", help="dev override: mark an account paid without Stripe"); g.add_argument("--root", required=True); g.add_argument("email")
+    g = sub.add_parser("grant", help="dev override: mark an account paid without Stripe"); g.add_argument("--root", required=True); g.add_argument("email"); g.add_argument("--plan", default="placeholder", help="use \"owner\" for an account with no storage limit")
     a = ap.parse_args()
     if a.cmd == "mail-test":
         send = build_sender(a)
@@ -56,7 +56,7 @@ def main() -> None:
     if a.cmd == "grant":
         uid = store.by_email(a.email)
         if not uid: raise SystemExit("no such account (sign in once first)")
-        store.grant(uid); print("granted", uid); return
+        store.grant(uid, a.plan); print("granted", uid, a.plan); return
     send_mail = build_sender(a)
     if not send_mail:
         def send_mail(email, link):  # dev only: no SMTP configured, so the link goes to the log. Anyone who can read the log can sign in as that user.

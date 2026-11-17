@@ -9,7 +9,7 @@ from ..remote.server import MAX_BODY, client_key
 from ..remote.tools import REMEMBER, REMIND
 from ..index import session_files
 from . import billing, devices, link, pages, tools, ui
-from .ingest import MAX_BODY as INGEST_MAX, QUOTA_BYTES, IngestError, ingest, vault_bytes
+from .ingest import MAX_BODY as INGEST_MAX, IngestError, ingest, vault_bytes
 from .oauth import SESSION_TTL, Auth, AuthError
 from .store import Store
 
@@ -81,7 +81,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             a = self.headers.get("Authorization") or ""
             d = devices.check(store, a[7:] if a.startswith("Bearer ") else "", now())
             if not d: self.send(401, {"error": "unauthorized"}); return None
-            if not store.entitled(d[0]): self.send(402, {"error": "subscription_required"}); return None
+            if not store.may_use(d[0]): self.send(402, {"error": "subscription_required"}); return None
             if not by_device.allow(d[1]): self.send(429, {"error": "slow_down"}); return None
             return d
         def validate(self, q):
@@ -156,7 +156,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             fields = {k: q.get(k, "") for k in OAUTH_FIELDS}
             uid = self.user()
             if not uid: return self.html(200, pages.login(client_name=c["name"], fields=fields))
-            if not store.entitled(uid): return self.html(402, pages.need_plan(store.email(uid), public + "/billing/checkout" if stripe else None))
+            if not store.may_use(uid): return self.html(402, pages.need_plan(store.email(uid), public + "/billing/checkout" if stripe else None))
             self.html(200, pages.consent(c["name"], urlparse(q["redirect_uri"]).hostname or "", store.email(uid), fields))
 
         def login(self):
@@ -191,7 +191,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             except AuthError as e: return self.bad(e)
             uid = self.user()
             if not uid: return self.fail(401)
-            if not store.entitled(uid): return self.fail(402)
+            if not store.may_use(uid): return self.fail(402)
             q = {"error": "access_denied"} if f.get("decision") != "allow" else {"code": auth.issue_code(f["client_id"], uid, f["redirect_uri"], f["code_challenge"])}
             if f.get("state"): q["state"] = f["state"]
             self.redirect(f["redirect_uri"] + ("&" if "?" in f["redirect_uri"] else "?") + urlencode(q))
@@ -247,7 +247,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if not uid: return self.redirect("/login")
             vault = store.root / "data" / uid / "Vault"
             self.html(200, pages.account(email=store.email(uid), status=store.status(uid), entitled=store.entitled(uid), stripe=bool(stripe), devices=devices.listing(store, uid),
-                                         mcp_url=public + "/mcp", connected=auth.connected(uid), used_bytes=vault_bytes(vault) if vault.is_dir() else 0, quota_bytes=QUOTA_BYTES,
+                                         mcp_url=public + "/mcp", connected=auth.connected(uid), used_bytes=vault_bytes(vault) if vault.is_dir() else 0, quota_bytes=store.quota(uid), usable=store.may_use(uid),
                                          notes=len(session_files(vault)) if vault.is_dir() else 0, now=now()))
 
         def add_device(self):
@@ -407,7 +407,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             uid = auth.check(a[7:] if a.startswith("Bearer ") else "")
             if not uid:
                 return self.send(401, {"error": "unauthorized"}, extra={"WWW-Authenticate": 'Bearer resource_metadata="%s/.well-known/oauth-protected-resource"' % public})
-            if not store.entitled(uid): return self.send(402, {"error": "subscription_required"})
+            if not store.may_use(uid): return self.send(402, {"error": "subscription_required"})
             if not by_user.allow(uid): return self.send(429, {"error": "slow_down"})
             try: req = json.loads(raw)
             except ValueError: return self.send(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}})

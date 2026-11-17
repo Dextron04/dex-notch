@@ -81,7 +81,7 @@ def home(user: Optional[str] = None) -> str:
 <div class="section-head reveal"><span class="eyebrow">How it works</span><h2 id="how-title">Three steps, then it just runs.</h2></div>
 <ol class="how">
 <li><h3>Install the app</h3><p>Dex Notch lives in your menu bar and the notch. It reads the AI conversations your Mac already has, from Claude Code, Codex and Gemini, and keeps them in a folder you own.</p></li>
-<li><h3>Add your Mac</h3><p>Sign in with an email link, no password. Add your Mac, paste its one-time token into Settings → Memory, and your history starts uploading.</p></li>
+<li><h3>Add your Mac</h3><p>Sign in with an email link, no password. Dex Notch opens your browser, you approve the code it shows, and your history starts uploading.</p></li>
 <li><h3>Ask from anywhere</h3><p>Add your memory as a connector in Claude or ChatGPT. They can search it, read it, and save new notes and reminders when you ask them to.</p></li>
 </ol>
 </div>
@@ -260,11 +260,13 @@ def need_plan(user: str, checkout_link: Optional[str]) -> str:
 # ---------------------------------------------------------------- account
 
 def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: List[dict], mcp_url: str, connected: bool, used_bytes: int, quota_bytes: int, notes: int,
-            now: Optional[float] = None) -> str:
+            now: Optional[float] = None, usable: Optional[bool] = None) -> str:
     now = now or time.time()
-    tone, label = {"active": ("ok", "Active"), "past_due": ("warn", "Payment issue"), "canceled": ("warn", "Canceled"), "pending": ("warn", "Waiting for access")}.get(status, ("warn", status.title()))
+    usable = entitled if usable is None else usable
+    tone, label = {"active": ("ok", "Active"), "past_due": ("warn", "Payment issue"), "canceled": ("warn", "Canceled"), "pending": ("ok", "Free plan")}.get(status, ("warn", status.title()))
     if entitled and status == "active": intro = "You're in. Everything on this page is live."
     elif entitled: intro = "Your card needs attention, but everything still works while it's retried."
+    elif usable: intro = "You're on the free plan: %s of memory, everything on this page is live." % ("no storage limit" if quota_bytes is None else "%d MB" % (quota_bytes // 1048576))
     elif status == "canceled": intro = "Your plan ended. Your notes are kept so you can still download them."
     elif stripe: intro = "Choose a plan to switch on uploads and your connector."
     else: intro = "Your account is ready, but paid plans aren't open yet. Early access is by invitation: once you're switched on, this page updates and the steps below start working."
@@ -274,7 +276,7 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
         '<li><div><div class="name">%s</div><div class="meta">added %s · last seen %s</div></div>'
         '<form method="post" action="/account/devices/revoke">%s<button class="btn btn-quiet btn-sm" type="submit">Remove<span class="sr-only"> %s</span></button></form></li>'
         % (esc(d["name"]), time.strftime("%b %-d", time.gmtime(d["created_at"])), _ago(d["last_seen"], now), hidden({"id": d["id"]}), esc(d["name"])) for d in devices)
-    pct = min(100, used_bytes * 100 // max(quota_bytes, 1))
+    pct = 0 if quota_bytes is None else min(100, used_bytes * 100 // max(quota_bytes, 1))
     used = "%.1f MB" % (used_bytes / 1048576) if used_bytes >= 104858 else "under 0.1 MB"
     step2 = "data-done" if devices else ""
     body = f"""
@@ -290,13 +292,9 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
 <div class="card-head"><h2 id="setup-title">Get set up</h2><p>About two minutes</p></div>
 <ol class="checklist">
 <li><span class="dot" aria-hidden="true"></span><h3>Install Dex Notch</h3>
-<div class="body"><p>Version 0.7 or later has the Memory pane. It needs macOS 14.</p><div class="row-actions"><a class="btn btn-ghost btn-sm" href="{RELEASES}">Download for Mac</a></div></div></li>
+<div class="body"><p>Version 0.8 or later. It needs macOS 14.</p><div class="row-actions"><a class="btn btn-ghost btn-sm" href="{RELEASES}">Download for Mac</a></div></div></li>
 <li {step2}><span class="dot" aria-hidden="true"></span><h3>Add this Mac</h3>
-<div class="body"><p>Name it, and we'll show a one-time token. In Dex Notch open <b>Settings → Memory</b>, enter <span class="mono">{esc(mcp_url.split('//')[1].split('/')[0])}</span> and paste the token. Your history starts uploading within a minute.</p>
-<form method="post" action="/account/devices" class="form-row" data-once>
-<div class="field"><label for="device-name">Name of this Mac</label><input type="text" id="device-name" name="name" maxlength="60" placeholder="MacBook Pro" autocomplete="off" enterkeyhint="done"></div>
-<button class="btn btn-sm" type="submit">Add this Mac</button>
-</form></div></li>
+<div class="body"><p>Open Dex Notch on the Mac. It opens a page in your browser; sign in, check the code matches and tap <b>Add this Mac</b>. Your history starts uploading within a minute (you can turn that off in Settings → Memory).</p></div></li>
 <li {"data-done" if connected else ""}><span class="dot" aria-hidden="true"></span><h3>Connect Claude or ChatGPT{' <span class="chip" data-tone="ok"><i></i>Connected</span>' if connected else ''}</h3>
 <div class="body"><p>Add a custom connector and paste this address. You'll be asked to sign in and approve it once.</p>
 <div class="copybox"><code id="mcp-url">{esc(mcp_url)}</code><button class="btn btn-ghost btn-sm" type="button" data-copy-from="mcp-url">Copy</button></div>
@@ -305,14 +303,14 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
 </section>
 
 <section class="card" aria-labelledby="macs-title">
-<div class="card-head"><h2 id="macs-title">Your Macs</h2><p>Each one uploads with its own token.</p></div>
+<div class="card-head"><h2 id="macs-title">Your Macs</h2><p>Each one uploads with its own key.</p></div>
 {('<ul class="devices plain" role="list">' + rows + '</ul>') if rows else '<p class="empty">No Macs yet. Add one in step 2 above.</p>'}
 </section>
 
 <section class="card" aria-labelledby="storage-title">
 <div class="card-head"><h2 id="storage-title">Storage</h2><p>{notes:,} saved conversation{'' if notes == 1 else 's'}</p></div>
 <progress class="meter" value="{pct}" max="100" aria-label="Storage used">{pct}%</progress>
-<p class="hint">{used} of {quota_bytes // 1048576} MB used.</p>
+<p class="hint">{used} used{", no limit." if quota_bytes is None else " of %d MB." % (quota_bytes // 1048576)}</p>
 </section>
 
 <section class="card" aria-labelledby="data-title">

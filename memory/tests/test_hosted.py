@@ -54,7 +54,7 @@ class HostedTests(unittest.TestCase):
     def test_bad_ids_and_unpaid_users(self):
         for bad in ("", "../x", "u_short", self.a + "/..", "u_" + "A" * 22):
             with self.assertRaises((ValueError, KeyError, PermissionError)): tools.call(self.s, bad, "vault_recent", {})
-        c = self.s.create_user("c@x.io")                                         # pending: not paid yet
+        c = self.s.create_user("c@x.io"); self.s.set_status(c, "canceled")        # a canceled account is refused
         with self.assertRaises(PermissionError): tools.call(self.s, c, "vault_recent", {})
         self.assertFalse((Path(self.d.name) / "data" / c).exists())               # refused before any directory exists
         self.s.grant(c); self.assertEqual(json.loads(tools.call(self.s, c, "vault_recent", {})), [])

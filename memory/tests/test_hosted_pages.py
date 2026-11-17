@@ -19,7 +19,8 @@ def all_pages():
         "consent": pages.consent(evil, "claude.ai", "a@x.io", {"client_id": evil}),
         "login-link": pages.login(link_name=evil, fields={"link": evil}), "link-confirm": pages.link_confirm("a@x.io", evil, "ABCD2345"), "link-done": pages.link_done(evil, "a@x.io"),
         "need-plan": pages.need_plan("a@x.io", None), "need-plan-stripe": pages.need_plan("a@x.io", "https://h.test/billing/checkout"),
-        "account": pages.account(**kw), "account-pending": pages.account(**dict(kw, status="pending", entitled=False, stripe=False, devices=[], connected=False)),
+        "account": pages.account(**kw), "account-free": pages.account(**dict(kw, status="pending", entitled=False, usable=True, quota_bytes=104857600)), "account-owner": pages.account(**dict(kw, quota_bytes=None)),
+        "account-pending": pages.account(**dict(kw, status="pending", entitled=False, stripe=False, devices=[], connected=False)),
         "token": pages.device_token("dvt_abc", evil, "https://h.test/mcp", "a@x.io"),
         "billing-ok": pages.billing_done(True, "a@x.io"), "billing-cancel": pages.billing_done(False, None), "goodbye": pages.goodbye(),
         **{"error-%d" % c: pages.error(c, evil if c == 400 else "") for c in (400, 401, 402, 404, 429, 502)},
@@ -55,7 +56,7 @@ class PageContractTests(unittest.TestCase):
         for n, s in self.scans.items(): self.assertEqual(s.inline, [], n)
 
     def test_each_page_has_one_h1_unique_ids_a_title_and_labelled_inputs(self):
-        variant_of = {"home-signed-in": "home", "login-oauth": "login", "login-link": "login", "need-plan-stripe": "need-plan", "account-pending": "account"}   # the same page in another state
+        variant_of = {"home-signed-in": "home", "login-oauth": "login", "login-link": "login", "need-plan-stripe": "need-plan", "account-pending": "account", "account-free": "account", "account-owner": "account"}   # the same page in another state
         by_kind = {}
         for n, s in self.scans.items():
             self.assertEqual(s.h1, 1, n); self.assertEqual(len(s.ids), len(set(s.ids)), n); self.assertTrue(s.title.strip().endswith("Dex Notch"), n)
@@ -72,6 +73,10 @@ class PageContractTests(unittest.TestCase):
     def test_user_input_is_escaped_everywhere(self):
         for n, h in all_pages().items(): self.assertNotIn("<script>alert(1)</script>", h, n)
         self.assertNotIn("<b>Pro</b>", pages.account(email="a@x.io", status="active", entitled=True, stripe=False, devices=DEVICES, mcp_url="https://h.test/mcp", connected=False, used_bytes=0, quota_bytes=1, notes=0))
+
+    def test_account_page_says_which_plan_and_how_much_space(self):
+        self.assertIn("free plan: 100 MB", all_pages()["account-free"]); self.assertIn("Free plan", all_pages()["account-free"])
+        self.assertIn("no limit", all_pages()["account-owner"]); self.assertNotIn("paste the token", all_pages()["account"])
 
     def test_apostrophes_are_not_double_escaped_in_headings(self):
         self.assertIn("Paid plans aren't open yet", pages.need_plan("a@x.io", None))
