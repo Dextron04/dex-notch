@@ -332,6 +332,71 @@
   .cta-band { position: relative; isolation: isolate; text-align: center; padding-block: clamp(3.5rem, 9vw, 6.5rem); border: 1px solid var(--line); border-radius: clamp(1rem, 3vw, 1.75rem); background: radial-gradient(50% 90% at 50% 0%, var(--glow), transparent 75%), var(--bg-raised); display: grid; justify-items: center; gap: 1.25rem; }
   .cta-band h2 { font-size: var(--step-3); max-inline-size: 16ch; }
 
+
+  /* ===== the long read and the legal pages ===== */
+  .longread { padding-block: clamp(2.5rem, 7vw, 5rem) 0; display: grid; gap: clamp(2rem, 5vw, 3.5rem); }
+  .read-head { display: grid; gap: 1.1rem; max-inline-size: 46rem; }
+  .read-head h1 { font-size: var(--step-4); line-height: 0.95; }
+  .standfirst { font: 400 var(--step-1)/1.45 var(--font-display); color: var(--text-dim); max-inline-size: 38rem; text-wrap: pretty; }
+  .byline { font: 500 var(--step--1)/1.4 var(--font-mono); color: var(--text-dim); }
+  .toc ol { list-style: none; padding: 0; margin: 0.6rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; counter-reset: toc; }
+  .toc li { counter-increment: toc; font-size: var(--step--1); }
+  .toc a { color: var(--text-dim); text-decoration: none; display: inline-block; padding-block: 0.35rem; }
+  .toc a:hover { color: var(--text); text-decoration: underline; }
+  .toc li::before { content: counter(toc, decimal-leading-zero); font: 500 0.72rem/1 var(--font-mono); color: var(--accent-text); margin-inline-end: 0.5rem; }
+  @media (min-width: 64rem) {
+    .longread.has-toc { grid-template-columns: 13rem minmax(0, 1fr); column-gap: clamp(2rem, 5vw, 5rem); align-items: start; }
+    .longread.has-toc > .read-head { grid-column: 1 / -1; }
+    .longread.has-toc > .toc { position: sticky; inset-block-start: 6rem; }
+    .toc ol { display: grid; gap: 0.1rem; }
+    .toc a { padding-block: 0.3rem; }
+  }
+  .prose { max-inline-size: var(--measure); padding-block-end: 1rem; }
+  .prose > * + * { margin-block-start: 1.15em; }
+  .prose p, .prose li, .prose dd { color: color-mix(in oklab, var(--text) 88%, var(--bg)); }
+  .prose h2 { font-size: var(--step-3); margin-block: 2.4em 0.1em; scroll-margin-block-start: 5rem; }
+  .prose h2:first-child { margin-block-start: 0; }
+  .prose a { color: var(--accent-text); }
+  .prose strong { color: var(--text); font-weight: 600; }
+  .prose code { background: var(--bg-raised); border: 1px solid var(--line); border-radius: 0.35rem; padding: 0.05em 0.35em; overflow-wrap: anywhere; }
+  .prose ul, .prose ol { padding-inline-start: 1.25rem; display: grid; gap: 0.7em; }
+  .prose li::marker { color: var(--accent-text); }
+  .prose-foot { font-size: var(--step--1); color: var(--text-dim) !important; border-block-start: 1px solid var(--line); padding-block-start: 1.1rem; }
+  .pull { font: italic 400 var(--step-2)/1.15 var(--font-display); color: var(--text); border-inline-start: 2px solid var(--ember); padding-inline-start: clamp(1rem, 3vw, 1.75rem); margin-inline: 0; text-wrap: balance; }
+  .points { display: grid; gap: 0; border-block-start: 1px solid var(--line); }
+  .points > div { display: grid; gap: 0.3rem; padding-block: 1.1rem; border-block-end: 1px solid var(--line); }
+  .points dt { font: 400 var(--step-1)/1.1 var(--font-display); color: var(--text); }
+  .points dd { margin: 0; }
+  .parts, .steps { list-style: none; padding: 0 !important; counter-reset: p; gap: 1rem !important; }
+  .parts li, .steps li { counter-increment: p; position: relative; padding: 1rem 1.1rem 1rem 3.4rem; background: var(--bg-raised); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+  .parts li::before, .steps li::before { content: counter(p); position: absolute; inset-inline-start: 1.1rem; inset-block-start: 0.7rem; font: italic 400 1.9rem/1 var(--font-display); color: var(--accent-text); }
+  .figure { margin-inline: 0; padding: clamp(0.75rem, 2vw, 1.25rem); background: var(--bg-raised); border: 1px solid var(--line); border-radius: var(--radius); }
+  .figure svg { inline-size: 100%; block-size: auto; overflow: visible; }
+  .figure figcaption { font-size: var(--step--1); color: var(--text-dim); margin-block-start: 0.75rem; }
+  .f-node rect { fill: var(--bg); stroke: var(--line-strong); }
+  .f-hub rect { fill: var(--bg-sunk); stroke: var(--ember); stroke-width: 1.5; }
+  .f-vault rect { stroke-dasharray: 4 4; }
+  .f-wire path { fill: none; stroke: var(--text-dim); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+  .f-label text { font: 500 12px/1 var(--font-mono); fill: var(--text); }
+  .f-label .f-dim { fill: var(--text-dim); }
+  .f-label .f-eyebrow { fill: var(--accent-text); font-size: 11px; letter-spacing: 0.08em; }
+  .f-label .f-who { fill: var(--accent-text); }
+  .roadmap { list-style: none; padding: 0 !important; gap: 0 !important; border-block-start: 1px solid var(--line); }
+  .roadmap li { display: grid; grid-template-columns: 5.75rem minmax(0, 1fr); gap: 1rem; align-items: baseline; padding-block: 0.95rem; border-block-end: 1px solid var(--line); }
+  .chip { justify-self: start; font: 500 0.72rem/1 var(--font-mono); letter-spacing: 0.04em; padding: 0.35rem 0.6rem; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--text-dim); }
+  .chip.is-done { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 50%, transparent); }
+  .chip.is-now { color: var(--on-ember); background: var(--ember); border-color: var(--ember); }
+  .chip.is-next { color: var(--accent-text); border-color: color-mix(in oklab, var(--ember) 55%, transparent); }
+  @media (max-width: 30rem) { .roadmap li { grid-template-columns: 1fr; gap: 0.4rem; } }
+
+
+  /* the long read's stage: a fixed canvas behind everything (three.js, drawn by /static/fx.js), and words that rise into place (GSAP) */
+  .scene-bg { position: fixed; inset: 0; inline-size: 100%; block-size: 100%; z-index: -1; pointer-events: none; }
+  @media (max-width: 63.99rem) { .scene-bg { opacity: 0.4; } }
+  .w { display: inline-block; overflow: clip; vertical-align: top; padding: 0 0.04em 0.1em; margin: 0 -0.04em -0.1em; }
+  .w > span { display: inline-block; }
+  .fx-on .read-head > * { animation: none; }
+
   /* ===== auth / account / flows ===== */
   .auth { padding-block: clamp(2rem, 7vw, 5rem) 0; display: grid; gap: clamp(2rem, 6vw, 4rem); align-items: center; }
   @media (min-width: 56rem) { .auth { grid-template-columns: 1.05fr 0.95fr; } }
@@ -449,8 +514,20 @@
       .how li { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% entry 55%; }
       .how li:nth-child(2) { animation-range: entry 8% entry 63%; }
       .how li:nth-child(3) { animation-range: entry 16% entry 71%; }
+      .pull, .figure, .points > div, .roadmap li { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% entry 40%; }
       .bento .card { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% entry 50%; }
     }
+
+
+    /* a thin ember line fills as you read: scroll-driven, so it costs no script and simply is not there where unsupported */
+    @supports (animation-timeline: scroll()) {
+      @keyframes read { from { scale: 0 1; } to { scale: 1 1; } }
+      .read-progress { position: fixed; inset: 0 0 auto 0; block-size: 3px; background: var(--ember); transform-origin: 0 50%; z-index: 20; animation: read linear both; animation-timeline: scroll(root block); }
+    }
+    .read-head > * { animation: rise var(--dur-slow) var(--ease) backwards; }
+    .read-head > :nth-child(2) { animation-delay: 70ms; }
+    .read-head > :nth-child(3) { animation-delay: 140ms; }
+    .read-head > :nth-child(4) { animation-delay: 210ms; }
 
     /* view transitions between pages: the header stays put, the page behind it lifts in */
     ::view-transition-old(root) { animation: fade var(--dur) var(--ease-in) reverse both; }

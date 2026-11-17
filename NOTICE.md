@@ -44,3 +44,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR
 ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
 THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## three.js and GSAP (the long-read page of the hosted service)
+
+`memory/agentvault/hosted/static/fx.js` is a bundle of two libraries, built by `memory/agentvault/hosted/fx/build.sh` from `fx.src.js`:
+
+- **three.js** 0.187.0, MIT License, Copyright © 2010-2026 three.js authors. <https://github.com/mrdoob/three.js>
+- **GSAP** 3.15.1, © GreenSock, used under the GSAP Standard License. <https://gsap.com/standard-license>

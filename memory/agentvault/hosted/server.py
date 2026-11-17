@@ -8,7 +8,7 @@ from .. import mcp_server
 from ..remote.server import MAX_BODY, client_key
 from ..remote.tools import REMEMBER, REMIND
 from ..index import session_files
-from . import billing, devices, link, pages, tools, ui
+from . import billing, devices, link, pages, story, tools, ui
 from .ingest import MAX_BODY as INGEST_MAX, IngestError, ingest, vault_bytes
 from .oauth import SESSION_TTL, Auth, AuthError
 from .store import EMAIL, Store
@@ -137,10 +137,10 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if u.path == "/authorize": return self.authorize_page(q)
             if u.path == "/": return self.html(200, pages.home(self.user_email(), auth.invite_only))
             if u.path.startswith("/static/"): return self.static(u.path[8:])
-            if u.path == "/privacy": return self.redirect(ui.PRIVACY)
+            if u.path in ("/privacy", "/terms"): return self.html(200, story.legal(u.path[1:], self.user_email()))
+            if u.path == "/about": return self.html(200, story.about(self.user_email(), auth.invite_only))
             if u.path == "/waitlist": return self.html(200, pages.waitlist_form(user=self.user_email())) if auth.invite_only else self.redirect("/login")
             if u.path == "/admin": return self.admin_page(q)
-            if u.path == "/terms": return self.redirect(ui.TERMS)
             if u.path == "/billing/checkout": return self.checkout()
             if u.path == "/billing/portal": return self.portal()
             if u.path in ("/billing/success", "/billing/cancel"): return self.html(200, pages.billing_done(u.path.endswith("success"), self.user_email()))

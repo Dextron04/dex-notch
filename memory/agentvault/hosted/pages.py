@@ -2,7 +2,7 @@
 Copy rule: say what happens, in the order it happens, without drama."""
 import time
 from typing import List, Optional
-from .ui import CHECK, CROSS, MAIL, PRIVACY, RELEASES, TERMS, REPO, esc, hidden, layout
+from .ui import CHECK, CROSS, MAIL, PRIVACY, RELEASES, STORY, TERMS, REPO, esc, hidden, layout
 
 def _ago(ts: Optional[float], now: float) -> str:
     if not ts: return "never"
@@ -29,8 +29,8 @@ def home(user: Optional[str] = None, beta: bool = False) -> str:
 <span class="eyebrow">Early access · for Mac</span>
 <h1 id="hero-title">The things that need you, <em>at the notch.</em></h1>
 <p class="lede">Dex Notch turns your Mac's notch into a quiet place for <strong>mail, iPhone alerts and reminders</strong>. Dex Memory keeps every AI conversation you've had in one private place, so Claude and ChatGPT can search it.</p>
-<div class="hero-actions">{primary}<a class="btn btn-ghost" href="{RELEASES}">Download for Mac</a></div>
-<p class="hero-meta">macOS 14 or later · open source · free while in early access</p>
+<div class="hero-actions">{primary}</div>
+<p class="hero-meta">macOS 14 or later · open source · free while in early access · <a href="{STORY}">Read why we're building it</a></p>
 </div>
 
 <div class="screen" role="group" aria-label="A demonstration of the notch showing four kinds of card">

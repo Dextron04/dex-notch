@@ -125,11 +125,8 @@ class ServerAssetTests(unittest.TestCase):
         _, h, _ = self.get("/static/app.css"); self.assertIn("immutable", h["cache-control"]); self.assertEqual(h["content-type"], "text/css; charset=utf-8")
         _, h, _ = self.get("/static/img/mark.png"); self.assertNotIn("immutable", h["cache-control"])
 
-    def test_privacy_redirects_and_unknown_pages_are_designed_404s(self):
-        class NR(urllib.request.HTTPRedirectHandler):
-            def redirect_request(self, *a, **k): return None
-        try: urllib.request.build_opener(NR).open(self.base + "/privacy"); self.fail("expected a redirect")
-        except urllib.error.HTTPError as e: self.assertEqual((e.code, e.headers["Location"]), (302, ui.PRIVACY)); e.close()
+    def test_privacy_is_read_here_and_unknown_pages_are_designed_404s(self):
+        st, _, body = self.get("/privacy"); self.assertEqual(st, 200); self.assertIn("Hosted memory", body.decode())
         st, h, body = self.get("/nowhere"); self.assertEqual(st, 404); self.assertIn("nothing here", body.decode())
 
 if __name__ == "__main__": unittest.main()

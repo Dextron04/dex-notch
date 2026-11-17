@@ -6,8 +6,7 @@ from typing import Optional
 STATIC = Path(__file__).resolve().parent / "static"
 REPO = "https://github.com/Dextron04/dex-notch"
 RELEASES = REPO + "/releases/latest"
-PRIVACY = REPO + "/blob/master/PRIVACY.md"
-TERMS = REPO + "/blob/master/docs/terms.md"
+PRIVACY, TERMS, STORY = "/privacy", "/terms", "/about"   # read on this site: the documents live in content/
 DESCRIPTION = "Dex Notch turns your Mac's notch into a quiet place for mail, iPhone alerts and reminders. Dex Memory keeps every AI conversation you've had where Claude and ChatGPT can search it."
 
 def esc(s) -> str:
@@ -15,7 +14,7 @@ def esc(s) -> str:
 
 def _version() -> str:
     h = hashlib.sha256()
-    for n in ("app.css", "app.js"): h.update((STATIC / n).read_bytes())
+    for n in ("app.css", "app.js", "fx.js"): h.update((STATIC / n).read_bytes())
     return h.hexdigest()[:10]
 VERSION = _version()  # the stylesheet and script are cached for a year; their URL changes when they do
 
@@ -29,14 +28,17 @@ MAIL = ('<svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><rect x="
 def hidden(fields: dict) -> str:
     return "".join('<input type="hidden" name="%s" value="%s">' % (esc(k), esc(v)) for k, v in fields.items())
 
-def layout(title: str, body: str, *, user: Optional[str] = None, current: str = "", description: str = DESCRIPTION, full_title: bool = False) -> str:
+FX = f'<script type="module" src="/static/fx.js?v={VERSION}"></script>'   # the long read only: three.js and GSAP, bundled and served from here
+
+def layout(title: str, body: str, *, user: Optional[str] = None, current: str = "", description: str = DESCRIPTION, full_title: bool = False, fx: bool = False) -> str:
     """`user` is the signed-in email (or None). `title` is unique per page: the part before the name is what a tab or a screen reader leads with."""
     if user:
         nav = ('<a href="/account"%s>Account</a><form method="post" action="/logout"><button class="btn btn-quiet btn-sm" type="submit">Sign out</button></form>'
                % (' aria-current="page"' if current == "account" else ""))
     else:
-        nav = ('<a class="nav-hide" href="/#how">How it works</a><a class="nav-hide" href="%s">Privacy</a>'
-               '<a class="btn btn-ghost btn-sm" href="/login"%s>Sign in</a>' % (PRIVACY, ' aria-current="page"' if current == "login" else ""))
+        nav = ('<a class="nav-hide" href="/#how">How it works</a><a class="nav-hide" href="%s"%s>The long read</a><a class="nav-hide" href="%s"%s>Privacy</a>'
+               '<a class="btn btn-ghost btn-sm" href="/login"%s>Sign in</a>' % (STORY, ' aria-current="page"' if current == "about" else "", PRIVACY, ' aria-current="page"' if current == "privacy" else "",
+                                                                             ' aria-current="page"' if current == "login" else ""))
     page_title = title if full_title else "%s · Dex Notch" % title
     return f"""<!doctype html>
 <html lang="en">
@@ -58,7 +60,7 @@ def layout(title: str, body: str, *, user: Optional[str] = None, current: str = 
 <link rel="stylesheet" href="/static/app.css?v={VERSION}">
 <link rel="expect" href="#main" blocking="render">
 <script src="/static/app.js?v={VERSION}" defer></script>
-</head>
+{FX if fx else ""}</head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-header">
@@ -74,6 +76,7 @@ def layout(title: str, body: str, *, user: Optional[str] = None, current: str = 
 <div class="wrap">
 <p>Dex Notch is open source and made for the Mac.<br>Early access: expect rough edges.</p>
 <nav aria-label="Footer"><ul>
+<li><a href="{STORY}">The long read</a></li>
 <li><a href="{PRIVACY}">Privacy</a></li>
 <li><a href="{TERMS}">Terms</a></li>
 <li><a href="{REPO}">Source</a></li>
