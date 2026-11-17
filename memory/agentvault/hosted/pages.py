@@ -82,7 +82,7 @@ def home(user: Optional[str] = None) -> str:
 <ol class="how">
 <li><h3>Install the app</h3><p>Dex Notch lives in your menu bar and the notch. It reads the AI conversations your Mac already has, from Claude Code, Codex and Gemini, and keeps them in a folder you own.</p></li>
 <li><h3>Add your Mac</h3><p>Sign in with an email link, no password. Dex Notch opens your browser, you approve the code it shows, and your history starts uploading.</p></li>
-<li><h3>Ask from anywhere</h3><p>Add your memory as a connector in Claude or ChatGPT. They can search it, read it, and save new notes and reminders when you ask them to.</p></li>
+<li><h3>Ask from anywhere</h3><p>In Claude or ChatGPT, add one connector with your memory's address from your account page and sign in once. They can then search and read it, and save new notes and reminders when you ask.</p></li>
 </ol>
 </div>
 </section>
@@ -296,9 +296,11 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
 <li {step2}><span class="dot" aria-hidden="true"></span><h3>Add this Mac</h3>
 <div class="body"><p>Open Dex Notch on the Mac. It opens a page in your browser; sign in, check the code matches and tap <b>Add this Mac</b>. Your history starts uploading within a minute (you can turn that off in Settings → Memory).</p></div></li>
 <li {"data-done" if connected else ""}><span class="dot" aria-hidden="true"></span><h3>Connect Claude or ChatGPT{' <span class="chip" data-tone="ok"><i></i>Connected</span>' if connected else ''}</h3>
-<div class="body"><p>Add a custom connector and paste this address. You'll be asked to sign in and approve it once.</p>
+<div class="body"><p><b>In Claude:</b> open <b>Settings → Connectors → Add custom connector</b>, name it Dex Memory, and paste this address.</p>
 <div class="copybox"><code id="mcp-url">{esc(mcp_url)}</code><button class="btn btn-ghost btn-sm" type="button" data-copy-from="mcp-url">Copy</button></div>
-<details><summary>Where do I paste it?</summary><p><b>Claude:</b> Settings → Connectors → Add custom connector.<br><b>ChatGPT:</b> Settings → Connectors, then create a connector (it may need developer mode).</p></details></div></li>
+<p>Claude then opens this site. Sign in as <span class="mono">{esc(email)}</span> and tap <b>Allow</b>. That's all: ask Claude "what did I decide about…" and it searches your memory.</p>
+<details><summary>Already have an older Dex connector?</summary><p>Remove it in the same Connectors list first, then add this one. The old one points at a previous vault that no longer updates.</p></details>
+<details><summary>ChatGPT</summary><p>Settings → Connectors, then create a connector (it may need developer mode). Use the same address and the same sign-in.</p></details></div></li>
 </ol>
 </section>
 
