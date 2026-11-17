@@ -6,6 +6,14 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.8.2: Closed beta, and a way to report problems
+
+*17 November 2026*
+
+- **Report a problem from Settings → Memory.** **Copy diagnostics** puts the setup facts on your clipboard: the version, macOS, what is switched on, whether Full Disk Access is granted, and when the server last confirmed this Mac. It never includes your email, passwords or conversations. **Report a problem** opens the issue form on GitHub; paste the diagnostics into it.
+- **Dex Notch is in a closed beta.** Sign-in is by invitation. Ask for one on the waitlist at the Dex Notch website and you will get an email when there is room, then a welcome email once your account exists. The [terms](docs/terms.md) and [PRIVACY.md](PRIVACY.md) are published and linked from the sign-in page.
+- **The hosted service is stricter.** It redirects plain `http://` to `https://`, tells browsers to only use https, and erases your waitlist entry and invitation when you delete your account.
+
 ## v0.8.1: A free plan, and clearer setup on the website
 
 *16 November 2026*
