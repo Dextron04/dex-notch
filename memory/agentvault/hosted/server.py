@@ -8,7 +8,7 @@ from .. import mcp_server
 from ..remote.server import MAX_BODY, client_key
 from ..remote.tools import REMEMBER, REMIND
 from ..index import session_files
-from . import billing, devices, pages, tools, ui
+from . import billing, devices, link, pages, tools, ui
 from .ingest import MAX_BODY as INGEST_MAX, QUOTA_BYTES, IngestError, ingest, vault_bytes
 from .oauth import SESSION_TTL, Auth, AuthError
 from .store import Store
@@ -42,6 +42,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
     by_ip, by_email, reg_ip = Limiter(10, 3600, now), Limiter(3, 900, now), Limiter(20, 3600, now)
     by_device = Limiter(120, 60, now)  # uploads and reminder polls per device per minute
     by_user = Limiter(120, 60, now)    # MCP calls per user per minute
+    link_ip, poll_ip = Limiter(20, 3600, now), Limiter(240, 60, now)   # Mac link codes started per hour, and polls for the answer per minute, per address
     exporting, export_slots = set(), threading.BoundedSemaphore(2)  # a zip of a whole vault is heavy: one per user, two at a time
 
     class H(BaseHTTPRequestHandler):
@@ -120,6 +121,8 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if u.path == "/billing/portal": return self.portal()
             if u.path in ("/billing/success", "/billing/cancel"): return self.html(200, pages.billing_done(u.path.endswith("success"), self.user_email()))
             if u.path == "/login/done": return self.redirect("/account")
+            if u.path == "/link": return self.link_page(q)
+            if u.path == "/v1/me": return self.v1_me()
             if u.path == "/login": return self.redirect("/account") if self.user() else self.html(200, pages.login())
             if u.path == "/account": return self.account()
             if u.path == "/healthz":
@@ -140,7 +143,8 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             fn = {"/mcp": self.mcp, "/register": self.register, "/authorize": self.consent, "/token": self.token,
                   "/login": self.login, "/login/verify": self.verify, "/hooks/stripe": self.stripe_hook,
                   "/account/devices": self.add_device, "/account/devices/revoke": self.revoke_device, "/account/signout-all": self.signout_all,
-                  "/logout": self.logout, "/v1/ingest": self.v1_ingest, "/account/export": self.export, "/account/delete": self.delete}.get(path)
+                  "/logout": self.logout, "/v1/ingest": self.v1_ingest, "/account/export": self.export, "/account/delete": self.delete,
+                  "/link": self.link_approve, "/v1/link/start": self.v1_link_start, "/v1/link/poll": self.v1_link_poll}.get(path)
             fn() if fn else self.send(404, {"error": "not_found"})
 
         def do_DELETE(self): self.send(405, {"error": "no sessions"}) if urlparse(self.path).path == "/mcp" else self.send(404, {"error": "not_found"})
@@ -162,6 +166,9 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if f.get("client_id"):  # sign-in started from an OAuth request: come back to it, rebuilt server side (never a URL taken from the form)
                 try: self.validate(f); nxt = "/authorize?" + urlencode({k: f[k] for k in OAUTH_FIELDS if f.get(k)})
                 except AuthError as e: return self.bad(e)
+            if f.get("link"):  # started from a Mac asking to be linked: come back to that page, rebuilt from a code that is still open
+                if not link.peek(store, f["link"], now()): return self.fail(400, "This link has expired. Go back to Dex Notch and start again.")
+                nxt = "/link?" + urlencode({"code": link.normalize(f["link"])})
             # the answer never says whether the address is known, or whether a mail went out
             if by_ip.allow(self.ip()) and by_email.allow(email):
                 try: send_mail(email, "%s/login/verify?t=%s" % (public, auth.start_login(email, nxt)))
@@ -174,7 +181,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if f is None: return
             try: sess, _, nxt = auth.finish_login(f.get("t", ""))
             except AuthError as e: return self.bad(e)
-            self.redirect(nxt if nxt and nxt.startswith("/authorize?") else "/login/done",
+            self.redirect(nxt if nxt and nxt.startswith(("/authorize?", "/link?")) else "/login/done",
                           {"Set-Cookie": "%s=%s; HttpOnly; SameSite=Lax; Path=/; Max-Age=%d%s" % (COOKIE, sess, SESSION_TTL, secure)})
 
         def consent(self):
@@ -188,6 +195,51 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             q = {"error": "access_denied"} if f.get("decision") != "allow" else {"code": auth.issue_code(f["client_id"], uid, f["redirect_uri"], f["code_challenge"])}
             if f.get("state"): q["state"] = f["state"]
             self.redirect(f["redirect_uri"] + ("&" if "?" in f["redirect_uri"] else "?") + urlencode(q))
+
+        # -- linking a Mac: the app starts it, the browser approves it, the app collects its device token
+        def link_page(self, q):
+            name = link.peek(store, q.get("code", ""), now())
+            if not name: return self.fail(400, "This link has expired. Go back to Dex Notch and start again.")
+            uid, code = self.user(), link.normalize(q["code"])
+            if not uid: return self.html(200, pages.login(link_name=name, fields={"link": code}))
+            self.html(200, pages.link_confirm(store.email(uid), name, code))
+
+        def link_approve(self):
+            f = self.form()
+            if f is None: return
+            uid = self.user()
+            if not uid: return self.fail(401)
+            if f.get("decision") != "allow": return self.redirect("/account")
+            try: name = link.approve(store, f.get("code", ""), uid, now())
+            except link.LinkError as e: return self.bad(e)
+            self.html(200, pages.link_done(name, store.email(uid)))
+
+        def v1_link_start(self):
+            raw = self.body(4096)
+            if raw is None: return
+            if not link_ip.allow(self.ip()): return self.send(429, {"error": "slow_down"})
+            try: d = json.loads(raw or b"{}"); name = d.get("name", "") if isinstance(d, dict) else ""
+            except ValueError: return self.send(400, {"error": "bad_json"})
+            try: code, secret = link.start(store, str(name), now())
+            except link.LinkError as e: return self.send(503, {"error": str(e)})
+            self.send(200, {"code": link.pretty(code), "secret": secret, "url": "%s/link?code=%s" % (public, code), "expires_in": link.TTL})
+
+        def v1_link_poll(self):
+            raw = self.body(4096)
+            if raw is None: return
+            if not poll_ip.allow(self.ip()): return self.send(429, {"error": "slow_down"})
+            try: d = json.loads(raw or b"{}"); secret = d.get("secret", "") if isinstance(d, dict) else ""
+            except ValueError: return self.send(400, {"error": "bad_json"})
+            status, tok, uid = link.poll(store, str(secret), now())
+            self.send(200, {"status": status} if status != "approved" else {"status": status, "token": tok, "email": store.email(uid)})
+
+        def v1_me(self):
+            """The app asks this on every launch: is this Mac still linked to a live account? Plan status is reported, not enforced here."""
+            a = self.headers.get("Authorization") or ""
+            d = devices.check(store, a[7:] if a.startswith("Bearer ") else "", now())
+            if not d: return self.send(401, {"error": "unauthorized"})
+            if not by_device.allow(d[1]): return self.send(429, {"error": "slow_down"})
+            self.send(200, {"email": store.email(d[0]), "status": store.status(d[0]), "entitled": store.entitled(d[0]), "device": d[1]})
 
         # -- account page: sign-out and the Macs allowed to upload
         def account(self):

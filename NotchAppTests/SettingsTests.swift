@@ -214,4 +214,12 @@ final class SettingsTests: XCTestCase {
         try HostedAccount.removeHost(at: url)
         XCTAssertNil(HostedAccount.connectedHost(at: url, token: { _, _ in "dvt_x" }))
     }
+    func testUploadIsOnUnlessTurnedOff() throws {
+        let url = dir.appendingPathComponent("up.json")
+        XCTAssertTrue(HostedAccount.uploads(at: url))                                   // no file, no section: on
+        try HostedAccount.saveHost(at: url, "vault.example.com"); XCTAssertTrue(HostedAccount.uploads(at: url))
+        try HostedAccount.setUpload(at: url, false); XCTAssertFalse(HostedAccount.uploads(at: url)); XCTAssertEqual(HostedAccount.host(at: url), "vault.example.com")
+        try HostedAccount.setUpload(at: url, true); XCTAssertTrue(HostedAccount.uploads(at: url))
+        try HostedAccount.saveHost(at: url, "vault.example.com", upload: false); XCTAssertFalse(HostedAccount.uploads(at: url))
+    }
 }

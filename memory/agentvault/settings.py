@@ -37,11 +37,11 @@ def _keychain(service: str, account: str) -> Optional[str]:
     return p.stdout.strip() or None if p.returncode == 0 else None
 
 def load_hosted(path: Optional[Path] = None, get_token: Callable[[str, str], Optional[str]] = _keychain) -> Optional[dict]:
-    """{host, base, token} when settings.json has a "hosted": {"host": …} section AND the keychain holds a device token, else None.
+    """{host, base, token, upload} when settings.json has a "hosted": {"host": …} section AND the keychain holds a device token, else None.
     `settings.json` never holds the token itself."""
     p = Path(path).expanduser() if path else DEFAULT_PATH.expanduser()
     try: h = json.loads(p.read_text())["hosted"]
     except (OSError, ValueError, KeyError, TypeError): return None
     host = normalize_host(h.get("host", "")) if isinstance(h, dict) else None
     token = get_token(HOSTED_SERVICE, HOSTED_ACCOUNT) if host else None
-    return {"host": host, "base": "https://" + host, "token": token} if host and token and token.startswith("dvt_") else None
+    return {"host": host, "base": "https://" + host, "token": token, "upload": h.get("upload") is not False} if host and token and token.startswith("dvt_") else None   # upload: off only when the person chose so

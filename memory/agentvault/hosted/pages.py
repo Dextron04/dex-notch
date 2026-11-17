@@ -142,9 +142,9 @@ def home(user: Optional[str] = None) -> str:
 
 # ---------------------------------------------------------------- sign in
 
-def login(*, client_name: Optional[str] = None, fields: Optional[dict] = None, email: str = "", error: str = "", user: Optional[str] = None) -> str:
-    heading = "Let %s use your memory" % esc(client_name) if client_name else "One link. <em>No password.</em>"
-    lede = ("Sign in to connect it. New here? This creates your account." if client_name
+def login(*, client_name: Optional[str] = None, fields: Optional[dict] = None, email: str = "", error: str = "", user: Optional[str] = None, link_name: Optional[str] = None) -> str:
+    heading = ("Let %s use your memory" % esc(client_name) if client_name else "Add <em>%s</em> to Dex Notch" % esc(link_name) if link_name else "One link. <em>No password.</em>")
+    lede = ("Sign in to connect it. New here? This creates your account." if client_name or link_name
             else "Enter your email and we'll send a link that signs you in. New here? It creates your account.")
     err = '<p class="form-error" role="alert">%s</p>' % esc(error) if error else ""
     body = f"""
@@ -222,6 +222,34 @@ def consent(client_name: str, host: str, email: str, fields: dict) -> str:
 </div>
 """
     return layout("Connect " + client_name, body, user=email)
+
+def link_confirm(email: str, name: str, code: str) -> str:
+    body = f"""
+<div class="wrap-narrow auth-single">
+<div class="card auth-card consent">
+<span class="eyebrow">Add a Mac</span>
+<h1>Add <em>{esc(name)}</em> to your account?</h1>
+<p class="sub">You're signed in as <b class="mono">{esc(email)}</b>. Check that this code is the one on your Mac's screen:</p>
+<p class="pair-code">{esc(code[:4] + "-" + code[4:])}</p>
+<ul class="perms plain" role="list">
+<li><span class="ico">{CHECK}</span><span>This Mac can save your AI conversations to your memory</span></li>
+<li><span class="ico">{CHECK}</span><span>You can remove it from your account page whenever you like</span></li>
+<li data-no><span class="ico">{CROSS}</span><span>Don't approve it if the code differs, or you didn't just start this in Dex Notch</span></li>
+</ul>
+<form method="post" action="/link">
+{hidden({"code": code})}
+<div class="consent-actions">
+<button class="btn btn-ghost" type="submit" name="decision" value="deny">Cancel</button>
+<button class="btn" type="submit" name="decision" value="allow">Add this Mac</button>
+</div>
+</form>
+</div>
+</div>
+"""
+    return layout("Add a Mac", body, user=email)
+
+def link_done(name: str, email: str) -> str:
+    return _centered("Mac added", "You're <em>in</em>", "<b>%s</b> is linked. Go back to Dex Notch: it finishes setting up on its own. You can close this tab." % esc(name), '<a class="btn btn-ghost" href="/account">Open your account</a>', eyebrow="Done", user=email)
 
 def need_plan(user: str, checkout_link: Optional[str]) -> str:
     action = '<a class="btn" href="%s">Subscribe to continue</a>' % esc(checkout_link) if checkout_link else '<a class="btn btn-ghost" href="/account">Go to your account</a>'

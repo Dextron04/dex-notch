@@ -21,7 +21,7 @@ class HostedLink:
                 self.stop = threading.Event()
                 threading.Thread(target=reminder_stream.run, args=(self.vault, cfg["base"], cfg["token"]),
                                  kwargs={"path": "/v1/reminders/wait", "stop": self.stop}, daemon=True).start()
-        if not cfg: return
+        if not cfg or not cfg.get("upload", True): return     # linked, but the person chose not to keep conversations in the account
         try:
             s = self.push(self.vault, cfg["base"], cfg["token"])
             if s["turns"]: print("hosted: uploaded", s, flush=True)

@@ -17,6 +17,7 @@ def all_pages():
         "login": pages.login(), "login-oauth": pages.login(client_name=evil, fields={"client_id": evil}, email=evil, error=evil),
         "sent": pages.login_sent(evil), "verify": pages.verify(evil),
         "consent": pages.consent(evil, "claude.ai", "a@x.io", {"client_id": evil}),
+        "login-link": pages.login(link_name=evil, fields={"link": evil}), "link-confirm": pages.link_confirm("a@x.io", evil, "ABCD2345"), "link-done": pages.link_done(evil, "a@x.io"),
         "need-plan": pages.need_plan("a@x.io", None), "need-plan-stripe": pages.need_plan("a@x.io", "https://h.test/billing/checkout"),
         "account": pages.account(**kw), "account-pending": pages.account(**dict(kw, status="pending", entitled=False, stripe=False, devices=[], connected=False)),
         "token": pages.device_token("dvt_abc", evil, "https://h.test/mcp", "a@x.io"),
@@ -54,7 +55,7 @@ class PageContractTests(unittest.TestCase):
         for n, s in self.scans.items(): self.assertEqual(s.inline, [], n)
 
     def test_each_page_has_one_h1_unique_ids_a_title_and_labelled_inputs(self):
-        variant_of = {"home-signed-in": "home", "login-oauth": "login", "need-plan-stripe": "need-plan", "account-pending": "account"}   # the same page in another state
+        variant_of = {"home-signed-in": "home", "login-oauth": "login", "login-link": "login", "need-plan-stripe": "need-plan", "account-pending": "account"}   # the same page in another state
         by_kind = {}
         for n, s in self.scans.items():
             self.assertEqual(s.h1, 1, n); self.assertEqual(len(s.ids), len(set(s.ids)), n); self.assertTrue(s.title.strip().endswith("Dex Notch"), n)

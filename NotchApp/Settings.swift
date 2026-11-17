@@ -180,6 +180,25 @@ enum HostedAccount {
         return h
     }
 
-    static func saveHost(at url: URL, _ host: String) throws { try Settings.mutate(at: url) { $0["hosted"] = ["host": host] } }
+    /// Where a fresh install signs up. settings.json can point at another server (a self-hosted one).
+    static let defaultHost = "vault.dextron04.in"
+
+    /// Whether recorded conversations are uploaded. On unless the person turned it off (the recorder reads the same key the same way).
+    static func uploads(at url: URL) -> Bool {
+        guard let d = try? Data(contentsOf: url), let root = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let h = root["hosted"] as? [String: Any] else { return true }
+        return (h["upload"] as? Bool) != false
+    }
+
+    static func saveHost(at url: URL, _ host: String, upload: Bool = true) throws {
+        try Settings.mutate(at: url) { $0["hosted"] = upload ? ["host": host] : ["host": host, "upload": false] }
+    }
+    static func setUpload(at url: URL, _ on: Bool) throws {
+        try Settings.mutate(at: url) { root in
+            guard var h = root["hosted"] as? [String: Any] else { return }
+            if on { h.removeValue(forKey: "upload") } else { h["upload"] = false }
+            root["hosted"] = h
+        }
+    }
     static func removeHost(at url: URL) throws { try Settings.mutate(at: url) { $0.removeValue(forKey: "hosted") } }
 }

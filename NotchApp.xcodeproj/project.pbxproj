@@ -18,6 +18,7 @@
 		23B64ECBB548D9A23A57FD34 /* AgentRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1487592A6A941D9CB95947 /* AgentRunner.swift */; };
 		2452662E03B5DE52879166A7 /* ReplySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B63938FF0CDB184A70CB883 /* ReplySession.swift */; };
 		2F9D4C587D08A0A859566F25 /* SettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA22C6E41EAD33D9E8DD129E /* SettingsTests.swift */; };
+		3079D52787E1306738598D32 /* AccountGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E309A3BA024DFCF5E80FEA3 /* AccountGate.swift */; };
 		3338925AA7C0F57D8C9465BA /* MailReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F02AF06F7646206E66DA662 /* MailReply.swift */; };
 		338383E9953684F2000B1A66 /* Reminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E728D5AB400774BF5A65DF /* Reminders.swift */; };
 		33A991DD0C8D532FDD7C271B /* VaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1699F9A9CD5771ED2F953B05 /* VaultReader.swift */; };
@@ -35,6 +36,7 @@
 		654D8443649142B3C79DDA2D /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5DE5AEC6077BF0580C62802 /* Settings.swift */; };
 		69D5965BE316E7D1A8F923DF /* NotchWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A42C48BB475251A9D6BB6BD /* NotchWindow.swift */; };
 		6FDCA5158E4E1733118CB32C /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F216985AFA23BC8E9805806 /* ConversationStore.swift */; };
+		78BF8250F055F1C4C531CC2C /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D6FACDD9417F0189139076 /* Account.swift */; };
 		797AB89EE2D18992578450C4 /* ConversationStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B7D87E48BF594612257808A /* ConversationStoreTests.swift */; };
 		8180508E708118CF50F0B557 /* Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582019F4D21E660A42477FFC /* Journal.swift */; };
 		84C5DC1B9737D7A5558EE39A /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5DE5AEC6077BF0580C62802 /* Settings.swift */; };
@@ -56,10 +58,12 @@
 		D6FDE1727C6435EFD74B6B69 /* KeychainStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3FDC75598EA2E996BF9FAE8 /* KeychainStoreTests.swift */; };
 		DA0BA79E74EFDAAF3E935EC0 /* Addons.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8544183AD3EF18DC864B247 /* Addons.swift */; };
 		DBEE7E9BC8319DCAC4FCFA1D /* AddonsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 837603D3A7FE79211CF92BE4 /* AddonsTests.swift */; };
+		E0583583599F95A4BB860466 /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D6FACDD9417F0189139076 /* Account.swift */; };
 		E07EEF3C06EADD40BE52F384 /* NotchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */; };
 		E3ADAE4DD1240F04D154E5CD /* VaultReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */; };
 		E63B2AF16E49E360BBFAD95D /* ReplyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA1BFB9DA2701025378F6A5 /* ReplyView.swift */; };
 		E703B3CA52F3E90860D67B7C /* AddonCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 461189366EBDE3A440C7E728 /* AddonCenter.swift */; };
+		EBC158EC2CDDA4359903992A /* AccountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E451AE53070E99CF7BA21B3C /* AccountTests.swift */; };
 		ED50E03DCA4D07EBAC51DB90 /* ModelMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794A0159731A8951203F5BD8 /* ModelMark.swift */; };
 /* End PBXBuildFile section */
 
@@ -83,6 +87,7 @@
 		5341F0FBE3246CF85E71F48C /* AppUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdater.swift; sourceTree = "<group>"; };
 		582019F4D21E660A42477FFC /* Journal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Journal.swift; sourceTree = "<group>"; };
 		5B960B471D39685753DB2451 /* NotchAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NotchAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6E309A3BA024DFCF5E80FEA3 /* AccountGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountGate.swift; sourceTree = "<group>"; };
 		72682E91183BD251F579ACB6 /* OfficialMarks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficialMarks.swift; sourceTree = "<group>"; };
 		72DD816D131CAE9B673110C5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		794A0159731A8951203F5BD8 /* ModelMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelMark.swift; sourceTree = "<group>"; };
@@ -99,10 +104,12 @@
 		A5CADAB3DBF5CC60D578B0C3 /* AgentStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStream.swift; sourceTree = "<group>"; };
 		B4CBD5204758A52DD991B3D4 /* NotchApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NotchApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA22C6E41EAD33D9E8DD129E /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
+		C2D6FACDD9417F0189139076 /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		C2E728D5AB400774BF5A65DF /* Reminders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reminders.swift; sourceTree = "<group>"; };
 		CE562AE9C74255701B08F531 /* AnswerBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerBody.swift; sourceTree = "<group>"; };
 		CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchApp.swift; sourceTree = "<group>"; };
 		E3FDC75598EA2E996BF9FAE8 /* KeychainStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStoreTests.swift; sourceTree = "<group>"; };
+		E451AE53070E99CF7BA21B3C /* AccountTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountTests.swift; sourceTree = "<group>"; };
 		E76E22DDB3A2D28B85B7C092 /* AlertView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertView.swift; sourceTree = "<group>"; };
 		E8544183AD3EF18DC864B247 /* Addons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Addons.swift; sourceTree = "<group>"; };
 		F5DE5AEC6077BF0580C62802 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
@@ -132,6 +139,8 @@
 		9DAA1C7250CA94F20218941D /* NotchApp */ = {
 			isa = PBXGroup;
 			children = (
+				C2D6FACDD9417F0189139076 /* Account.swift */,
+				6E309A3BA024DFCF5E80FEA3 /* AccountGate.swift */,
 				461189366EBDE3A440C7E728 /* AddonCenter.swift */,
 				E8544183AD3EF18DC864B247 /* Addons.swift */,
 				2F1487592A6A941D9CB95947 /* AgentRunner.swift */,
@@ -171,6 +180,7 @@
 		E8DB5246F60E7ADEE92DAE88 /* NotchAppTests */ = {
 			isa = PBXGroup;
 			children = (
+				E451AE53070E99CF7BA21B3C /* AccountTests.swift */,
 				837603D3A7FE79211CF92BE4 /* AddonsTests.swift */,
 				93222A27B250E3C8A8AE083F /* AgentStreamTests.swift */,
 				3B7D87E48BF594612257808A /* ConversationStoreTests.swift */,
@@ -288,6 +298,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E0583583599F95A4BB860466 /* Account.swift in Sources */,
+				EBC158EC2CDDA4359903992A /* AccountTests.swift in Sources */,
 				DA0BA79E74EFDAAF3E935EC0 /* Addons.swift in Sources */,
 				DBEE7E9BC8319DCAC4FCFA1D /* AddonsTests.swift in Sources */,
 				5D77FCCB6F6B59832FB84838 /* AgentStream.swift in Sources */,
@@ -317,6 +329,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				78BF8250F055F1C4C531CC2C /* Account.swift in Sources */,
+				3079D52787E1306738598D32 /* AccountGate.swift in Sources */,
 				E703B3CA52F3E90860D67B7C /* AddonCenter.swift in Sources */,
 				C1E493FDAF1341459B05B3C3 /* Addons.swift in Sources */,
 				23B64ECBB548D9A23A57FD34 /* AgentRunner.swift in Sources */,

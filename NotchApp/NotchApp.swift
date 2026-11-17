@@ -6,9 +6,14 @@ struct NotchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     private var updater: AppUpdater { AppUpdater.shared }
     private var center: AddonCenter { AddonCenter.shared }
+    private var gate: AccountGate { AccountGate.shared }
 
     var body: some Scene {
         MenuBarExtra {
+            if !gate.isOpen {                // nothing runs until the server has confirmed the account
+                Button("Sign in to Dex Notch…") { GateWindow.shared.show() }
+                if let v = updater.readyVersion { Button("Restart to update to \(v)") { updater.restartNow() } }
+            } else {
             Button("Ask…  ⌥Space") { delegate.assistant.toggle() }
             Button("Recall…  ⌥⇧Space") { delegate.assistant.toggleRecall() }
             if !center.needsReconnect.isEmpty { Button("Reconnect Gmail (\(center.needsReconnect.count))…") { center.reconnectAll() } }
@@ -21,6 +26,7 @@ struct NotchApp: App {
             Button("Settings…") { SetupWindow.shared.show(assistant: delegate.assistant) }.keyboardShortcut(",")
             Button("Open settings.json") { delegate.assistant.openSettings() }
             Button("Check connection") { delegate.assistant.connect() }
+            }
             Divider()
             Button("Quit") { NSApp.terminate(nil) }.keyboardShortcut("q")
         } label: {
@@ -37,8 +43,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let assistant = Assistant()
     private var notch: NotchWindow?
     private var hotkeys: [Hotkey] = []
+    private var walkthrough = false
 
     func applicationDidFinishLaunching(_ note: Notification) {
+        walkthrough = SetupWindow.needsWalkthrough      // asked now: signing in writes settings.json, which would make a fresh install look like an old one
+        AppUpdater.shared.start()          // even before sign-in: an update may be what fixes a problem
+        AccountGate.shared.onOpen = { [weak self] in self?.startApp() }
+        AccountGate.shared.launch()        // starts the app, once the server confirms this Mac's account
+    }
+
+    private func startApp() {
         notch = NotchWindow(assistant: assistant)
         notch?.show()
         hotkeys = [
@@ -47,8 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ]
         assistant.connect()
         AddonCenter.shared.start(assistant: assistant)
-        AppUpdater.shared.start()
-        if SetupWindow.needsWalkthrough {      // first launch: walk through every permission and choice, don't make people hunt for a config file
+        if walkthrough {      // first launch: walk through every permission and choice, don't make people hunt for a config file
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [assistant] in SetupWindow.shared.show(assistant: assistant, guided: true) }
         }
         // NOTCH_OPEN_SETTINGS=models|folders|mail|iphone|updates opens Settings on that page (README screenshots)

@@ -6,6 +6,15 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.8.0: Sign up, then start
+
+*16 November 2026*
+
+- **Dex Notch now starts with an account.** The first time you open it, a welcome window asks you to sign up or sign in. **Continue in browser** opens a page where you enter your email and get a link (no password); the page shows a short code, you check it matches the one on your Mac, and tap **Add this Mac**. Dex Notch starts once the server has confirmed it. An account is free while Dex Notch is in testing.
+- **It checks every time you open it.** If you remove this Mac on your account page, or delete the account, Dex Notch goes back to the sign-in window. With no connection it keeps working for 7 days after the last time the server confirmed it, then waits until it can check again.
+- **You choose whether conversations are uploaded.** The welcome window has a switch, **Keep my AI conversations in my account**, with what it means beside it. Change it later in Settings → Memory, where you can also **Sign out**. Notes are stored on the server operator's machine and are not end-to-end encrypted: [PRIVACY.md](PRIVACY.md) has the details.
+- **Everyone signs in, including people already using Dex Notch.** Your notes and settings on this Mac are not touched.
+
 ## v0.7.1: A home for hosted memory
 
 *16 November 2026*

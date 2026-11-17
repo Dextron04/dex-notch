@@ -25,9 +25,8 @@ final class SetupModel {
     var checkMinutes = 5.0
     var pane: SetupPane = .models
     var message: String?
-    var hostedHost = ""
-    var hostedToken = ""
     var hostedConnected: String?
+    var keepConversations = true
 
     private let url = Settings.defaultURL
     private var home: URL { FileManager.default.homeDirectoryForCurrentUser }
@@ -47,6 +46,7 @@ final class SetupModel {
         else if ad.gmail == nil { ownClientOpen = true }
         if ad.microsoftIsOwn, let id = ad.microsoftClientID { msID = id; msOpen = true } else if ad.microsoftClientID == nil { msOpen = true }
         hostedConnected = HostedAccount.connectedHost(at: url)
+        keepConversations = HostedAccount.uploads(at: url)
         if let g = a.gemma { host = g.host; model = g.model; keychainService = g.keychainService; keychainAccount = g.keychainAccount; localOpen = true }
     }
 
@@ -73,23 +73,11 @@ final class SetupModel {
     func useProjects() { if let p = projectsSuggestion { workspace = p; if !folders.contains(p) { folders.append(p) } } }
     func remove(_ f: String) { folders.removeAll { $0 == f }; if workspace == f { workspace = nil } }
 
-    /// Connect and Disconnect act at once (they are not part of Save): the token goes to the keychain first, so a host is never saved without one.
-    func connectHosted() {
+    /// Acts at once (not part of Save). The recorder re-reads settings.json every tick, so it takes effect within seconds.
+    func setKeepConversations(_ on: Bool) {
         message = nil
-        guard let h = Settings.normalizeHost(hostedHost) else { message = "The server should look like vault.example.com (no path, no username)."; return }
-        let t = hostedToken.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard HostedAccount.isValidToken(t) else { message = "That doesn't look like a device token. It starts with dvt_ and is shown once on your account page."; return }
-        guard KeychainStore.set(token: t, service: HostedAccount.keychainService, account: HostedAccount.keychainAccount) else { message = "The token couldn't be stored in the keychain."; return }
-        do { try HostedAccount.saveHost(at: url, h) }
-        catch { KeychainStore.delete(service: HostedAccount.keychainService, account: HostedAccount.keychainAccount); message = "Couldn't save settings.json: \(error.localizedDescription)"; return }
-        hostedConnected = h; hostedToken = ""
-    }
-
-    func disconnectHosted() {
-        message = nil
-        KeychainStore.delete(service: HostedAccount.keychainService, account: HostedAccount.keychainAccount)
-        do { try HostedAccount.removeHost(at: url) } catch { message = "Couldn't save settings.json: \(error.localizedDescription)"; return }
-        hostedConnected = nil
+        do { try HostedAccount.setUpload(at: url, on); keepConversations = on }
+        catch { message = "Couldn't save settings.json: \(error.localizedDescription)" }
     }
 
     func save() -> Bool {
@@ -517,27 +505,19 @@ struct SetupView: View {
 
     private var memoryPane: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Memory", "Keep your AI conversations in your Dex account, so Claude and ChatGPT can search them from anywhere.")
-            why("This uploads the conversations recorded on this Mac (Claude Code, Codex, Gemini) to the Dex server you connect, with passwords and keys removed first. It is optional and does nothing until you connect. You can disconnect at any time; what was already uploaded stays in your account until you delete it.")
+            header("Memory", "Your Dex account keeps your AI conversations, so Claude and ChatGPT can search them from anywhere.")
+            why("Dex Notch only runs while this Mac is linked to your account. When the switch below is on, the conversations recorded on this Mac (Claude Code, Codex, Gemini) are uploaded to your account with passwords and keys removed first. They are stored on the server operator's machine and are not end-to-end encrypted. Turning it off stops uploads; what was already uploaded stays until you delete it on your account page.")
             if let h = m.hostedConnected {
-                row(title: "Connected", detail: h, mono: true,
+                row(title: "Signed in", detail: [AccountGate.shared.email, h].compactMap { $0 }.joined(separator: " · "), mono: true,
                     lead: { Image(systemName: "checkmark.circle.fill").font(.system(size: 17)).foregroundStyle(Ink.ember) },
                     trail: { HStack(spacing: 18) {
                         link("Open account page") { if let u = URL(string: "https://\(h)/account") { NSWorkspace.shared.open(u) } }
-                        link("Disconnect", dim: true) { m.disconnectHosted() }
+                        link("Sign out", dim: true) { AccountGate.shared.signOut() }
                     } })
-            } else {
-                VStack(alignment: .leading, spacing: 22) {
-                    field("Server", "vault.example.com", text: $m.hostedHost)
-                    field("Device token", "dvt_…", text: $m.hostedToken, secure: true)
-                }
-                HStack(spacing: 22) {
-                    link("Connect") { m.connectHosted() }
-                    if let h = Settings.normalizeHost(m.hostedHost) {
-                        link("Get a token", dim: true) { if let u = URL(string: "https://\(h)/account") { NSWorkspace.shared.open(u) } }
-                    }
-                }.padding(.top, 20)
-                Text("On your account page choose Add this Mac, then paste the token here. It is shown only once.")
+                row(title: "Keep my conversations in my account", detail: m.keepConversations ? "On: new conversations are uploaded." : "Off: nothing is uploaded from this Mac.",
+                    lead: { Image(systemName: "icloud.and.arrow.up").font(.system(size: 16)).foregroundStyle(Ink.dim) },
+                    trail: { Toggle("", isOn: Binding(get: { m.keepConversations }, set: { m.setKeepConversations($0) })).labelsHidden().toggleStyle(.switch) })
+                Text("Signing out removes this Mac's key and returns Dex Notch to the sign-in screen.")
                     .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
             }
         }

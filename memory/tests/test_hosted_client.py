@@ -29,7 +29,9 @@ class SettingsTests(unittest.TestCase):
             p = Path(d) / "s.json"; tok = lambda s, a: "dvt_abc" if (s, a) == (settings.HOSTED_SERVICE, settings.HOSTED_ACCOUNT) else None
             self.assertIsNone(settings.load_hosted(p, tok))                                                 # no file
             p.write_text(json.dumps({"hosted": {"host": "https://vault.example.com/"}}))
-            self.assertEqual(settings.load_hosted(p, tok), {"host": "vault.example.com", "base": "https://vault.example.com", "token": "dvt_abc"})
+            self.assertEqual(settings.load_hosted(p, tok), {"host": "vault.example.com", "base": "https://vault.example.com", "token": "dvt_abc", "upload": True})
+            p.write_text(json.dumps({"hosted": {"host": "vault.example.com", "upload": False}})); self.assertFalse(settings.load_hosted(p, tok)["upload"])   # linked, but not keeping conversations
+            p.write_text(json.dumps({"hosted": {"host": "vault.example.com"}}))
             self.assertIsNone(settings.load_hosted(p, lambda s, a: None))                                   # no token in the keychain
             self.assertIsNone(settings.load_hosted(p, lambda s, a: "not-a-device-token"))
             for bad in ("evil.com/steal", "a b.com", "http://x.com", "", "x.com:99999"):
@@ -98,6 +100,8 @@ class LinkTests(unittest.TestCase):
         cfgs[0] = {"host": "h", "base": "https://h", "token": "dvt_2"}; link.tick(); time.sleep(0.1)
         self.assertEqual(len(started), 2); self.assertTrue(started[0][2].is_set())                          # token changed: old stream told to stop
         cfgs[0] = None; link.tick(); self.assertTrue(started[1][2].is_set()); self.assertEqual(len(pushes), 3)
+        cfgs[0] = {"host": "h", "base": "https://h", "token": "dvt_2", "upload": False}; link.tick(); time.sleep(0.1)
+        self.assertEqual(len(pushes), 3)                                                                    # linked but opted out: reminders still arrive, nothing is uploaded
     def test_errors_are_reported_once(self):
         import io, contextlib
         link = HostedLink(Path("/v"), load=lambda: {"host": "h", "base": "https://h", "token": "dvt_1"}, push=lambda *a: (_ for _ in ()).throw(hosted_sync.HostedError("no active subscription")))

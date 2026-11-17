@@ -392,6 +392,7 @@
   .token-card ol b { color: var(--text); font-weight: 550; }
   .notice { display: flex; gap: 0.75rem; padding: 0.9rem 1rem; border-radius: var(--radius-sm); border: 1px solid color-mix(in oklab, var(--ember) 50%, transparent); background: color-mix(in oklab, var(--ember) 9%, transparent); font-size: var(--step--1); }
 
+  .pair-code { font-family: var(--font-mono); font-size: 2.1rem; font-weight: 600; letter-spacing: 0.16em; color: var(--accent-text); margin-block: 0.25rem 0.5rem; }
   .perms { list-style: none; padding: 0; display: grid; gap: 0.75rem; margin-block: 1.25rem; }
   .perms li { display: grid; grid-template-columns: 1.6rem 1fr; gap: 0.6rem; align-items: start; }
   .perms .ico { inline-size: 1.4rem; block-size: 1.4rem; color: var(--ok); margin-block-start: 0.15rem; }

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS grants(hash TEXT PRIMARY KEY, kind TEXT NOT NULL, use
   client_id TEXT NOT NULL, data TEXT, exp REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS grants_user ON grants(user_id);
 CREATE TABLE IF NOT EXISTS login_links(hash TEXT PRIMARY KEY, email TEXT NOT NULL, next TEXT, exp REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS links(code TEXT PRIMARY KEY, secret_hash TEXT NOT NULL UNIQUE, name TEXT NOT NULL, user_id TEXT, token TEXT, exp REAL NOT NULL);  -- see link.py
 CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), exp REAL NOT NULL);
 """
 STATUSES = {"pending", "active", "past_due", "canceled", "deleted"}
@@ -74,7 +75,7 @@ class Store:
         with self.conn() as c:
             r = c.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
             if not r: raise KeyError(uid)
-            for t in ("devices", "grants", "sessions"): c.execute("DELETE FROM %s WHERE user_id=?" % t, (uid,))
+            for t in ("devices", "grants", "sessions", "links"): c.execute("DELETE FROM %s WHERE user_id=?" % t, (uid,))
             c.execute("DELETE FROM login_links WHERE email=?", (r["email"],))
             c.execute("UPDATE users SET status='deleted', status_at=?, email=? WHERE id=?", (time.time(), "deleted-%s@invalid" % uid, uid))
         shutil.rmtree(self.root / "data" / uid, ignore_errors=True)
