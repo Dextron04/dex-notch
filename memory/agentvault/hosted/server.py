@@ -56,6 +56,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
 
     class H(BaseHTTPRequestHandler):
         server_version = "agentvault-hosted"
+        timeout = 60   # a client that opens a connection and says nothing is dropped, not held for ever
         def log_message(self, *a): pass  # never log URLs: they carry codes and sign-in tokens
         def log_request(self, code="-", size="-"):
             print("%s %s %s %s" % (time.strftime("%F %T"), self.command, urlparse(self.path).path, code), file=sys.stderr, flush=True)  # the path only: no query, no body, no user
@@ -68,12 +69,22 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if "Cache-Control" not in (extra or {}): self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "no-referrer")  # a sign-in link in the address bar must never travel as a referrer
             if ctype.startswith("text/html"): self.send_header("Content-Security-Policy", CSP)
+            if secure: self.send_header("Strict-Transport-Security", "max-age=31536000")
             for k, v in (extra or {}).items(): self.send_header(k, v)
             self.end_headers()
             if self.command != "HEAD": self.wfile.write(body)
 
+        def plain_http(self):
+            """Cloudflare says the visitor used http://. Nothing is served over it: a form or token sent that way is already exposed, so send them to https."""
+            if secure and '"http"' in (self.headers.get("CF-Visitor") or ""):
+                self.send(308, b"", "text/plain", {"Location": public + self.path}); return True
+            return False
+
         def body(self, limit=MAX_BODY):
-            n = int(self.headers.get("Content-Length") or 0)
+            try: n = int(self.headers.get("Content-Length") or 0)
+            except ValueError: n = -1
+            if n < 0:
+                self.send(400, {"error": "bad_length"}, extra={"Connection": "close"}); self.close_connection = True; return None
             if n > limit:
                 self.send(413, {"error": "too_large"}, extra={"Connection": "close"}); self.close_connection = True; return None
             return self.rfile.read(n)
@@ -114,6 +125,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
 
         # -- routes
         def do_GET(self):
+            if self.plain_http(): return
             u = urlparse(self.path); q = {k: v[0] for k, v in parse_qs(u.query).items()}
             if u.path.startswith("/.well-known/oauth-protected-resource"):
                 return self.send(200, {"resource": public + "/mcp", "authorization_servers": [public], "bearer_methods_supported": ["header"]})
@@ -151,6 +163,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             self.do_GET()
 
         def do_POST(self):
+            if self.plain_http(): return
             path = urlparse(self.path).path
             fn = {"/mcp": self.mcp, "/register": self.register, "/authorize": self.consent, "/token": self.token,
                   "/login": self.login, "/login/verify": self.verify, "/hooks/stripe": self.stripe_hook,
@@ -160,7 +173,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                   "/link": self.link_approve, "/v1/link/start": self.v1_link_start, "/v1/link/poll": self.v1_link_poll}.get(path)
             fn() if fn else self.send(404, {"error": "not_found"})
 
-        def do_DELETE(self): self.send(405, {"error": "no sessions"}) if urlparse(self.path).path == "/mcp" else self.send(404, {"error": "not_found"})
+        def do_DELETE(self): self.plain_http() or self.send(405, {"error": "no sessions"}) if urlparse(self.path).path == "/mcp" else self.send(404, {"error": "not_found"})
 
         # -- sign-in
         def authorize_page(self, q):

@@ -1,6 +1,6 @@
 """Hosted accounts: users, billing status, and the one place a user id becomes a directory.
 SQLite, one short-lived connection per call (the HTTP server is threaded). Billing is a placeholder: see `grant`."""
-import re, secrets, shutil, sqlite3, time
+import os, re, secrets, shutil, sqlite3, time
 from contextlib import closing
 from pathlib import Path
 from typing import Optional
@@ -40,6 +40,8 @@ class Store:
         self.db = self.root / "hosted.db"
         with self.conn() as c:
             c.executescript(SCHEMA)
+            try: os.chmod(self.db, 0o600)   # the account database is for this user only
+            except OSError: pass
             if "status_at" not in [r["name"] for r in c.execute("PRAGMA table_info(users)")]: c.execute("ALTER TABLE users ADD COLUMN status_at REAL")  # databases from before retention existed
 
     def conn(self):
@@ -81,7 +83,7 @@ class Store:
             r = c.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
             if not r: raise KeyError(uid)
             for t in ("devices", "grants", "sessions", "links"): c.execute("DELETE FROM %s WHERE user_id=?" % t, (uid,))
-            c.execute("DELETE FROM login_links WHERE email=?", (r["email"],))
+            for t in ("login_links", "waitlist", "invites"): c.execute("DELETE FROM %s WHERE email=?" % t, (r["email"],))   # the address itself goes too, not only the account
             c.execute("UPDATE users SET status='deleted', status_at=?, email=? WHERE id=?", (time.time(), "deleted-%s@invalid" % uid, uid))
         shutil.rmtree(self.root / "data" / uid, ignore_errors=True)
 

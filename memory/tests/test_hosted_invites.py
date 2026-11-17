@@ -45,7 +45,24 @@ class InviteTests(unittest.TestCase):
         for e in ("a@x.io", "b@x.io", "c@x.io"): self.store.invite(e)
         self.assertEqual(self.join("a@x.io"), 302); self.assertEqual(self.join("b@x.io"), 302)
         self.assertIn("full", self.login("c@x.io")[2]); self.assertIsNone(self.auth.may_join("a@x.io"))
-        self.store.delete_account(self.store.by_email("b@x.io")); self.assertEqual(self.join("c@x.io"), 302)  # a deleted account frees its place
+        self.store.join_waitlist("b@x.io"); self.store.delete_account(self.store.by_email("b@x.io"))
+        self.assertEqual((self.store.waitlist(), self.store.invited("b@x.io")), ([], False))   # erasing an account erases the address everywhere
+        self.assertEqual(self.join("c@x.io"), 302)  # a deleted account frees its place
+
+class TransportTests(unittest.TestCase):
+    def test_http_visitors_are_sent_to_https_and_bad_lengths_are_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            srv = make_server(Store(Path(d)), Auth(Store(Path(d))), PUB, lambda e, l: None, port=0)
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            base = "http://127.0.0.1:%d" % srv.server_address[1]
+            try:
+                for m in ("GET", "POST"):
+                    st, h, _ = call(m, base + "/login?x=1", {} if m == "POST" else None, {"CF-Visitor": '{"scheme":"http"}'})
+                    self.assertEqual((st, h["Location"]), (308, PUB + "/login?x=1"))
+                self.assertEqual(call("GET", base + "/healthz", headers={"CF-Visitor": '{"scheme":"https"}'})[0], 200)
+                self.assertIn("max-age", call("GET", base + "/healthz")[1].get("Strict-Transport-Security", ""))
+                self.assertEqual(call("POST", base + "/login", {}, {"Content-Length": "-5"}, form=True)[0] in (400,), True)
+            finally: srv.shutdown(); srv.server_close()
 
 class WelcomeTests(InviteTests):
     def test_welcome_goes_out_once_when_the_account_is_created(self):
