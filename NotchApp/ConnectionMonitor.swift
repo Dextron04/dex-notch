@@ -76,7 +76,7 @@ final class ConnectionMonitor {
         let web = await HostedAPI.assistants(host: host, token: token)
         var s: [Surface: Conn] = [.claude: ConnectionLogic.web(web?.claude), .chatgpt: ConnectionLogic.web(web?.chatgpt)]
         for (k, v) in cli { s[k] = v }
-        let r = ConnectionReport(states: s, checked: Date()); report = r
+        let r = ConnectionReport(states: s, checked: Date(), vaultLocked: web?.vault); report = r
         guard nudge else { return }
         var nudged = (UserDefaults.standard.dictionary(forKey: Self.nudgedKey) as? [String: Date]) ?? [:]
         if let missing = ConnectionLogic.nudge(r, installed: here, nudged: nudged, now: Date(), remind: remind) {
@@ -121,6 +121,13 @@ final class ConnectionMonitor {
     }
 
     // MARK: the buttons
+
+    /// Opens the account page at the passphrase form: the one step that has to happen in the browser, because the passphrase never passes through the app.
+    func lockVault() {
+        guard let host, let u = ConnectionLogic.lockURL(host: host) else { return }
+        NSWorkspace.shared.open(u)
+        note = "Choose a passphrase on the page that opened, save the recovery code, then press Check again."
+    }
 
     func connect(_ s: Surface) {
         guard let host else { return }

@@ -18,6 +18,7 @@ enum Conn: Equatable, Sendable {
 struct ConnectionReport: Equatable, Sendable {
     var states: [Surface: Conn]
     var checked: Date
+    var vaultLocked: Bool? = nil     // nil = the server didn't say
     func state(_ s: Surface) -> Conn { states[s] ?? .unknown }
 }
 
@@ -31,10 +32,12 @@ enum ConnectionLogic {
     static func guideURL(host: String, _ s: Surface) -> URL? { URL(string: "https://\(host)/connect#\(s.anchor)") }
 
     /// The server's own answer (`/v1/me`): which web assistants hold a live authorization.
-    static func parseAssistants(_ d: Data) -> (claude: Bool, chatgpt: Bool)? {
+    static func parseAssistants(_ d: Data) -> (claude: Bool, chatgpt: Bool, vault: Bool?)? {
         guard let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any], let a = o["assistants"] as? [String: Any] else { return nil }
-        return ((a["claude"] as? Bool) ?? false, (a["chatgpt"] as? Bool) ?? false)
+        return ((a["claude"] as? Bool) ?? false, (a["chatgpt"] as? Bool) ?? false, o["vault_locked"] as? Bool)
     }
+    /// The account page, at the passphrase form.
+    static func lockURL(host: String) -> URL? { URL(string: "https://\(host)/account#vault-title") }
 
     static func web(_ on: Bool?) -> Conn { on.map { $0 ? .connected : .missing } ?? .unknown }
 

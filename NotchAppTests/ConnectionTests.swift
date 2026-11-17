@@ -42,6 +42,9 @@ final class ConnectionTests: XCTestCase {
         let a = ConnectionLogic.parseAssistants(Data(#"{"email":"a@b.co","assistants":{"claude":true,"chatgpt":false}}"#.utf8))
         XCTAssertEqual(a?.claude, true); XCTAssertEqual(a?.chatgpt, false)
         XCTAssertNil(ConnectionLogic.parseAssistants(Data(#"{"email":"a@b.co"}"#.utf8)))      // an older server: no guess
+        XCTAssertNil(a?.vault)                                                              // and no claim about the vault either
+        XCTAssertEqual(ConnectionLogic.parseAssistants(Data(#"{"assistants":{},"vault_locked":true}"#.utf8))?.vault, true)
+        XCTAssertEqual(ConnectionLogic.lockURL(host: host)?.absoluteString, "https://vault.dextron04.in/account#vault-title")
         XCTAssertEqual(ConnectionLogic.web(nil), .unknown); XCTAssertEqual(ConnectionLogic.web(false), .missing)
     }
 

@@ -545,6 +545,10 @@ struct SetupView: View {
             subhead("Connections").padding(.top, 8)
             Text("Claude and ChatGPT can all search and add to the same memory once they're connected. Dex Notch checks, and tells you at the notch if one is missing.")
                 .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.bottom, 4)
+            let v = mon.report?.vaultLocked
+            row(title: "Vault passphrase", detail: mon.report == nil ? "Checking…" : v == true ? "Locked: your notes are encrypted on the server." : v == false ? "Not locked yet. Lock it so your notes are encrypted." : "Couldn't check just now.",
+                lead: { Image(systemName: v == true ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(v == true ? Ink.ember : Ink.dim) },
+                trail: { if v != true && mon.report != nil { link("Lock my vault") { mon.lockVault() } } })
             ForEach(Surface.allCases, id: \.self) { s in
                 let c = mon.report?.state(s) ?? .unknown, here = mon.installed.contains(s)
                 row(title: s.name, detail: mon.report == nil ? "Checking…" : ConnectionLogic.detail(s, c, here: here),
