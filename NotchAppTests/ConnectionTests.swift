@@ -43,34 +43,63 @@ final class ConnectionTests: XCTestCase {
         XCTAssertEqual(a?.claude, true); XCTAssertEqual(a?.chatgpt, false)
         XCTAssertNil(ConnectionLogic.parseAssistants(Data(#"{"email":"a@b.co"}"#.utf8)))      // an older server: no guess
         XCTAssertNil(a?.vault)                                                              // and no claim about the vault either
-        XCTAssertEqual(ConnectionLogic.parseAssistants(Data(#"{"assistants":{},"vault_locked":true}"#.utf8))?.vault, true)
+        XCTAssertEqual(ConnectionLogic.parseAssistants(Data(#"{"assistants":{},"vault_locked":true,"progress":{"uploaded":true,"used":false}}"#.utf8))?.vault, true)
+        XCTAssertEqual(ConnectionLogic.parseAssistants(Data(#"{"assistants":{},"progress":{"uploaded":true,"used":false}}"#.utf8))?.used, false)
         XCTAssertEqual(ConnectionLogic.lockURL(host: host)?.absoluteString, "https://vault.dextron04.in/account#vault-title")
         XCTAssertEqual(ConnectionLogic.web(nil), .unknown); XCTAssertEqual(ConnectionLogic.web(false), .missing)
     }
 
     private func report(_ s: [Surface: Conn]) -> ConnectionReport { ConnectionReport(states: s, checked: now) }
+    func testClaudeCodeIsPartOfTheClaudeRowAndCodexPartOfChatGPT() {
+        let r = report([.claude: .connected, .chatgpt: .connected, .codex: .missing])
+        XCTAssertEqual(ConnectionLogic.rollUp(.claude, r, installed: [.claudeCode]).state, .connected)
+        XCTAssertEqual(ConnectionLogic.rollUp(.chatgpt, r, installed: []).state, .connected)                    // no Codex here: nothing more to add
+        let half = ConnectionLogic.rollUp(.chatgpt, r, installed: [.codex])
+        XCTAssertEqual(half.state, .missing); XCTAssertEqual(half.detail, "Connected in ChatGPT. Codex still needs adding.")   // ChatGPT on the web does not pass connectors on to Codex
+        XCTAssertEqual(ConnectionLogic.rollUp(.chatgpt, report([.chatgpt: .connected, .codex: .needsSignIn]), installed: [.codex]).state, .needsSignIn)
+        XCTAssertEqual(ConnectionLogic.rollUp(.claude, report([.claude: .unknown]), installed: []).state, .unknown)
+        XCTAssertEqual(ConnectionLogic.rollUp(.claude, nil, installed: []).detail, "Checking…")
+    }
     func testOnlyThingsThisMacHasAreWorthACard() {
         let r = report([.claude: .missing, .chatgpt: .missing, .claudeCode: .missing, .codex: .connected])
-        XCTAssertEqual(ConnectionLogic.nudge(r, installed: [.claudeCode], nudged: [:], now: now, remind: true), .claudeCode)
-        XCTAssertNil(ConnectionLogic.nudge(r, installed: [], nudged: [:], now: now, remind: true))          // nothing installed: say nothing
-        XCTAssertNil(ConnectionLogic.nudge(r, installed: [.codex], nudged: [:], now: now, remind: true))    // it is connected
+        XCTAssertEqual(ConnectionLogic.nudge(r, installed: [.claudeCode], nudged: [:], now: now, remind: true), .claude)
+        XCTAssertNil(ConnectionLogic.nudge(r, installed: [], nudged: [:], now: now, remind: true))             // nothing installed: say nothing
+        XCTAssertEqual(ConnectionLogic.nudge(r, installed: [.codex], nudged: [:], now: now, remind: true), .chatgpt)   // the web part of ChatGPT is still missing
+        XCTAssertNil(ConnectionLogic.nudge(report([.chatgpt: .connected, .codex: .connected]), installed: [.codex], nudged: [:], now: now, remind: true))
     }
     func testNeverGuessesAndNeverNagsAndCanBeSwitchedOff() {
-        let r = report([.claudeCode: .unknown, .codex: .missing])
+        let r = report([.claude: .unknown, .claudeCode: .unknown, .chatgpt: .missing])
         XCTAssertNil(ConnectionLogic.nudge(r, installed: [.claudeCode], nudged: [:], now: now, remind: true))     // couldn't check: not a reason to speak
-        let day = now.addingTimeInterval(-86_400)
-        XCTAssertNil(ConnectionLogic.nudge(r, installed: [.codex], nudged: ["codex": day], now: now, remind: true))
-        XCTAssertEqual(ConnectionLogic.nudge(r, installed: [.codex], nudged: ["codex": now.addingTimeInterval(-4 * 86_400)], now: now, remind: true), .codex)
-        XCTAssertNil(ConnectionLogic.nudge(r, installed: [.codex], nudged: [:], now: now, remind: false))
+        XCTAssertNil(ConnectionLogic.nudge(r, installed: [.chatgpt], nudged: ["chatgpt": now.addingTimeInterval(-86_400)], now: now, remind: true))
+        XCTAssertEqual(ConnectionLogic.nudge(r, installed: [.chatgpt], nudged: ["chatgpt": now.addingTimeInterval(-4 * 86_400)], now: now, remind: true), .chatgpt)
+        XCTAssertNil(ConnectionLogic.nudge(r, installed: [.chatgpt], nudged: [:], now: now, remind: false))
     }
     func testOneCardAtATimeInOrder() {
-        let r = report([.claude: .missing, .claudeCode: .missing])
-        XCTAssertEqual(ConnectionLogic.nudge(r, installed: [.claude, .claudeCode], nudged: [:], now: now, remind: true), .claude)
-        XCTAssertEqual(ConnectionLogic.nudge(r, installed: [.claude, .claudeCode], nudged: ["claude": now], now: now, remind: true), .claudeCode)
+        let r = report([.claude: .missing, .chatgpt: .missing])
+        XCTAssertEqual(ConnectionLogic.nudge(r, installed: [.claude, .chatgpt], nudged: [:], now: now, remind: true), .claude)
+        XCTAssertEqual(ConnectionLogic.nudge(r, installed: [.claude, .chatgpt], nudged: ["claude": now], now: now, remind: true), .chatgpt)
+    }
+    func testTheNextStepFollowsTheOrderAndNeverGuesses() {
+        func next(_ v: Bool?, _ r: Bool, _ u: Bool?, _ c: Bool?, _ x: Bool?) -> ConnectionLogic.Step? { ConnectionLogic.nextStep(vault: v, recording: r, uploaded: u, connected: c, used: x) }
+        XCTAssertEqual(next(false, false, false, false, false), .vault)
+        XCTAssertEqual(next(true, false, false, false, false), .record)
+        XCTAssertEqual(next(true, true, nil, false, false), .connect)
+        XCTAssertEqual(next(true, true, true, true, false), .firstChat)
+        XCTAssertNil(next(true, true, true, true, true))
+        XCTAssertNil(next(nil, true, nil, nil, nil))                       // the server didn't answer: nothing to say
+        XCTAssertNil(next(true, false, true, true, true))                  // conversations arrived, so it works even if the helper isn't this Mac's
+        XCTAssertEqual(ConnectionLogic.stepText(nil).title, "You're all set")
+    }
+    func testTheTrialPromptsAreTheOnesTheWebsiteShows() {
+        XCTAssertEqual(ConnectionLogic.firstPrompt, "Remember this for me: I'm trying out Dex Memory, and my favorite color is amber.")
+    }
+    func testTheClaudeAddLinkPrefillsTheNameAndTheEncodedAddress() {
+        XCTAssertEqual(ConnectionLogic.addToClaudeURL(host: host)?.absoluteString,
+                       "https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Dex%20Memory&connectorUrl=https%3A%2F%2Fvault%2Edextron04%2Ein%2Fmcp")
     }
     func testWordsAreHonest() {
         XCTAssertEqual(ConnectionLogic.detail(.codex, .missing, here: false), "Not installed on this Mac.")
-        XCTAssertEqual(ConnectionLogic.detail(.claudeCode, .needsSignIn, here: true), "Added, but not signed in yet.")
+        XCTAssertEqual(ConnectionLogic.detail(.codex, .needsSignIn, here: true), "Added, but not signed in yet.")
         XCTAssertTrue(ConnectionLogic.cardText(.chatgpt, .missing).headline.contains("ChatGPT"))
     }
 }

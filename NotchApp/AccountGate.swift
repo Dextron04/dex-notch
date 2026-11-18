@@ -186,7 +186,7 @@ struct GateView: View {
             Toggle(isOn: $g.keepConversations) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Keep my AI conversations in my account").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Ink.text)
-                    Text("Conversations recorded on this Mac (Claude Code, Codex, Gemini) are uploaded with passwords and keys removed, so Claude and ChatGPT can search them. They are encrypted on the server's disk with a passphrase you choose, but not end-to-end: the service opens them to search. Change this any time in Settings → Memory.")
+                    Text("Conversations recorded on this Mac (Claude Code, Codex, Gemini) are uploaded with passwords and keys removed, so Claude and ChatGPT can search them. They are encrypted on the server's disk with a key only you can open, but not end-to-end: the service opens them to search. To do this, Dex Notch starts a small helper in the background that watches for new conversations. Change or stop it any time in Settings → Memory.")
                         .font(.system(size: 12.5)).foregroundStyle(Ink.dim).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
                 }
             }

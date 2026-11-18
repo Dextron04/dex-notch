@@ -20,6 +20,7 @@
 		2351AC6AFE2DD2648AC941C8 /* ConnectionLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4238EE4D607071C2DC49564E /* ConnectionLogic.swift */; };
 		23B64ECBB548D9A23A57FD34 /* AgentRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1487592A6A941D9CB95947 /* AgentRunner.swift */; };
 		2452662E03B5DE52879166A7 /* ReplySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B63938FF0CDB184A70CB883 /* ReplySession.swift */; };
+		2660C2F1962F132008848A83 /* RecorderLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = D891818290A45CF95E1F7353 /* RecorderLogic.swift */; };
 		2F9D4C587D08A0A859566F25 /* SettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA22C6E41EAD33D9E8DD129E /* SettingsTests.swift */; };
 		3079D52787E1306738598D32 /* AccountGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E309A3BA024DFCF5E80FEA3 /* AccountGate.swift */; };
 		3338925AA7C0F57D8C9465BA /* MailReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F02AF06F7646206E66DA662 /* MailReply.swift */; };
@@ -50,12 +51,14 @@
 		8503551F1B10B24D06E2FF0A /* AlertView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E76E22DDB3A2D28B85B7C092 /* AlertView.swift */; };
 		86BB296C647833D918FA33E1 /* WhatsNewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ED3A72A153FD60EEF8E9E06 /* WhatsNewView.swift */; };
 		898D7FB93A9186B951B4088F /* NotchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CBB2E551130DD2CE010BFF /* NotchView.swift */; };
+		8D89300AC490B19D1C8CDA36 /* RecorderLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = D891818290A45CF95E1F7353 /* RecorderLogic.swift */; };
 		9D7DA6C3F8755AD1BA023406 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F216985AFA23BC8E9805806 /* ConversationStore.swift */; };
 		A25BBE365AAED7FB09729191 /* Reminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E728D5AB400774BF5A65DF /* Reminders.swift */; };
 		A3DD3777F50EAD9EA6B956FD /* Outlook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EA06C1877B686D4AD839108 /* Outlook.swift */; };
 		A48F6F5CAD79AB60BD5BB30C /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04FED0FDAE6B5FC7FE0D0983 /* SetupView.swift */; };
 		A8E7AF7E5FB0A8A3AA08ABB9 /* MailReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F02AF06F7646206E66DA662 /* MailReply.swift */; };
 		AB5858CF9C6BCC0882589DB0 /* SVGPathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A408D4D4233E5DC1C8E2622A /* SVGPathTests.swift */; };
+		AF27DBE24C1C8EF9F4A23702 /* RecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98C88C7DB8676E86C4F91CB1 /* RecorderTests.swift */; };
 		B099E16A32014D0B4AEB986E /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 51A7B2DD66A95BA97994F08A /* Sparkle */; };
 		B0E8F6D04051DF78F4E9C917 /* SVGPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99408511A3D90560197E556F /* SVGPath.swift */; };
 		BFF5DE6C28BCA61791F88A08 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */; };
@@ -72,11 +75,13 @@
 		E703B3CA52F3E90860D67B7C /* AddonCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 461189366EBDE3A440C7E728 /* AddonCenter.swift */; };
 		EBC158EC2CDDA4359903992A /* AccountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E451AE53070E99CF7BA21B3C /* AccountTests.swift */; };
 		ED50E03DCA4D07EBAC51DB90 /* ModelMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794A0159731A8951203F5BD8 /* ModelMark.swift */; };
+		EFC9B7FB6063ED32E64E7286 /* RecorderInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 052093784A20E00FCFD63163 /* RecorderInstaller.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		01C444F1096C79018A64B462 /* Hotkey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hotkey.swift; sourceTree = "<group>"; };
 		04FED0FDAE6B5FC7FE0D0983 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
+		052093784A20E00FCFD63163 /* RecorderInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecorderInstaller.swift; sourceTree = "<group>"; };
 		0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		0A42C48BB475251A9D6BB6BD /* NotchWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchWindow.swift; sourceTree = "<group>"; };
 		11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultReaderTests.swift; sourceTree = "<group>"; };
@@ -105,6 +110,7 @@
 		8EE2273ED4887AF61DC376B5 /* Changelog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Changelog.swift; sourceTree = "<group>"; };
 		930E261BCB82A59819B0A2A3 /* JournalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalTests.swift; sourceTree = "<group>"; };
 		93222A27B250E3C8A8AE083F /* AgentStreamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStreamTests.swift; sourceTree = "<group>"; };
+		98C88C7DB8676E86C4F91CB1 /* RecorderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecorderTests.swift; sourceTree = "<group>"; };
 		99408511A3D90560197E556F /* SVGPath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGPath.swift; sourceTree = "<group>"; };
 		9F02AF06F7646206E66DA662 /* MailReply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailReply.swift; sourceTree = "<group>"; };
 		9F216985AFA23BC8E9805806 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
@@ -118,6 +124,7 @@
 		C2E728D5AB400774BF5A65DF /* Reminders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reminders.swift; sourceTree = "<group>"; };
 		CE562AE9C74255701B08F531 /* AnswerBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerBody.swift; sourceTree = "<group>"; };
 		CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchApp.swift; sourceTree = "<group>"; };
+		D891818290A45CF95E1F7353 /* RecorderLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecorderLogic.swift; sourceTree = "<group>"; };
 		E2492641C06B062C753F0281 /* AgentFilesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentFilesTests.swift; sourceTree = "<group>"; };
 		E3FDC75598EA2E996BF9FAE8 /* KeychainStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStoreTests.swift; sourceTree = "<group>"; };
 		E451AE53070E99CF7BA21B3C /* AccountTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountTests.swift; sourceTree = "<group>"; };
@@ -180,6 +187,8 @@
 				72682E91183BD251F579ACB6 /* OfficialMarks.swift */,
 				1EA06C1877B686D4AD839108 /* Outlook.swift */,
 				34B56D0B5E24A59E4A23F196 /* RecallView.swift */,
+				052093784A20E00FCFD63163 /* RecorderInstaller.swift */,
+				D891818290A45CF95E1F7353 /* RecorderLogic.swift */,
 				C2E728D5AB400774BF5A65DF /* Reminders.swift */,
 				4B63938FF0CDB184A70CB883 /* ReplySession.swift */,
 				1BA1BFB9DA2701025378F6A5 /* ReplyView.swift */,
@@ -203,6 +212,7 @@
 				3B7D87E48BF594612257808A /* ConversationStoreTests.swift */,
 				930E261BCB82A59819B0A2A3 /* JournalTests.swift */,
 				E3FDC75598EA2E996BF9FAE8 /* KeychainStoreTests.swift */,
+				98C88C7DB8676E86C4F91CB1 /* RecorderTests.swift */,
 				BA22C6E41EAD33D9E8DD129E /* SettingsTests.swift */,
 				A408D4D4233E5DC1C8E2622A /* SVGPathTests.swift */,
 				11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */,
@@ -246,6 +256,7 @@
 				7AD512718444DB917FE95810 /* Sources */,
 				A249338EB4A300EC4440BCA9 /* Resources */,
 				4D1810ADFAA32C48D7E8925D /* Frameworks */,
+				6894C5FBFBA8C82164811954 /* Bundle the recorder */,
 			);
 			buildRules = (
 			);
@@ -310,6 +321,28 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		6894C5FBFBA8C82164811954 /* Bundle the recorder */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle the recorder";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# the recorder is standard-library Python; the server and connector halves of the package stay out of the app\nDEST=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/recorder\"\nrm -rf \"$DEST\" && mkdir -p \"$DEST\"\nrsync -a --exclude hosted --exclude remote --exclude __pycache__ --exclude '*.pyc' --exclude .DS_Store \"$SRCROOT/memory/agentvault\" \"$DEST/\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		6DAD31D031BEF19B5B6A6D7A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -336,6 +369,8 @@
 				3338925AA7C0F57D8C9465BA /* MailReply.swift in Sources */,
 				07DDFEAAC32C48FC7609BA86 /* OfficialMarks.swift in Sources */,
 				A3DD3777F50EAD9EA6B956FD /* Outlook.swift in Sources */,
+				2660C2F1962F132008848A83 /* RecorderLogic.swift in Sources */,
+				AF27DBE24C1C8EF9F4A23702 /* RecorderTests.swift in Sources */,
 				338383E9953684F2000B1A66 /* Reminders.swift in Sources */,
 				50C799904FBE799B42C449D1 /* SVGPath.swift in Sources */,
 				AB5858CF9C6BCC0882589DB0 /* SVGPathTests.swift in Sources */,
@@ -377,6 +412,8 @@
 				11C732EA3D38A55B3B378D11 /* OfficialMarks.swift in Sources */,
 				029A6F7614CCBB48A636A655 /* Outlook.swift in Sources */,
 				1C26891F3606A3AEA83E86B1 /* RecallView.swift in Sources */,
+				EFC9B7FB6063ED32E64E7286 /* RecorderInstaller.swift in Sources */,
+				8D89300AC490B19D1C8CDA36 /* RecorderLogic.swift in Sources */,
 				A25BBE365AAED7FB09729191 /* Reminders.swift in Sources */,
 				2452662E03B5DE52879166A7 /* ReplySession.swift in Sources */,
 				E63B2AF16E49E360BBFAD95D /* ReplyView.swift in Sources */,
@@ -415,6 +452,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_APP_SANDBOX = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = NotchApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -557,6 +595,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_APP_SANDBOX = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = NotchApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

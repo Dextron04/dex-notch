@@ -64,6 +64,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ConnectionMonitor.shared.onMissing = { s, c in AddonCenter.shared.queueConnectCard(s, c) }
         ConnectionMonitor.shared.openSettings = { [assistant] in SetupWindow.shared.show(assistant: assistant, pane: .memory) }
         ConnectionMonitor.shared.start()
+        RecorderInstaller.shared.refresh()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {       // once, after sign-up, if they chose to keep their conversations: the welcome window says so
+            let r = RecorderInstaller.shared
+            if r.status == .notInstalled, HostedAccount.uploads(at: Settings.defaultURL), !UserDefaults.standard.bool(forKey: "recorderAutoStarted") {
+                UserDefaults.standard.set(true, forKey: "recorderAutoStarted"); r.install()
+            } else { r.updateIfNeeded() }
+        }
         if walkthrough {      // first launch: walk through every permission and choice, don't make people hunt for a config file
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [assistant] in SetupWindow.shared.show(assistant: assistant, guided: true) }
         }

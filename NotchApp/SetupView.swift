@@ -531,11 +531,62 @@ struct SetupView: View {
                         link("Copy diagnostics") { m.copyDiagnostics(center: center) }
                         link("Report a problem", dim: true) { NSWorkspace.shared.open(Diagnostics.issueURL) }
                     } })
+                getStartedCard
+                recorderRow
                 connectionsSection
                 Text("Signing out removes this Mac's key and returns Dex Notch to the sign-in screen.")
                     .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
             }
         }
+    }
+
+    /// The next thing to do, and a button that does it. Done steps disappear; when none is left it says so.
+    private var getStartedCard: some View {
+        let mon = ConnectionMonitor.shared, rec = RecorderInstaller.shared
+        let connected: Bool? = mon.report.map { $0.state(.claude) == .connected || $0.state(.chatgpt) == .connected || $0.state(.claudeCode) == .connected }
+        let step = ConnectionLogic.nextStep(vault: mon.report?.vaultLocked, recording: rec.status == .running, uploaded: mon.report?.uploaded, connected: connected, used: mon.report?.used)
+        let t = ConnectionLogic.stepText(step)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(step == nil ? "All set" : "Next step").font(.system(size: 11, weight: .medium)).tracking(0.5).foregroundStyle(Ink.ember)
+            Text(t.title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Ink.text)
+            Text(t.detail).font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+            if step == .firstChat {
+                Text("“\(ConnectionLogic.firstPrompt)”").font(.system(size: 13)).foregroundStyle(Ink.text.opacity(0.85)).padding(10).background(RoundedRectangle(cornerRadius: 8).fill(Ink.text.opacity(0.06)))
+                Text("Then, in a new chat: “\(ConnectionLogic.secondPrompt)”").font(.system(size: 13)).foregroundStyle(Ink.dim)
+            }
+            if let step {
+                link(t.button) {
+                    switch step {
+                    case .vault: mon.lockVault()
+                    case .record: rec.install()
+                    case .connect: mon.connect(.claude)
+                    case .firstChat: NSPasteboard.general.clearContents(); NSPasteboard.general.setString(ConnectionLogic.firstPrompt, forType: .string); mon.note = "Copied. Paste it into Claude or ChatGPT."
+                    }
+                }.padding(.top, 2)
+                if step == .connect { link("or ChatGPT", dim: true) { mon.connect(.chatgpt) } }
+            }
+        }
+        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Ink.text.opacity(0.06)))
+        .padding(.vertical, 12)
+    }
+
+    private var recorderRow: some View {
+        let r = RecorderInstaller.shared, on = r.status == .running
+        return VStack(alignment: .leading, spacing: 0) {
+            row(title: "Record my conversations", detail: RecorderLogic.text(r.status),
+                lead: { Image(systemName: on ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(on ? Ink.ember : Ink.dim) },
+                trail: { HStack(spacing: 18) {
+                    switch r.status {
+                    case .running: link("Turn off", dim: true) { r.stop() }
+                    case .elsewhere: EmptyView()
+                    case .needsPython: link("Copy the command") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString("xcode-select --install", forType: .string) }
+                    default: link(r.busy ? "Working…" : "Start recording") { r.install() }
+                    }
+                } })
+            if let n = r.note { Text(n).font(.system(size: 13)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.top, 6) }
+        }
+        .task { r.refresh() }
     }
 
     /// Whether each assistant is connected to the memory, with a button for the ones that aren't.
@@ -549,12 +600,12 @@ struct SetupView: View {
             row(title: "Vault passphrase", detail: mon.report == nil ? "Checking…" : v == true ? "Locked: your notes are encrypted on the server." : v == false ? "Not locked yet. Lock it so your notes are encrypted." : "Couldn't check just now.",
                 lead: { Image(systemName: v == true ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(v == true ? Ink.ember : Ink.dim) },
                 trail: { if v != true && mon.report != nil { link("Lock my vault") { mon.lockVault() } } })
-            ForEach(Surface.allCases, id: \.self) { s in
-                let c = mon.report?.state(s) ?? .unknown, here = mon.installed.contains(s)
-                row(title: s.name, detail: mon.report == nil ? "Checking…" : ConnectionLogic.detail(s, c, here: here),
-                    lead: { Image(systemName: c == .connected ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(c == .connected ? Ink.ember : Ink.dim) },
-                    trail: { if c != .connected && (here || !s.isCLI) {
-                        link(mon.busy == s ? "Working…" : s.isCLI ? (c == .needsSignIn ? "Sign in" : "Add to \(s.name)") : "Connect") { mon.connect(s) }
+            ForEach(ConnectionLogic.rows, id: \.self) { s in
+                let st = ConnectionLogic.rollUp(s, mon.report, installed: mon.installed)
+                row(title: s.name, detail: st.detail,
+                    lead: { Image(systemName: st.state == .connected ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(st.state == .connected ? Ink.ember : Ink.dim) },
+                    trail: { if st.state != .connected && mon.report != nil {
+                        link(mon.busy == s ? "Working…" : s == .claude ? "Add in Claude" : st.state == .needsSignIn ? "Sign in" : "Connect") { mon.connect(s) }
                     } })
             }
             HStack(spacing: 18) {

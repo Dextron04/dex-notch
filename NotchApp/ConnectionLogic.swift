@@ -19,6 +19,8 @@ struct ConnectionReport: Equatable, Sendable {
     var states: [Surface: Conn]
     var checked: Date
     var vaultLocked: Bool? = nil     // nil = the server didn't say
+    var uploaded: Bool? = nil        // the first conversations from a Mac have arrived
+    var used: Bool? = nil            // an assistant has used the memory at least once
     func state(_ s: Surface) -> Conn { states[s] ?? .unknown }
 }
 
@@ -29,13 +31,46 @@ enum ConnectionLogic {
     static let every: TimeInterval = 3 * 86_400
 
     static func mcpURL(host: String) -> String { "https://\(host)/mcp" }
+    /// claude.ai's own "add a custom connector" dialog, opened with the name and address already filled in. The person reviews it and confirms there.
+    /// The connector then shows up in Claude Code on the same account.
+    static func addToClaudeURL(host: String) -> URL? {
+        let value = mcpURL(host: host).addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+        return URL(string: "https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Dex%20Memory&connectorUrl=\(value)")
+    }
     static func guideURL(host: String, _ s: Surface) -> URL? { URL(string: "https://\(host)/connect#\(s.anchor)") }
 
     /// The server's own answer (`/v1/me`): which web assistants hold a live authorization.
-    static func parseAssistants(_ d: Data) -> (claude: Bool, chatgpt: Bool, vault: Bool?)? {
+    static func parseAssistants(_ d: Data) -> (claude: Bool, chatgpt: Bool, vault: Bool?, uploaded: Bool?, used: Bool?)? {
         guard let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any], let a = o["assistants"] as? [String: Any] else { return nil }
-        return ((a["claude"] as? Bool) ?? false, (a["chatgpt"] as? Bool) ?? false, o["vault_locked"] as? Bool)
+        let p = o["progress"] as? [String: Any]
+        return ((a["claude"] as? Bool) ?? false, (a["chatgpt"] as? Bool) ?? false, o["vault_locked"] as? Bool, p?["uploaded"] as? Bool, p?["used"] as? Bool)
     }
+
+    // MARK: getting started
+
+    enum Step: String, CaseIterable, Sendable { case vault, record, connect, firstChat }
+
+    /// What a new tester should do next, in order. nil when there is nothing left. A step the server can't confirm is not nagged about.
+    static func nextStep(vault: Bool?, recording: Bool, uploaded: Bool?, connected: Bool?, used: Bool?) -> Step? {
+        if vault == false { return .vault }
+        if !recording && uploaded != true { return .record }
+        if connected == false { return .connect }
+        if used == false { return .firstChat }
+        return nil
+    }
+
+    static func stepText(_ s: Step?) -> (title: String, detail: String, button: String) {
+        switch s {
+        case .vault?: return ("Lock your vault", "Choose Touch ID or a passphrase. Your notes are encrypted with a key only you can open.", "Lock my vault")
+        case .record?: return ("Start recording", "Dex Notch saves your Claude Code, Codex and Gemini conversations and uploads them to your account.", "Start recording")
+        case .connect?: return ("Connect Claude or ChatGPT", "So they can search what you've saved, and save to it.", "Add in Claude")
+        case .firstChat?: return ("Have your first conversation", "Paste this into Claude or ChatGPT, then ask the other one to find it.", "Copy the first line")
+        case nil: return ("You're all set", "Ask any assistant: \"Search my Dex memory for …\"", "")
+        }
+    }
+
+    static let firstPrompt = "Remember this for me: I'm trying out Dex Memory, and my favorite color is amber."
+    static let secondPrompt = "Search my Dex memory: what did I say my favorite color was?"
     /// The account page, at the passphrase form.
     static func lockURL(host: String) -> URL? { URL(string: "https://\(host)/account#vault-title") }
 
@@ -68,22 +103,49 @@ enum ConnectionLogic {
         return .missing
     }
 
+    /// The two rows Settings shows. Claude includes Claude Code (it uses the connectors on your Claude account); ChatGPT includes Codex.
+    static let rows: [Surface] = [.claude, .chatgpt]
+
+    /// Whether this Mac has anything for a row: the app, or the terminal tool that belongs with it.
+    static func here(_ row: Surface, _ installed: Set<Surface>) -> Bool {
+        row == .claude ? installed.contains(.claude) || installed.contains(.claudeCode) : installed.contains(.chatgpt) || installed.contains(.codex)
+    }
+
+    /// One state and one sentence for a row, from the pieces behind it.
+    static func rollUp(_ row: Surface, _ r: ConnectionReport?, installed: Set<Surface>) -> (state: Conn, detail: String) {
+        guard let r else { return (.unknown, "Checking…") }
+        if row == .claude {
+            let web = r.state(.claude), cli = installed.contains(.claudeCode) ? r.state(.claudeCode) : Conn.unknown
+            if web == .connected || cli == .connected { return (.connected, "Connected." + (installed.contains(.claudeCode) ? " Claude Code uses the same connection." : "")) }
+            if web == .missing || cli == .missing { return (.missing, "Not connected to your memory.") }
+            if cli == .needsSignIn { return (.needsSignIn, "Needs you to sign in again.") }
+            return (.unknown, "Couldn't check just now.")
+        }
+        let web = r.state(.chatgpt), codex = installed.contains(.codex) ? r.state(.codex) : Conn.connected     // no Codex here: nothing more to add
+        if web == .connected && codex == .connected { return (.connected, "Connected." + (installed.contains(.codex) ? " Codex too." : "")) }
+        if codex == .needsSignIn && web != .missing { return (.needsSignIn, "Codex is added but needs you to sign in.") }
+        if web == .missing && codex == .missing { return (.missing, "Not connected to your memory.") }
+        if web == .missing { return (.missing, "Not connected in ChatGPT.") }
+        if codex == .missing { return (.missing, web == .connected ? "Connected in ChatGPT. Codex still needs adding." : "Codex still needs adding.") }
+        return (.unknown, "Couldn't check just now.")
+    }
+
     /// Which missing connection (if any) deserves a card at the notch now: only for things this Mac has, never twice inside `every`, never on a guess.
     static func nudge(_ r: ConnectionReport, installed: Set<Surface>, nudged: [String: Date], now: Date, remind: Bool) -> Surface? {
         guard remind else { return nil }
-        for s in Surface.allCases where installed.contains(s) {
-            guard r.state(s) == .missing || r.state(s) == .needsSignIn else { continue }
-            if let t = nudged[s.rawValue], now.timeIntervalSince(t) < every { continue }
-            return s
+        for row in rows where here(row, installed) {
+            let st = rollUp(row, r, installed: installed).state
+            guard st == .missing || st == .needsSignIn else { continue }
+            if let t = nudged[row.rawValue], now.timeIntervalSince(t) < every { continue }
+            return row
         }
         return nil
     }
 
     static func cardText(_ s: Surface, _ c: Conn) -> (headline: String, reason: String) {
         switch (s, c) {
-        case (.claudeCode, .needsSignIn): return ("Claude Code needs to sign in to your memory", "Open Claude Code, type /mcp and choose dex-memory.")
-        case (.codex, .needsSignIn): return ("Codex needs to sign in to your memory", "Settings → Memory opens the sign-in for you.")
-        case (.claudeCode, _), (.codex, _): return ("\(s.name) isn't connected to your memory", "Settings → Memory can add it for you in one click.")
+        case (.claude, _): return ("Claude isn't connected to your memory", "One click opens Claude with it ready to add. Claude Code picks it up from there.")
+        case (.chatgpt, .needsSignIn): return ("Codex needs to sign in to your memory", "Settings → Memory opens the sign-in for you.")
         default: return ("\(s.name) isn't connected to your memory", "Add it once and it can search what your other assistants learned. About a minute.")
         }
     }
@@ -91,7 +153,7 @@ enum ConnectionLogic {
     static func detail(_ s: Surface, _ c: Conn, here: Bool) -> String {
         switch c {
         case .connected: return "Connected."
-        case .needsSignIn: return s.isCLI ? "Added, but not signed in yet." : "Needs you to sign in again."
+        case .needsSignIn: return s == .codex ? "Added, but not signed in yet." : "Needs you to sign in again."
         case .missing: return s.isCLI && !here ? "Not installed on this Mac." : "Not connected to your memory."
         case .unknown: return here || !s.isCLI ? "Couldn't check just now." : "Not installed on this Mac."
         }

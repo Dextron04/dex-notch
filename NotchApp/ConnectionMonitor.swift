@@ -76,7 +76,7 @@ final class ConnectionMonitor {
         let web = await HostedAPI.assistants(host: host, token: token)
         var s: [Surface: Conn] = [.claude: ConnectionLogic.web(web?.claude), .chatgpt: ConnectionLogic.web(web?.chatgpt)]
         for (k, v) in cli { s[k] = v }
-        let r = ConnectionReport(states: s, checked: Date(), vaultLocked: web?.vault); report = r
+        let r = ConnectionReport(states: s, checked: Date(), vaultLocked: web?.vault, uploaded: web?.uploaded, used: web?.used); report = r
         guard nudge else { return }
         var nudged = (UserDefaults.standard.dictionary(forKey: Self.nudgedKey) as? [String: Date]) ?? [:]
         if let missing = ConnectionLogic.nudge(r, installed: here, nudged: nudged, now: Date(), remind: remind) {
@@ -129,20 +129,29 @@ final class ConnectionMonitor {
         note = "Choose a passphrase on the page that opened, save the recovery code, then press Check again."
     }
 
-    func connect(_ s: Surface) {
+    /// One button per row. Claude: Claude's own add-a-connector dialog, ready filled in (Claude Code shares it). ChatGPT: its steps in the browser (ChatGPT has no prefilled link),
+    /// and, when Codex is here and not connected, the same click adds it to Codex too: ChatGPT on the web doesn't pass connectors on to Codex.
+    func connect(_ row: Surface) {
         guard let host else { return }
         note = nil
-        if !s.isCLI {
-            if let u = ConnectionLogic.guideURL(host: host, s) { NSWorkspace.shared.open(u) }
-            note = "Add the connector in \(s.name) (the page that just opened has the steps), then press Check again."
+        if row == .claude || row == .claudeCode {
+            if let u = ConnectionLogic.addToClaudeURL(host: host) { NSWorkspace.shared.open(u) }
+            note = "Claude opened with Dex Memory ready to add. Confirm it there, sign in and allow, then press Check again." + (installed.contains(.claudeCode) ? " Claude Code picks it up from your Claude account." : "")
             return
         }
-        busy = s
-        let mcp = ConnectionLogic.mcpURL(host: host)
+        let web = report?.state(.chatgpt) != .connected, codex = installed.contains(.codex) && report?.state(.codex) != .connected
+        var said: [String] = []
+        if web {
+            if let u = ConnectionLogic.guideURL(host: host, .chatgpt) { NSWorkspace.shared.open(u) }
+            said.append("ChatGPT's steps opened in your browser. Add the connector there.")
+        }
+        guard codex else { note = (said + ["Then press Check again."]).joined(separator: " "); return }
+        busy = .chatgpt
+        let mcp = ConnectionLogic.mcpURL(host: host), before = said
         Task {
-            let added = await Task.detached { Self.add(s, mcp: mcp) }.value
-            note = added.message
-            if s == .codex, added.ok { _ = await Task.detached { Self.login(.codex) }.value }       // opens the browser to sign in, and waits
+            let added = await Task.detached { Self.add(.codex, mcp: mcp) }.value
+            note = (before + [added.message]).joined(separator: " ")
+            if added.ok { _ = await Task.detached { Self.login(.codex) }.value }       // opens the browser to sign in, and waits
             busy = nil
             await refresh(full: true)
         }
@@ -152,21 +161,24 @@ final class ConnectionMonitor {
     func openFromCard(_ id: String) {
         let raw = id.split(separator: "|").dropFirst().first.map(String.init) ?? ""
         guard let s = Surface(rawValue: raw) else { return }
-        if s.isCLI { openSettings?() } else if let host, let u = ConnectionLogic.guideURL(host: host, s) { NSWorkspace.shared.open(u) }
+        guard let host else { return }
+        if s == .claude { if let u = ConnectionLogic.addToClaudeURL(host: host) { NSWorkspace.shared.open(u) } }
+        else if report?.state(.chatgpt) == .missing, let u = ConnectionLogic.guideURL(host: host, .chatgpt) { NSWorkspace.shared.open(u) }
+        else { openSettings?() }                                            // only Codex is left: the button that adds it is in Settings
     }
 
     struct Added: Sendable { var ok: Bool; var message: String }
 
     nonisolated static func add(_ s: Surface, mcp: String) -> Added {
         let name = ConnectionLogic.serverName
-        let (tool, args): (String, [String]) = s == .claudeCode ? ("claude", ["mcp", "add", "--transport", "http", "--scope", "user", name, mcp]) : ("codex", ["mcp", "add", name, "--url", mcp])
+        let (tool, args) = ("codex", ["mcp", "add", name, "--url", mcp])
         guard let exe = AgentRunner.locate(tool) else { return Added(ok: false, message: "\(s.name) wasn't found on this Mac.") }
         let r = Probe.run(exe, args, timeout: 30, mergeErrors: true) ?? ""
         let first = r.split(whereSeparator: \.isNewline).first.map { String($0.prefix(140)) } ?? "no answer"
         let exists = r.lowercased().contains("already exists")
         let ok = exists || r.lowercased().contains("added") || (s == .codex && !r.lowercased().contains("error"))
         if !ok { return Added(ok: false, message: "\(s.name) said: \(first)") }
-        return Added(ok: true, message: s == .claudeCode ? "Added to Claude Code. Open it, type /mcp, choose dex-memory and sign in." : "Added to Codex. Finish signing in in your browser.")
+        return Added(ok: true, message: "Added to Codex. Finish signing in in your browser.")
     }
 
     nonisolated static func login(_ s: Surface) -> Bool {
