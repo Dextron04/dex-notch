@@ -128,7 +128,7 @@ class PasskeyServerTests(unittest.TestCase):
 
     def test_forged_replayed_wrong_site_and_cloned_assertions_are_refused(self):
         ck, pk, prf = self.session(), Passkey(), self.prf(); self.enroll(ck, pk, prf)
-        self.assertEqual(self.sign_in(Passkey())[0], 400)                                                              # an unknown passkey
+        self.assertEqual(self.sign_in(Passkey())[0], 404)                                                              # an unknown passkey: the page tells the password manager
         self.assertEqual(self.sign_in(pk, origin="https://evil.example")[0], 400)                                      # signed for another site
         st, _, o = self.j("/webauthn/login/options"); a = pk.get(o["publicKey"]["challenge"]); a.update(prf="", fields={})
         self.assertEqual(self.j("/webauthn/login/finish", a)[0], 200); self.assertEqual(self.j("/webauthn/login/finish", a)[0], 400)   # a challenge works once
@@ -178,6 +178,6 @@ class PasskeyServerTests(unittest.TestCase):
 
     def test_deleting_the_account_removes_its_passkeys(self):
         ck, pk = self.session(), Passkey(); self.enroll(ck, pk, self.prf()); uid = self.store.by_email("ada@example.com"); self.store.delete_account(uid)
-        self.assertIsNone(self.store.passkey(pk.id)); self.assertEqual(self.sign_in(pk)[0], 400)
+        self.assertIsNone(self.store.passkey(pk.id)); self.assertEqual(self.sign_in(pk)[0], 404)
 
 if __name__ == "__main__": unittest.main()

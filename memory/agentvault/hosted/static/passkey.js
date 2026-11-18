@@ -7,11 +7,36 @@
   const post = async (url, body) => {
     const r = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error || "That didn't work. Try again.");
+    if (!r.ok) throw Object.assign(new Error(j.error || "That didn't work. Try again."), { status: r.status });
     return j;
   };
+  // the password manager keeps its own list: tell it when a passkey is gone or unknown here (Chrome and Safari; elsewhere this does nothing)
+  const forget = (rpId, credentialId) => PublicKeyCredential.signalUnknownCredential?.({ rpId, credentialId }).catch(() => {});
+  let autofill = new AbortController();
   const prfOf = (cred) => { const f = cred.getClientExtensionResults?.().prf?.results?.first; return f ? enc(f) : ''; };
   const prfExt = (opts) => { const e = opts.extensions?.prf?.eval; if (e) e.first = dec(e.first); return opts; };
+
+  const loginOptions = async () => {
+    const o = await post('/webauthn/login/options'), pk = prfExt(o.publicKey);
+    pk.challenge = dec(pk.challenge); return pk;
+  };
+  const finishLogin = async (cred, pk, b) => {
+    const r = cred.response;
+    try {
+      const j = await post('/webauthn/login/finish', { id: enc(cred.rawId), clientDataJSON: enc(r.clientDataJSON), authenticatorData: enc(r.authenticatorData), signature: enc(r.signature),
+        prf: prfOf(cred), fields: JSON.parse(b.dataset.fields || '{}') });
+      location.assign(j.next);
+    } catch (e) { if (e.status === 404) forget(pk.rpId, enc(cred.rawId)); throw e; }
+  };
+  // passkeys offered in the email field's own autofill list: no button needed
+  const conditional = async (b) => {
+    try {
+      const caps = await PublicKeyCredential.getClientCapabilities?.();
+      if (!(caps ? caps.conditionalGet === true : await PublicKeyCredential.isConditionalMediationAvailable?.())) return;
+      const pk = await loginOptions();
+      await finishLogin(await navigator.credentials.get({ publicKey: pk, mediation: 'conditional', signal: autofill.signal }), pk, b);
+    } catch (e) { /* cancelled, replaced by the button, or not available: nothing to say */ }
+  };
 
   const unlockWith = async (ids) => {                      // the passkey's own secret, via a normal sign-in prompt
     const o = await post('/webauthn/login/options');
@@ -23,12 +48,10 @@
 
   const run = {
     async login(b) {
-      const o = await post('/webauthn/login/options');
-      const pk = prfExt(o.publicKey); pk.challenge = dec(pk.challenge);
-      const cred = await navigator.credentials.get({ publicKey: pk }), r = cred.response;
-      const j = await post('/webauthn/login/finish', { id: enc(cred.rawId), clientDataJSON: enc(r.clientDataJSON), authenticatorData: enc(r.authenticatorData), signature: enc(r.signature),
-        prf: prfOf(cred), fields: JSON.parse(b.dataset.fields || '{}') });
-      location.assign(j.next);
+      autofill.abort(); autofill = new AbortController();      // the autofill request and the button must not both be waiting
+      const pk = await loginOptions();
+      try { await finishLogin(await navigator.credentials.get({ publicKey: pk }), pk, b); }
+      catch (e) { if (e.status !== 404) conditional(b); throw e; }          // cancelled: offer the autofill again
     },
     async create(b, setup) {
       const o = await post('/webauthn/register/options');
@@ -38,8 +61,10 @@
       let prf = prfOf(cred);
       if (!prf) { try { prf = (await unlockWith([enc(cred.rawId)])).prf; } catch { prf = ''; } }     // some authenticators only give the secret on a second touch
       const pass = document.getElementById('pk-pass');
-      const j = await post('/webauthn/register/finish', { clientDataJSON: enc(r.clientDataJSON), attestationObject: enc(r.attestationObject), prf, setup,
-        passphrase: pass ? pass.value : '', next: b.dataset.next || '', name: /Mac/.test(navigator.platform) ? 'Touch ID on this Mac' : 'Passkey' });
+      let j;
+      try { j = await post('/webauthn/register/finish', { clientDataJSON: enc(r.clientDataJSON), attestationObject: enc(r.attestationObject), prf, setup,
+        passphrase: pass ? pass.value : '', next: b.dataset.next || '', name: /Mac/.test(navigator.platform) ? 'Touch ID on this Mac' : 'Passkey' }); }
+      catch (e) { forget(pk.rp.id, enc(cred.rawId)); throw e; }
       location.assign(j.next);
     },
     setup(b) { return run.create(b, true); },
@@ -52,6 +77,11 @@
       form.requestSubmit(b.dataset.submit ? form.querySelector(b.dataset.submit) : undefined);
     },
   };
+
+  const signIn = document.querySelector('[data-passkey="login"]');
+  if (signIn) conditional(signIn);
+  const sync = document.querySelector('[data-passkey-sync]');
+  if (sync) PublicKeyCredential.signalAllAcceptedCredentials?.({ rpId: sync.dataset.rp, userId: sync.dataset.user, allAcceptedCredentialsIds: JSON.parse(sync.dataset.ids || '[]') }).catch(() => {});
 
   document.querySelectorAll('[data-passkey]').forEach((b) => {
     b.hidden = false;

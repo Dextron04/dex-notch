@@ -164,7 +164,7 @@ def login(*, beta: bool = False, client_name: Optional[str] = None, fields: Opti
 {hidden(fields or {})}
 <div class="field">
 <label for="email">Email address</label>
-<input type="email" id="email" name="email" value="{esc(email)}" required autocomplete="email" inputmode="email" enterkeyhint="send" spellcheck="false" autocapitalize="none" placeholder="you@example.com" autofocus>
+<input type="email" id="email" name="email" value="{esc(email)}" required autocomplete="username webauthn" inputmode="email" enterkeyhint="send" spellcheck="false" autocapitalize="none" placeholder="you@example.com" autofocus>
 </div>
 <button class="btn" type="submit">Email me a sign-in link</button>
 </form>
@@ -327,7 +327,7 @@ def need_plan(user: str, checkout_link: Optional[str]) -> str:
 
 def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: List[dict], mcp_url: str, connected: bool, used_bytes: int, quota_bytes: int, notes: int,
             now: Optional[float] = None, usable: Optional[bool] = None, encrypted: bool = False, can_encrypt: bool = False, flash: str = "",
-            passkeys: Optional[List[dict]] = None, unlocked: bool = False, has_passphrase: bool = True) -> str:
+            passkeys: Optional[List[dict]] = None, unlocked: bool = False, has_passphrase: bool = True, rp_id: str = "", passkey_user: str = "") -> str:
     now = now or time.time()
     usable = entitled if usable is None else usable
     tone, label = {"active": ("ok", "Active"), "past_due": ("warn", "Payment issue"), "canceled": ("warn", "Canceled"), "pending": ("ok", "Free plan")}.get(status, ("warn", status.title()))
@@ -349,7 +349,7 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
         '<li><div><div class="name">%s</div><div class="meta">added %s · last used %s · %s</div></div>'
         '<form method="post" action="/account/passkeys/remove">%s<button class="btn btn-quiet btn-sm" type="submit">Remove<span class="sr-only"> %s</span></button></form></li>'
         % (esc(p["name"]), time.strftime("%b %-d", time.gmtime(p["created"])), _ago(p["last_used"], now), "opens your notes" if p["unlocks"] else "signs in only", hidden({"id": p["id"]}), esc(p["name"])) for p in passkeys)
-    pk_card = ('<section class="card" aria-labelledby="pk-title"><div class="card-head"><h2 id="pk-title">Passkeys</h2><p>Touch ID, your phone or a security key</p></div>'
+    pk_card = ('<section class="card" aria-labelledby="pk-title" data-passkey-sync data-rp="%s" data-user="%s" data-ids="%s">' % (esc(rp_id), esc(passkey_user), esc(json.dumps([p["id"] for p in passkeys]))) + '<div class="card-head"><h2 id="pk-title">Passkeys</h2><p>Touch ID, your phone or a security key</p></div>'
                + (('<ul class="devices plain" role="list">' + pk_rows + '</ul>') if pk_rows else '<p class="empty">No passkeys yet. Add one and a touch signs you in.</p>')
                + ('<p class="hint">Your vault has no passphrase yet. The recovery code is your way back in if every passkey is lost.</p>' if encrypted and not has_passphrase else '')
                + ('<div class="field"><label for="pk-pass">Vault passphrase <span class="dim">(needed once, to let this passkey open your notes)</span></label><input type="password" id="pk-pass" name="passphrase" autocomplete="current-password" spellcheck="false"></div>' if encrypted and not unlocked and has_passphrase else '')

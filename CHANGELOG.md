@@ -17,7 +17,7 @@ The newest version is at the top. Every release is on the [Releases page](https:
     <img src="docs/assets/shot-recovery.png" alt="The recovery code page: Save your recovery code, shown once, with a Copy button" width="62%">
   </p>
 
-- **Sign in and unlock with Touch ID.** Add a passkey (Touch ID, your phone, or a security key) and one touch signs you in and opens your vault: no email link and no passphrase. Choosing a passkey when you set up your vault means there is no passphrase at all; your recovery code is the way back in. A passkey that can't open notes still signs you in, and the emailed link and the passphrase keep working. Exporting your notes always asks again, even when you are signed in with a passkey.
+- **Sign in and unlock with Touch ID.** Add a passkey (Touch ID, your phone, or a security key) and one touch signs you in and opens your vault: no email link and no passphrase. Browsers that can will offer your passkey right in the email field, and tell your password manager when a passkey has been removed. Choosing a passkey when you set up your vault means there is no passphrase at all; your recovery code is the way back in. A passkey that can't open notes still signs you in, and the emailed link and the passphrase keep working. Exporting your notes always asks again, even when you are signed in with a passkey.
 
   <p align="center">
     <img src="docs/assets/shot-passkey-login.png" alt="The sign-in page with a Sign in with a passkey button above the email link form" width="62%">

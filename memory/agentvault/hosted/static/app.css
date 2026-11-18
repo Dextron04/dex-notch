@@ -396,7 +396,6 @@
   @media (max-width: 63.99rem) { .scene-bg { opacity: 0.4; } }
   .w { display: inline-block; overflow: clip; vertical-align: top; padding: 0 0.04em 0.1em; margin: 0 -0.04em -0.1em; }
   .w > span { display: inline-block; }
-  .fx-on .read-head > * { animation: none; }
 
 
   /* passkey buttons: hidden until the browser can do passkeys, then given room */
@@ -495,25 +494,14 @@
     /* page load: header, then the line of copy, then the screen: lead with the hero, 70ms apart */
     .site-header { animation: fade var(--dur-slow) var(--ease) backwards; }
     .hero-copy > * { animation: rise var(--dur-slow) var(--ease) backwards; }
-    .hero-copy > :nth-child(2) { animation-delay: 70ms; }
-    .hero-copy > :nth-child(3) { animation-delay: 140ms; }
-    .hero-copy > :nth-child(4) { animation-delay: 210ms; }
-    .hero-copy > :nth-child(5) { animation-delay: 280ms; }
     .screen { animation: rise 760ms var(--ease) 260ms backwards; }
     .demo-controls { animation: fade var(--dur-slow) var(--ease) 700ms backwards; }
     .screen { --breath: 1; }
     .screen::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(40% 55% at 50% 0%, var(--glow), transparent 70%); animation: breathe 9s var(--ease-float) infinite; pointer-events: none; }
     .scene:not([hidden]) > * { animation: scene-in var(--dur-slow) var(--ease) backwards; }
-    .scene:not([hidden]) > :nth-child(2) { animation-delay: 60ms; }
-    .scene:not([hidden]) > :nth-child(3) { animation-delay: 120ms; }
-    .scene:not([hidden]) > :nth-child(4) { animation-delay: 180ms; }
     .scene-top .tag::before { animation: dot-pulse 2.6s var(--ease-float) infinite; }
 
     .auth > *, .page-head > *, .stack > *, .centerpage > *, .sent > * { animation: rise var(--dur-slow) var(--ease) backwards; }
-    .auth > :nth-child(2), .stack > :nth-child(2), .centerpage > :nth-child(2), .sent > :nth-child(2) { animation-delay: 70ms; }
-    .stack > :nth-child(3), .centerpage > :nth-child(3), .sent > :nth-child(3) { animation-delay: 140ms; }
-    .stack > :nth-child(4), .centerpage > :nth-child(4), .sent > :nth-child(4) { animation-delay: 210ms; }
-    .stack > :nth-child(n+5) { animation-delay: 280ms; }
     .pulse::before { animation: ring 2.4s var(--ease) infinite; }
     .pulse::after { animation: ring 2.4s var(--ease) 1.2s infinite; }
 
@@ -534,9 +522,29 @@
       .read-progress { position: fixed; inset: 0 0 auto 0; block-size: 3px; background: var(--ember); transform-origin: 0 50%; z-index: 20; animation: read linear both; animation-timeline: scroll(root block); }
     }
     .read-head > * { animation: rise var(--dur-slow) var(--ease) backwards; }
-    .read-head > :nth-child(2) { animation-delay: 70ms; }
-    .read-head > :nth-child(3) { animation-delay: 140ms; }
-    .read-head > :nth-child(4) { animation-delay: 210ms; }
+    /* staggers: each child starts a step after the one before it. sibling-index() where the browser has it; the same delays written out where it does not */
+    @supports (animation-delay: calc(sibling-index() * 0.1s)) {
+      .hero-copy > *, .read-head > * { animation-delay: calc((sibling-index() - 1) * 70ms); }
+      .scene:not([hidden]) > * { animation-delay: calc((sibling-index() - 1) * 60ms); }
+      .auth > *, .stack > *, .centerpage > *, .sent > * { animation-delay: min(calc((sibling-index() - 1) * 70ms), 280ms); }
+    }
+    .fx-on .read-head > * { animation: none; }       /* GSAP animates these on the long read instead (this layer comes last, so it has to be said here) */
+    @supports not (animation-delay: calc(sibling-index() * 0.1s)) {
+      .hero-copy > :nth-child(2) { animation-delay: 70ms; }
+      .hero-copy > :nth-child(3) { animation-delay: 140ms; }
+      .hero-copy > :nth-child(4) { animation-delay: 210ms; }
+      .hero-copy > :nth-child(5) { animation-delay: 280ms; }
+      .scene:not([hidden]) > :nth-child(2) { animation-delay: 60ms; }
+      .scene:not([hidden]) > :nth-child(3) { animation-delay: 120ms; }
+      .scene:not([hidden]) > :nth-child(4) { animation-delay: 180ms; }
+      .auth > :nth-child(2), .stack > :nth-child(2), .centerpage > :nth-child(2), .sent > :nth-child(2) { animation-delay: 70ms; }
+      .stack > :nth-child(3), .centerpage > :nth-child(3), .sent > :nth-child(3) { animation-delay: 140ms; }
+      .stack > :nth-child(4), .centerpage > :nth-child(4), .sent > :nth-child(4) { animation-delay: 210ms; }
+      .stack > :nth-child(n+5) { animation-delay: 280ms; }
+      .read-head > :nth-child(2) { animation-delay: 70ms; }
+      .read-head > :nth-child(3) { animation-delay: 140ms; }
+      .read-head > :nth-child(4) { animation-delay: 210ms; }
+    }
 
     /* view transitions between pages: the header stays put, the page behind it lifts in */
     ::view-transition-old(root) { animation: fade var(--dur) var(--ease-in) reverse both; }

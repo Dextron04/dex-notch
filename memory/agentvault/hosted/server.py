@@ -425,7 +425,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                 chal = json.loads(cdj).get("challenge")
                 challenges.take(chal, "get")
                 row = store.passkey(d.get("id"))
-                if not row or store.status(row["user_id"]) in (None, "deleted"): raise webauthn.PasskeyError("passkey check failed")
+                if not row or store.status(row["user_id"]) in (None, "deleted"): return self.send(404, {"error": "That passkey isn't registered here any more."})   # the page tells the password manager to forget it
                 count = webauthn.authenticate(cdj, webauthn.unb64u(d.get("authenticatorData")), webauthn.unb64u(d.get("signature")), chal, origin, rp_id, row["public_key"], row["sign_count"])
                 store.passkey_used(row["id"], count)
             except (webauthn.PasskeyError, ValueError, TypeError, AttributeError): return self.pk_fail()
@@ -515,7 +515,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             self.html(200, pages.account(email=store.email(uid), status=store.status(uid), entitled=store.entitled(uid), stripe=bool(stripe), devices=devices.listing(store, uid),
                                          mcp_url=public + "/mcp", connected=auth.connected(uid), used_bytes=vault_bytes(vault) if vault.is_dir() else 0, quota_bytes=store.quota(uid), usable=store.may_use(uid),
                                          notes=len(session_files(vault)) if vault.is_dir() else 0, now=now(),
-                                         encrypted=store.encrypted(uid), can_encrypt=encrypt, flash=flash, passkeys=store.passkeys(uid), unlocked=bool(self.session_key()), has_passphrase=bool((store.vault_keys(uid) or {}).get("salt"))))
+                                         encrypted=store.encrypted(uid), can_encrypt=encrypt, flash=flash, passkeys=store.passkeys(uid), unlocked=bool(self.session_key()), has_passphrase=bool((store.vault_keys(uid) or {}).get("salt")), rp_id=rp_id, passkey_user=webauthn.b64u(uid.encode())))
 
         def add_device(self):
             f = self.form()
