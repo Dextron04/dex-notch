@@ -27,6 +27,7 @@ final class SetupModel {
     var message: String?
     var hostedConnected: String?
     var keepConversations = true
+    var whyOpen: Set<SetupPane> = []
 
     private let url = Settings.defaultURL
     private var home: URL { FileManager.default.homeDirectoryForCurrentUser }
@@ -114,6 +115,12 @@ final class SetupModel {
 enum SetupPane: String, CaseIterable, Identifiable {
     case welcome = "Welcome", models = "Models", folders = "Folders", mail = "Mail", phone = "iPhone", memory = "Memory", updates = "Updates", finish = "All set"
     var id: String { rawValue }
+    var symbol: String {
+        switch self {
+        case .welcome: "hand.wave"; case .models: "sparkles"; case .folders: "folder"; case .mail: "envelope"
+        case .phone: "iphone"; case .memory: "brain.head.profile"; case .updates: "arrow.down.circle"; case .finish: "checkmark.seal"
+        }
+    }
     static let settings: [SetupPane] = [.models, .folders, .mail, .phone, .memory, .updates]
     static let guided: [SetupPane] = [.welcome, .models, .folders, .mail, .phone, .finish]       // the first-run walk-through, in order
 }
@@ -136,7 +143,7 @@ struct SetupView: View {
             Rectangle().fill(Ink.text.opacity(0.09)).frame(width: 1)
             VStack(spacing: 0) {
                 ScrollView {
-                    pane.padding(.horizontal, 48).padding(.top, 42).padding(.bottom, 28)
+                    pane.padding(.horizontal, 44).padding(.top, 40).padding(.bottom, 28)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .id(m.pane).transition(.opacity)
                 }
@@ -144,7 +151,12 @@ struct SetupView: View {
             }
         }
         .frame(width: Self.width, height: height)
-        .background(Color.black)
+        .background {
+            ZStack {
+                Color.black
+                RadialGradient(colors: [Ink.ember.opacity(0.13), .clear], center: .topTrailing, startRadius: 0, endRadius: 520)      // a little warmth where the page begins
+            }
+        }
         .preferredColorScheme(.dark)
         .tint(Ink.ember)
     }
@@ -157,26 +169,45 @@ struct SetupView: View {
                 Image("AppMark").resizable().frame(width: 32, height: 32).accessibilityHidden(true)
                 Text("Dex Notch").font(.system(size: 18, weight: .semibold)).foregroundStyle(Ink.text)
             }
-            .padding(.top, 52).padding(.bottom, 36)
-            ForEach(guided ? SetupPane.guided : SetupPane.settings) { p in
-                let on = m.pane == p
-                Button { withAnimation(.spring(duration: 0.4, bounce: 0.12)) { m.pane = p } } label: {
-                    HStack(spacing: 11) {
-                        ZStack {
-                            if on { Circle().fill(Ink.ember).matchedGeometryEffect(id: "dot", in: railNS) }
-                        }.frame(width: 6, height: 6)
-                        Text(p.rawValue).font(.system(size: 16, weight: on ? .semibold : .regular)).foregroundStyle(on ? Ink.text : Ink.dim)
-                        Spacer(minLength: 0)
+            .padding(.top, 52).padding(.bottom, 30).padding(.horizontal, 8)
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(guided ? SetupPane.guided : SetupPane.settings) { p in
+                    let on = m.pane == p
+                    Button { withAnimation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.12)) { m.pane = p } } label: {
+                        HStack(spacing: 11) {
+                            Image(systemName: p.symbol).font(.system(size: 13, weight: .medium)).frame(width: 28, height: 28)
+                                .foregroundStyle(on ? Color.black : Ink.dim)
+                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(on ? Ink.ember : Ink.text.opacity(0.07)))
+                            Text(p.rawValue).font(.system(size: 15, weight: on ? .semibold : .regular)).foregroundStyle(on ? Ink.text : Ink.dim)
+                            Spacer(minLength: 0)
+                            if !guided && needsAttention(p) { Circle().fill(Ink.ember).frame(width: 7, height: 7).accessibilityLabel("Needs attention") }
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 6).contentShape(Rectangle())
+                        .background { if on { RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Ink.text.opacity(0.07)).matchedGeometryEffect(id: "pill", in: railNS) } }
                     }
-                    .padding(.vertical, 9).contentShape(Rectangle())
+                    .buttonStyle(.plain).accessibilityAddTraits(on ? .isSelected : [])
                 }
-                .buttonStyle(.plain).accessibilityAddTraits(on ? .isSelected : [])
             }
             Spacer()
             Text("Press ⌥ Space any time to ask.").font(.system(size: 12.5)).foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 22)
+                .padding(.horizontal, 8).padding(.bottom, 22)
         }
-        .padding(.horizontal, 28).frame(width: 214, alignment: .leading)
+        .padding(.horizontal, 16).frame(width: 214, alignment: .leading)
+    }
+
+    /// A dot on the sidebar item when that page has something for you to do.
+    private func needsAttention(_ p: SetupPane) -> Bool {
+        switch p {
+        case .mail: return !center.needsReconnect.isEmpty
+        case .phone: return center.settings.phoneAlerts && !PhoneNotes.canRead()
+        case .updates: return AppUpdater.shared.readyVersion != nil
+        case .memory:
+            guard m.hostedConnected != nil else { return false }
+            let mon = ConnectionMonitor.shared, rec = RecorderInstaller.shared
+            let connected = mon.report.map { $0.state(.claude) == .connected || $0.state(.chatgpt) == .connected || $0.state(.claudeCode) == .connected }
+            return ConnectionLogic.nextStep(vault: mon.report?.vaultLocked, recording: rec.status == .running, uploaded: mon.report?.uploaded, connected: connected, used: mon.report?.used) != nil
+        default: return false
+        }
     }
 
     @ViewBuilder private var pane: some View {
@@ -195,27 +226,42 @@ struct SetupView: View {
     // MARK: building blocks
 
     private func header(_ title: String, _ lede: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.system(size: 30, weight: .semibold)).foregroundStyle(Ink.text)
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: m.pane.symbol).font(.system(size: 17, weight: .medium)).foregroundStyle(Ink.ember)
+                .frame(width: 38, height: 38).background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Ink.ember.opacity(0.14)))
+                .accessibilityHidden(true)
+            Text(title).font(.system(size: 34, weight: .regular, design: .serif)).foregroundStyle(Ink.text)
             Text(lede).font(.system(size: 15)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
         }
         .padding(.bottom, 22)
     }
 
-    /// Plain-English reason for a permission or a choice, shown at the top of the step that asks for it.
+    /// The plain-English reason for a permission or choice. Tucked away in Settings so the page stays calm, open during first run.
     private func why(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Rectangle().fill(Ink.ember.opacity(0.7)).frame(width: 2)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Why this is needed").font(.system(size: 12, weight: .semibold)).tracking(0.4).foregroundStyle(Ink.ember)
-                Text(text).font(.system(size: 14)).foregroundStyle(Ink.text.opacity(0.85)).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
-            }
+        let open = Binding<Bool>(get: { guided || m.whyOpen.contains(m.pane) }, set: { if $0 { m.whyOpen.insert(m.pane) } else { m.whyOpen.remove(m.pane) } })
+        return DisclosureGroup(isExpanded: open) {
+            Text(text).font(.system(size: 14)).foregroundStyle(Ink.text.opacity(0.82)).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.top, 8)
+        } label: {
+            Label("Why this is needed", systemImage: "questionmark.circle").font(.system(size: 13, weight: .semibold)).foregroundStyle(Ink.ember).contentShape(Rectangle())
         }
+        .tint(Ink.ember)
+        .padding(.horizontal, 14).padding(.vertical, 11)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Ink.ember.opacity(0.07)))
         .padding(.bottom, 20)
     }
 
+    /// Rows that belong together sit on one soft card. The last row's hairline falls outside the clip, so only the dividers between rows show.
+    private func card<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 0) { content() }
+            .padding(.horizontal, 16).padding(.bottom, -1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Ink.text.opacity(0.045))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Ink.text.opacity(0.08)))
+    }
+
     private func subhead(_ t: String) -> some View {
-        Text(t).font(.system(size: 17, weight: .semibold)).foregroundStyle(Ink.text).padding(.top, 32).padding(.bottom, 4)
+        Text(t).font(.system(size: 13, weight: .semibold)).tracking(0.3).foregroundStyle(Ink.dim).padding(.top, 28).padding(.bottom, 10)
     }
 
     /// One line of the list: mark, name and a detail line, actions on the right, a hairline under it.
@@ -227,7 +273,7 @@ struct SetupView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(mono ? .system(size: 14, design: .monospaced) : muted ? .system(size: 15) : .system(size: 16, weight: .semibold)).foregroundStyle(muted ? Ink.dim : Ink.text)
                         .lineLimit(1).truncationMode(.middle)
-                    if let detail { Text(detail).font(.system(size: 13)).foregroundStyle(Ink.dim).lineLimit(2).fixedSize(horizontal: false, vertical: true) }
+                    if let detail { Text(detail).font(.system(size: 13)).foregroundStyle(Ink.dim).lineLimit(5).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer(minLength: 16)
                 trail()
@@ -249,8 +295,15 @@ struct SetupView: View {
         }.buttonStyle(.plain)
     }
 
+    private func secondaryButton(_ title: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Ink.ember).lineLimit(1).fixedSize()
+                .padding(.horizontal, 17).padding(.vertical, 6).overlay(Capsule().strokeBorder(Ink.ember.opacity(0.6))).contentShape(Capsule())
+        }.buttonStyle(.plain)
+    }
+
     private func link(_ title: String, dim: Bool = false, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) { Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(dim ? Ink.dim : Ink.ember).contentShape(Rectangle()) }.buttonStyle(.plain)
+        Button(action: action) { Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(dim ? Ink.dim : Ink.ember).lineLimit(1).fixedSize().contentShape(Rectangle()) }.buttonStyle(.plain)
     }
 
     private func field(_ label: String, _ placeholder: String, text: Binding<String>, secure: Bool = false) -> some View {
@@ -277,9 +330,7 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 0) {
             header("Models", "Who answers when you ask. One is enough to start. They run on your own subscriptions, so there are no keys to enter.")
             why("Dex Notch doesn't think for itself. It passes your questions to an AI you already use, such as Claude or Codex, running on this Mac. We only check that one is installed. Nothing goes through our servers.")
-            VStack(spacing: 0) {
-                cliRow(.claude); cliRow(.codex); localRow
-            }
+            card { cliRow(.claude); cliRow(.codex); localRow }
             if a.detected && a.cliFound.isEmpty {
                 link("Check again") { a.refreshAvailability() }.padding(.top, 18)
             }
@@ -334,23 +385,27 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 0) {
             header("Folders", "Where a model may edit files. Edit runs are sandboxed to the folders you allow here.")
             why("When you ask an AI to change files, it may only touch the folders you list here. The rest of your Mac stays off limits to it. If you skip this, it can only use a throwaway scratch folder.")
-            row(title: "Default folder", detail: m.workspace.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? "Scratch folder only",
-                lead: { Image(systemName: "folder").font(.system(size: 17)).foregroundStyle(Ink.dim) },
-                trail: {
-                    HStack(spacing: 16) {
-                        if m.workspace != nil { link("Clear", dim: true) { m.workspace = nil } }
-                        link("Choose…") { m.chooseWorkspace() }
-                    }
-                },
-                extra: { if let p = m.projectsSuggestion { link("Use ~/Projects") { m.useProjects() }.help(p).padding(.leading, 40) } })
-            subhead("Quick switch with ⌘F")
-            if m.folders.isEmpty {
-                Text("None. Edit runs stay in the scratch folder.").font(.system(size: 14)).foregroundStyle(Ink.dim).padding(.vertical, 12)
+            card {
+                row(title: "Default folder", detail: m.workspace.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? "Scratch folder only",
+                    lead: { Image(systemName: "folder.fill").font(.system(size: 17)).foregroundStyle(m.workspace == nil ? Ink.dim : Ink.ember) },
+                    trail: {
+                        HStack(spacing: 16) {
+                            if m.workspace != nil { link("Clear", dim: true) { m.workspace = nil } }
+                            link("Choose…") { m.chooseWorkspace() }
+                        }
+                    },
+                    extra: { if let p = m.projectsSuggestion { link("Use ~/Projects") { m.useProjects() }.help(p).padding(.leading, 40) } })
             }
-            ForEach(m.folders, id: \.self) { f in
-                row(title: (f as NSString).abbreviatingWithTildeInPath, mono: true, pad: 11,
-                    lead: { Image(systemName: "folder").font(.system(size: 14)).foregroundStyle(Ink.dim) },
-                    trail: { Button { m.remove(f) } label: { Image(systemName: "minus.circle").foregroundStyle(Ink.dim) }.buttonStyle(.plain).help("Remove") })
+            subhead("Quick switch with ⌘F")
+            card {
+                if m.folders.isEmpty {
+                    Text("None. Edit runs stay in the scratch folder.").font(.system(size: 14)).foregroundStyle(Ink.dim).padding(.vertical, 14)
+                }
+                ForEach(m.folders, id: \.self) { f in
+                    row(title: (f as NSString).abbreviatingWithTildeInPath, mono: true, pad: 11,
+                        lead: { Image(systemName: "folder").font(.system(size: 14)).foregroundStyle(Ink.dim) },
+                        trail: { Button { m.remove(f) } label: { Image(systemName: "minus.circle").foregroundStyle(Ink.dim) }.buttonStyle(.plain).help("Remove").accessibilityLabel("Remove \(f)") })
+                }
             }
             link("Add folder…") { m.addFolder() }.padding(.top, 16)
         }
@@ -365,11 +420,13 @@ struct SetupView: View {
             header("Mail", "New mail is judged as it arrives, and only the few emails that need you reach the notch. Dex Notch only reads mail until you allow replies.")
             why("To tell you about important email, Dex Notch has to read your inbox. You sign in on Google's or Microsoft's own page, so we never see your password. It starts read-only. Sending replies is a second permission that you can leave off.")
             if !center.needsReconnect.isEmpty {
-                row(title: "Reconnect needed", detail: "This update asks Google for one new permission, so you can reply from the notch. Alerts for these accounts are paused until you sign in again.",
-                    lead: { Image(systemName: "exclamationmark.arrow.triangle.2.circlepath").font(.system(size: 16)).foregroundStyle(Ink.emberDeep) },
-                    trail: { link("Reconnect") { center.reconnectAll() } })
+                card {
+                    row(title: "Reconnect needed", detail: "This update asks Google for one new permission, so you can reply from the notch. Alerts for these accounts are paused until you sign in again.",
+                        lead: { Image(systemName: "exclamationmark.arrow.triangle.2.circlepath").font(.system(size: 16)).foregroundStyle(Ink.emberDeep) },
+                        trail: { link("Reconnect") { center.reconnectAll() } })
+                }.padding(.bottom, 14)
             }
-            VStack(spacing: 0) {
+            card {
                 if accounts.isEmpty {
                     row(title: "No account connected", muted: true, lead: { AddonMark(addon: "gmail", size: 24).opacity(0.45) }, trail: { EmptyView() })
                 }
@@ -384,15 +441,15 @@ struct SetupView: View {
                         })
                 }
             }
-            row(title: "Allow replies", detail: m.repliesOnConnect ? "New accounts also let Dex Notch draft and send replies, only when you press Send or Save draft." : "New accounts stay read-only. Use Allow replies on an account later if you want to reply.",
+            card { row(title: "Allow replies", detail: m.repliesOnConnect ? "New accounts also let Dex Notch draft and send replies, only when you press Send or Save draft." : "New accounts stay read-only. Use Allow replies on an account later if you want to reply.",
                 lead: { Image(systemName: "arrowshape.turn.up.left").font(.system(size: 16)).foregroundStyle(Ink.dim) },
-                trail: { Toggle("", isOn: $m.repliesOnConnect).labelsHidden().toggleStyle(.switch) })
-            HStack(spacing: 20) {
-                link(accounts.isEmpty ? "Connect Gmail" : "Add a Gmail account") { center.connectGmail(clientID: m.gmailID, clientSecret: m.gmailSecret) }
-                link("Connect Outlook") { center.connectOutlook(clientID: m.msID) }.help("Outlook.com, Hotmail, or a work or school Microsoft 365 account")
+                trail: { Toggle("", isOn: $m.repliesOnConnect).labelsHidden().toggleStyle(.switch) }) }.padding(.top, 14)
+            HStack(spacing: 12) {
+                primaryButton(accounts.isEmpty ? "Connect Gmail" : "Add a Gmail account") { center.connectGmail(clientID: m.gmailID, clientSecret: m.gmailSecret) }
+                secondaryButton("Connect Outlook") { center.connectOutlook(clientID: m.msID) }.help("Outlook.com, Hotmail, or a work or school Microsoft 365 account")
                 if center.connected { link("Check now", dim: true) { center.checkNow() } }
             }.padding(.top, 18)
-            Text(center.status).font(.system(size: 13)).foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true).padding(.top, 8)
+            Text(center.status).font(.system(size: 13)).foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
 
             DisclosureGroup(isExpanded: $m.msOpen) {
                 VStack(alignment: .leading, spacing: 18) {
@@ -402,9 +459,9 @@ struct SetupView: View {
                 }.padding(.top, 14)
             } label: {
                 Text(AddonSettings.bundledMicrosoft() != nil ? "Use your own Microsoft application" : "Your Microsoft application (this build has none built in)")
-                    .font(.system(size: 14)).foregroundStyle(Ink.dim).contentShape(Rectangle())
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Ink.text.opacity(0.85)).contentShape(Rectangle())
             }
-            .tint(Ink.dim).padding(.top, 22)
+            .tint(Ink.ember).padding(14).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Ink.text.opacity(0.045))).overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Ink.text.opacity(0.08))).padding(.top, 26)
 
             if !builtIn {
             DisclosureGroup(isExpanded: $m.ownClientOpen) {
@@ -416,17 +473,19 @@ struct SetupView: View {
                 }.padding(.top, 14)
             } label: {
                 Text(builtIn ? "Use your own Google client" : "Your Google client (this build has none built in)")
-                    .font(.system(size: 14)).foregroundStyle(Ink.dim).contentShape(Rectangle())
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Ink.text.opacity(0.85)).contentShape(Rectangle())
             }
-            .tint(Ink.dim).padding(.top, builtIn ? 32 : 22)
+            .tint(Ink.ember).padding(14).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Ink.text.opacity(0.045))).overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Ink.text.opacity(0.08))).padding(.top, 14)
             }
 
             if !center.history.isEmpty {
                 subhead("Recent alerts")
-                ForEach(center.history.prefix(4)) { a in
-                    row(title: a.headline, detail: a.sender + (a.account.map { " · " + $0 } ?? ""), pad: 12,
-                        lead: { AddonMark(addon: a.addon, size: 22) },
-                        trail: { link("Open") { if let u = URL(string: a.url) { NSWorkspace.shared.open(u) } } })
+                card {
+                    ForEach(center.history.prefix(4)) { a in
+                        row(title: a.headline, detail: a.sender + (a.account.map { " · " + $0 } ?? ""), pad: 12,
+                            lead: { AddonMark(addon: a.addon, size: 22) },
+                            trail: { link("Open") { if let u = URL(string: a.url) { NSWorkspace.shared.open(u) } } })
+                    }
                 }
             }
 
@@ -436,14 +495,12 @@ struct SetupView: View {
 
             subhead("Your name")
             Text("Used to sign the replies the AI drafts. Leave it blank and they end with a short thanks.").font(.system(size: 13)).foregroundStyle(Ink.dim).padding(.bottom, 10)
-            TextField("", text: $m.myName, prompt: Text("Alex").foregroundStyle(Ink.dim)).textFieldStyle(.plain).font(.system(size: 15)).foregroundStyle(Ink.text)
-            Rectangle().fill(Ink.text.opacity(0.18)).frame(height: 1).padding(.top, 6)
+            TextField("", text: $m.myName, prompt: Text("Alex").foregroundStyle(Ink.dim)).textFieldStyle(.plain).font(.system(size: 15)).foregroundStyle(Ink.text).padding(14).inputWell()
 
             subhead("What matters to you")
             Text("Added to the rules that decide what interrupts you.").font(.system(size: 13)).foregroundStyle(Ink.dim).padding(.bottom, 10)
             TextField("", text: $m.importance, prompt: Text("Recruiters, my landlord, anything about payments.").foregroundStyle(Ink.dim), axis: .vertical)
-                .textFieldStyle(.plain).lineLimit(2...4).font(.system(size: 15)).foregroundStyle(Ink.text)
-            Rectangle().fill(Ink.text.opacity(0.18)).frame(height: 1).padding(.top, 6)
+                .textFieldStyle(.plain).lineLimit(2...4).font(.system(size: 15)).foregroundStyle(Ink.text).padding(14).inputWell()
             if builtIn {
             DisclosureGroup(isExpanded: $m.ownClientOpen) {
                 VStack(alignment: .leading, spacing: 18) {
@@ -454,9 +511,9 @@ struct SetupView: View {
                 }.padding(.top, 14)
             } label: {
                 Text(builtIn ? "Use your own Google client" : "Your Google client (this build has none built in)")
-                    .font(.system(size: 14)).foregroundStyle(Ink.dim).contentShape(Rectangle())
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Ink.text.opacity(0.85)).contentShape(Rectangle())
             }
-            .tint(Ink.dim).padding(.top, builtIn ? 32 : 22)
+            .tint(Ink.ember).padding(14).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Ink.text.opacity(0.045))).overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Ink.text.opacity(0.08))).padding(.top, 14)
             }
         }
     }
@@ -471,16 +528,17 @@ struct SetupView: View {
             let c = m.checkMinutes
             options.append((c < 60 ? "\(Int(c)) min" : "\(String(format: "%g", c / 60)) hours", c)); options.sort { $0.minutes < $1.minutes }
         }
-        return HStack(spacing: 22) {
+        return HStack(spacing: 2) {
             ForEach(options, id: \.minutes) { o in
                 let on = m.checkMinutes == o.minutes
-                Button { withAnimation(.spring(duration: 0.3, bounce: 0.1)) { m.checkMinutes = o.minutes } } label: {
-                    Text(o.label).font(.system(size: 15, weight: on ? .semibold : .regular)).foregroundStyle(on ? Ink.ember : Ink.dim)
-                        .padding(.vertical, 5).contentShape(Rectangle())
-                        .overlay(alignment: .bottom) { if on { Rectangle().fill(Ink.ember).frame(height: 1).matchedGeometryEffect(id: "freq", in: freqNS) } }
+                Button { withAnimation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.1)) { m.checkMinutes = o.minutes } } label: {
+                    Text(o.label).font(.system(size: 14, weight: on ? .semibold : .regular)).foregroundStyle(on ? Color.black : Ink.dim)
+                        .frame(maxWidth: .infinity).padding(.vertical, 7).contentShape(Capsule())
+                        .background { if on { Capsule().fill(Ink.ember).matchedGeometryEffect(id: "freq", in: freqNS) } }
                 }.buttonStyle(.plain).accessibilityAddTraits(on ? .isSelected : [])
             }
         }
+        .padding(3).background(Capsule().fill(Ink.text.opacity(0.07)))
     }
 
     // MARK: welcome, iPhone, finish
@@ -490,10 +548,12 @@ struct SetupView: View {
             header("Welcome to Dex Notch", "Dex Notch turns your Mac's notch into a quiet place for the few things that need you: an AI to ask, important email, and notifications from your iPhone.")
             Text("Next, a few short steps. Each one says what it needs and why, and every step can be skipped. You can change anything later in Settings.")
                 .font(.system(size: 15)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.bottom, 14)
-            row(title: "An AI to ask", detail: "Uses Claude or Codex if they are installed here.", lead: { Image(systemName: "sparkles").font(.system(size: 16)).foregroundStyle(Ink.dim) }, trail: { EmptyView() })
-            row(title: "Folders the AI may edit", detail: "Only the ones you choose.", lead: { Image(systemName: "folder").font(.system(size: 16)).foregroundStyle(Ink.dim) }, trail: { EmptyView() })
-            row(title: "Gmail", detail: "Read-only unless you allow replies.", lead: { Image(systemName: "envelope").font(.system(size: 16)).foregroundStyle(Ink.dim) }, trail: { EmptyView() })
-            row(title: "iPhone notifications", detail: "Needs one Mac permission, Full Disk Access.", lead: { Image(systemName: "iphone").font(.system(size: 16)).foregroundStyle(Ink.dim) }, trail: { EmptyView() })
+            card {
+                row(title: "An AI to ask", detail: "Uses Claude or Codex if they are installed here.", lead: { Image(systemName: "sparkles").font(.system(size: 16)).foregroundStyle(Ink.ember) }, trail: { EmptyView() })
+                row(title: "Folders the AI may edit", detail: "Only the ones you choose.", lead: { Image(systemName: "folder").font(.system(size: 16)).foregroundStyle(Ink.ember) }, trail: { EmptyView() })
+                row(title: "Gmail", detail: "Read-only unless you allow replies.", lead: { Image(systemName: "envelope").font(.system(size: 16)).foregroundStyle(Ink.ember) }, trail: { EmptyView() })
+                row(title: "iPhone notifications", detail: "Needs one Mac permission, Full Disk Access.", lead: { Image(systemName: "iphone").font(.system(size: 16)).foregroundStyle(Ink.ember) }, trail: { EmptyView() })
+            }
         }
     }
 
@@ -504,15 +564,17 @@ struct SetupView: View {
             VStack(alignment: .leading, spacing: 0) {
                 header("iPhone", "See your iPhone's notifications at the notch, on the Mac, without picking up your phone.")
                 why("Your iPhone sends its notifications to this Mac, and macOS keeps them in a private file that apps can't open unless you say so. Full Disk Access lets Dex Notch open that one file. It only looks for new notifications and shows them at the notch. Nothing is sent anywhere, and you can switch it off at any time.")
-                row(title: "Show iPhone notifications", detail: center.phoneStatus.isEmpty ? "Off until you switch it on." : center.phoneStatus,
-                    lead: { Image(systemName: "iphone").font(.system(size: 16)).foregroundStyle(Ink.dim) },
-                    trail: { Toggle("", isOn: Binding(get: { center.settings.phoneAlerts }, set: { center.setPhoneAlerts($0) })).labelsHidden().toggleStyle(.switch) })
-                row(title: "Full Disk Access", detail: allowed ? "Allowed." : "Not allowed yet. Open System Settings, find Dex Notch in the list (press + to add it if it isn't there) and switch it on. macOS may ask you to reopen Dex Notch.",
-                    lead: { Image(systemName: allowed ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(allowed ? Ink.ember : Ink.dim) },
-                    trail: { if !allowed { link("Open System Settings") { _ = PhoneNotes.canRead(); NSWorkspace.shared.open(PhoneNotes.privacyPane) } } })
-                row(title: "Also judge this Mac's notifications", detail: "Slack, Messages and other apps here. The AI reads each one and only the important ones come to the notch. This sends their text to the AI you picked, so it stays off until you switch it on.",
-                    lead: { Image(systemName: "laptopcomputer").font(.system(size: 16)).foregroundStyle(Ink.dim) },
-                    trail: { Toggle("", isOn: Binding(get: { center.settings.macAlerts }, set: { center.setMacAlerts($0) })).labelsHidden().toggleStyle(.switch) })
+                card {
+                    row(title: "Show iPhone notifications", detail: center.phoneStatus.isEmpty ? "Off until you switch it on." : center.phoneStatus,
+                        lead: { Image(systemName: "iphone").font(.system(size: 16)).foregroundStyle(Ink.dim) },
+                        trail: { Toggle("", isOn: Binding(get: { center.settings.phoneAlerts }, set: { center.setPhoneAlerts($0) })).labelsHidden().toggleStyle(.switch) })
+                    row(title: "Full Disk Access", detail: allowed ? "Allowed." : "Not allowed yet. Open System Settings, find Dex Notch in the list (press + to add it if it isn't there) and switch it on. macOS may ask you to reopen Dex Notch.",
+                        lead: { Image(systemName: allowed ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(allowed ? Ink.ember : Ink.dim) },
+                        trail: { if !allowed { link("Open System Settings") { _ = PhoneNotes.canRead(); NSWorkspace.shared.open(PhoneNotes.privacyPane) } } })
+                    row(title: "Also judge this Mac's notifications", detail: "Slack, Messages and other apps here. The AI reads each one and only the important ones come to the notch. This sends their text to the AI you picked, so it stays off until you switch it on.",
+                        lead: { Image(systemName: "laptopcomputer").font(.system(size: 16)).foregroundStyle(Ink.dim) },
+                        trail: { Toggle("", isOn: Binding(get: { center.settings.macAlerts }, set: { center.setMacAlerts($0) })).labelsHidden().toggleStyle(.switch) })
+                }
                 subhead("Before this can work")
                 Text("Your iPhone must be set up with iPhone Mirroring on this Mac, and System Settings → Notifications must allow notifications from your iPhone. Dex Notch can't change either of those for you.")
                     .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
@@ -525,25 +587,33 @@ struct SetupView: View {
             header("Memory", "Your Dex account keeps your AI conversations, so Claude and ChatGPT can search them from anywhere.")
             why("Dex Notch only runs while this Mac is linked to your account. When the switch below is on, the conversations recorded on this Mac (Claude Code, Codex, Gemini) are uploaded to your account with passwords and keys removed first. They are encrypted on the server's disk with a passphrase you choose, but not end-to-end: the service opens them to search. Turning it off stops uploads; what was already uploaded stays until you delete it on your account page.")
             if let h = m.hostedConnected {
-                row(title: "Signed in", detail: [AccountGate.shared.email, h].compactMap { $0 }.joined(separator: " · "), mono: true,
-                    lead: { Image(systemName: "checkmark.circle.fill").font(.system(size: 17)).foregroundStyle(Ink.ember) },
-                    trail: { HStack(spacing: 18) {
-                        link("Open account page") { if let u = URL(string: "https://\(h)/account") { NSWorkspace.shared.open(u) } }
-                        link("Sign out", dim: true) { AccountGate.shared.signOut() }
-                    } })
-                row(title: "Keep my conversations in my account", detail: m.keepConversations ? "On: new conversations are uploaded." : "Off: nothing is uploaded from this Mac.",
-                    lead: { Image(systemName: "icloud.and.arrow.up").font(.system(size: 16)).foregroundStyle(Ink.dim) },
-                    trail: { Toggle("", isOn: Binding(get: { m.keepConversations }, set: { m.setKeepConversations($0) })).labelsHidden().toggleStyle(.switch) })
-                row(title: "Something not working?", detail: "Copy diagnostics gives setup facts only: the version, what is switched on, and when the server last confirmed this Mac. No email, passwords or conversations. Paste it into your report.",
-                    lead: { Image(systemName: "ladybug").font(.system(size: 16)).foregroundStyle(Ink.dim) },
-                    trail: { HStack(spacing: 18) {
-                        link("Copy diagnostics") { m.copyDiagnostics(center: center) }
-                        link("Install guide", dim: true) { NSWorkspace.shared.open(Diagnostics.guideURL) }
-                        link("Report a problem", dim: true) { NSWorkspace.shared.open(Diagnostics.issueURL) }
-                    } })
                 getStartedCard
-                recorderRow
+                subhead("Your account")
+                card {
+                    row(title: "Signed in", detail: [AccountGate.shared.email, h].compactMap { $0 }.joined(separator: " · "),
+                        lead: { Image(systemName: "checkmark.circle.fill").font(.system(size: 17)).foregroundStyle(Ink.ember) },
+                        trail: { HStack(spacing: 18) {
+                            link("Account page") { if let u = URL(string: "https://\(h)/account") { NSWorkspace.shared.open(u) } }
+                            link("Sign out", dim: true) { AccountGate.shared.signOut() }
+                        } })
+                    row(title: "Keep my conversations in my account", detail: m.keepConversations ? "On: new conversations are uploaded." : "Off: nothing is uploaded from this Mac.",
+                        lead: { Image(systemName: "icloud.and.arrow.up").font(.system(size: 16)).foregroundStyle(Ink.dim) },
+                        trail: { Toggle("", isOn: Binding(get: { m.keepConversations }, set: { m.setKeepConversations($0) })).labelsHidden().toggleStyle(.switch) })
+                }
+                subhead("Recording")
+                card { recorderRow }
                 connectionsSection
+                subhead("Help")
+                card {
+                    row(title: "Something not working?", detail: "Copy diagnostics gives setup facts only: the version, what is switched on, and when the server last confirmed this Mac. No email, passwords or conversations. Paste it into your report.",
+                        lead: { Image(systemName: "ladybug").font(.system(size: 16)).foregroundStyle(Ink.dim) },
+                        trail: { EmptyView() },
+                        extra: { HStack(spacing: 20) {
+                            link("Copy diagnostics") { m.copyDiagnostics(center: center) }
+                            link("Install guide", dim: true) { NSWorkspace.shared.open(Diagnostics.guideURL) }
+                            link("Report a problem", dim: true) { NSWorkspace.shared.open(Diagnostics.issueURL) }
+                        }.padding(.leading, 40) })
+                }
                 Text("Signing out removes this Mac's key and returns Dex Notch to the sign-in screen.")
                     .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
             }
@@ -557,7 +627,7 @@ struct SetupView: View {
         let step = ConnectionLogic.nextStep(vault: mon.report?.vaultLocked, recording: rec.status == .running, uploaded: mon.report?.uploaded, connected: connected, used: mon.report?.used)
         let t = ConnectionLogic.stepText(step)
         return VStack(alignment: .leading, spacing: 8) {
-            Text(step == nil ? "All set" : "Next step").font(.system(size: 11, weight: .medium)).tracking(0.5).foregroundStyle(Ink.ember)
+            Label(step == nil ? "All set" : "Next step", systemImage: step == nil ? "checkmark.seal.fill" : "arrow.right.circle.fill").font(.system(size: 12, weight: .semibold)).foregroundStyle(Ink.ember)
             Text(t.title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Ink.text)
             Text(t.detail).font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             if step == .firstChat {
@@ -576,9 +646,10 @@ struct SetupView: View {
                 if step == .connect { link("or ChatGPT", dim: true) { mon.connect(.chatgpt) } }
             }
         }
-        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Ink.text.opacity(0.06)))
-        .padding(.vertical, 12)
+        .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LinearGradient(colors: [Ink.ember.opacity(0.20), Ink.ember.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing)))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Ink.ember.opacity(0.35)))
+        .padding(.bottom, 4)
         .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: step)          // the card eases into the next step; nothing moves for people who asked for less motion
     }
 
@@ -604,10 +675,11 @@ struct SetupView: View {
     private var connectionsSection: some View {
         let mon = ConnectionMonitor.shared
         return VStack(alignment: .leading, spacing: 0) {
-            subhead("Connections").padding(.top, 8)
+            subhead("Connections")
             Text("Claude and ChatGPT can all search and add to the same memory once they're connected. Dex Notch checks, and tells you at the notch if one is missing.")
                 .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.bottom, 4)
             let v = mon.report?.vaultLocked
+            card {
             row(title: "Vault passphrase", detail: mon.report == nil ? "Checking…" : v == true ? "Locked: your notes are encrypted on the server." : v == false ? "Not locked yet. Lock it so your notes are encrypted." : "Couldn't check just now.",
                 lead: { Image(systemName: v == true ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(v == true ? Ink.ember : Ink.dim) },
                 trail: { if v != true && mon.report != nil { link("Lock my vault") { mon.lockVault() } } })
@@ -619,15 +691,16 @@ struct SetupView: View {
                         link(mon.busy == s ? "Working…" : s == .claude ? "Add in Claude" : st.state == .needsSignIn ? "Sign in" : "Show the steps") { mon.connect(s) }
                     } })
             }
+            let here = mon.agentsHere, on = mon.instructionsOn
+            row(title: "Save every conversation", detail: here.isEmpty ? "No Claude Code, Codex or Gemini found on this Mac." : (on ? "On" : "Off") + " for " + here.map(\.label).joined(separator: ", ") + ". They save a summary to your memory when a conversation ends.",
+                lead: { Image(systemName: on ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(on ? Ink.ember : Ink.dim) },
+                trail: { if !here.isEmpty { link(on ? "Turn off" : "Turn on", dim: on) { mon.toggleInstructions() } } })
+            }
             HStack(spacing: 18) {
                 link(mon.checking ? "Checking…" : "Check again") { Task { await mon.refresh(full: true) } }
                 Toggle("Remind me at the notch", isOn: Binding(get: { mon.remind }, set: { mon.setRemind($0) })).toggleStyle(.switch).controlSize(.small)
                     .font(.system(size: 13)).foregroundStyle(Ink.dim)
             }.padding(.top, 12)
-            let here = mon.agentsHere, on = mon.instructionsOn
-            row(title: "Save every conversation", detail: here.isEmpty ? "No Claude Code, Codex or Gemini found on this Mac." : (on ? "On" : "Off") + " for " + here.map(\.label).joined(separator: ", ") + ". They save a summary to your memory when a conversation ends.",
-                lead: { Image(systemName: on ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(on ? Ink.ember : Ink.dim) },
-                trail: { if !here.isEmpty { link(on ? "Turn off" : "Turn on", dim: on) { mon.toggleInstructions() } } })
             if let n = mon.note { Text(n).font(.system(size: 13)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.top, 8) }
         }
         .task { mon.refreshInstructions(); await mon.refresh() }
@@ -637,14 +710,16 @@ struct SetupView: View {
         let ok = PhoneNotes.canRead() && center.settings.phoneAlerts
         return VStack(alignment: .leading, spacing: 0) {
             header("You're set", "Here is what Dex Notch will do. Change any of it later from the menu bar icon → Settings.")
-            row(title: "AI to ask", detail: a.cliFound.isEmpty ? "None found yet. Install Claude or Codex, then press Check again in Settings." : a.cliFound.map(\.displayName).sorted().joined(separator: ", "),
-                lead: { Image(systemName: a.cliFound.isEmpty ? "circle.dashed" : "checkmark.circle.fill").foregroundStyle(a.cliFound.isEmpty ? Ink.dim : Ink.ember) }, trail: { EmptyView() })
-            row(title: "Folders", detail: m.folders.isEmpty ? "None. Edits stay in the scratch folder." : "\(m.folders.count) allowed",
-                lead: { Image(systemName: m.folders.isEmpty ? "circle.dashed" : "checkmark.circle.fill").foregroundStyle(m.folders.isEmpty ? Ink.dim : Ink.ember) }, trail: { EmptyView() })
-            row(title: "Gmail", detail: center.accounts.isEmpty ? "Not connected." : center.accounts.joined(separator: ", "),
-                lead: { Image(systemName: center.accounts.isEmpty ? "circle.dashed" : "checkmark.circle.fill").foregroundStyle(center.accounts.isEmpty ? Ink.dim : Ink.ember) }, trail: { EmptyView() })
-            row(title: "iPhone notifications", detail: ok ? "On." : center.settings.phoneAlerts ? "Switched on, but Full Disk Access is still missing." : "Off.",
-                lead: { Image(systemName: ok ? "checkmark.circle.fill" : "circle.dashed").foregroundStyle(ok ? Ink.ember : Ink.dim) }, trail: { EmptyView() })
+            card {
+                row(title: "AI to ask", detail: a.cliFound.isEmpty ? "None found yet. Install Claude or Codex, then press Check again in Settings." : a.cliFound.map(\.displayName).sorted().joined(separator: ", "),
+                    lead: { Image(systemName: a.cliFound.isEmpty ? "circle.dashed" : "checkmark.circle.fill").foregroundStyle(a.cliFound.isEmpty ? Ink.dim : Ink.ember) }, trail: { EmptyView() })
+                row(title: "Folders", detail: m.folders.isEmpty ? "None. Edits stay in the scratch folder." : "\(m.folders.count) allowed",
+                    lead: { Image(systemName: m.folders.isEmpty ? "circle.dashed" : "checkmark.circle.fill").foregroundStyle(m.folders.isEmpty ? Ink.dim : Ink.ember) }, trail: { EmptyView() })
+                row(title: "Gmail", detail: center.accounts.isEmpty ? "Not connected." : center.accounts.joined(separator: ", "),
+                    lead: { Image(systemName: center.accounts.isEmpty ? "circle.dashed" : "checkmark.circle.fill").foregroundStyle(center.accounts.isEmpty ? Ink.dim : Ink.ember) }, trail: { EmptyView() })
+                row(title: "iPhone notifications", detail: ok ? "On." : center.settings.phoneAlerts ? "Switched on, but Full Disk Access is still missing." : "Off.",
+                    lead: { Image(systemName: ok ? "checkmark.circle.fill" : "circle.dashed").foregroundStyle(ok ? Ink.ember : Ink.dim) }, trail: { EmptyView() })
+            }
             Text("Press ⌥ Space any time to ask.").font(.system(size: 15)).foregroundStyle(Ink.dim).padding(.top, 26)
         }
     }
@@ -655,6 +730,7 @@ struct SetupView: View {
         let u = AppUpdater.shared
         return VStack(alignment: .leading, spacing: 0) {
             header("Updates", "Dex Notch looks for a new version once a day and downloads it in the background. It never restarts without asking.")
+            card {
             row(title: "Version \(u.version)", detail: [u.status, u.readyVersion == nil ? u.lastCheckedText : nil].compactMap { $0 }.joined(separator: " "),
                 lead: { Image("AppMark").resizable().frame(width: 26, height: 26) },
                 trail: {
@@ -664,6 +740,7 @@ struct SetupView: View {
             row(title: "Update automatically", detail: u.running ? "Turn this off to update only when you choose Check now." : "Not available in this build.",
                 lead: { Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 16)).foregroundStyle(Ink.dim) },
                 trail: { Toggle("", isOn: Binding(get: { u.autoUpdate }, set: { u.autoUpdate = $0 })).labelsHidden().toggleStyle(.switch).disabled(!u.running) })
+            }
             link("What's new in \(u.version)") { NSWorkspace.shared.open(u.notesURL) }.padding(.top, 18)
         }
     }
@@ -713,6 +790,14 @@ struct SetupView: View {
             .padding(.horizontal, 48).padding(.vertical, 14)
         }
         .background(Color.black)
+    }
+}
+
+private extension View {
+    /// A soft rounded well for typing into, in place of a bare underline.
+    func inputWell() -> some View {
+        background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Ink.text.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Ink.text.opacity(0.1)))
     }
 }
 
