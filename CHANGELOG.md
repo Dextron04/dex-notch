@@ -6,6 +6,35 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.9.3: A fresher, clearer Settings window
+
+*18 November 2026*
+
+- **Settings has been redesigned from the top.** Every page now has an icon, a clear title and a one-line summary of what it is for, and related settings sit together on soft cards instead of one long list. A small dot beside a page in the sidebar means it has something for you to do: a reconnect on Mail, Full Disk Access on iPhone, an update ready to restart into, or your next step on Memory.
+
+  <p align="center">
+    <img src="docs/assets/shot-settings-models.png" alt="The Settings window on the Models page: a sidebar with an icon for each page, and Claude, Codex and a local model on one card." width="720">
+  </p>
+  <p align="center">
+    <img src="docs/assets/gif-settings.gif" alt="Moving through the Settings pages: Models, Folders, iPhone and Memory." width="560"><br>
+    <a href="docs/assets/gif-settings.mp4">Watch it as a video</a>
+  </p>
+
+- **Memory is easier to follow.** It used to be one long page. It now starts with the one thing to do next, in a highlighted card with the button that does it, then your account, recording, your connections to Claude and ChatGPT, and help, each in its own group. "Save every conversation" moved in with the connections, where it belongs.
+
+  <p align="center">
+    <img src="docs/assets/shot-settings-memory.png" alt="The Memory page: a highlighted Next step card, then Your account with the sign-in and the upload switch." width="720">
+  </p>
+
+- **The "why" is there when you want it.** The explanation of why a permission is needed used to fill the top of every page. In Settings it is now a single quiet line, "Why this is needed", that opens when you click it. During first-time setup it stays open.
+
+  <p align="center">
+    <img src="docs/assets/shot-settings-iphone.png" alt="The iPhone page: switches for iPhone notifications and this Mac's notifications, and the Full Disk Access step with its full instructions." width="720">
+  </p>
+
+- **Smaller things.** Connect Gmail and Connect Outlook are real buttons. How often to look at your mail is a simple slider-style choice. Instructions that were cut off with "…", like the Full Disk Access steps, now show in full. The links in the help row no longer break into pieces. The first-run welcome uses the same look.
+- **Also on the website, already live.** On a phone, the address you paste into ChatGPT now sits on one line with Copy under it, instead of breaking in the middle.
+
 ## v0.9.2: Honest ChatGPT steps, and Allow works with Touch ID
 
 *18 November 2026*
