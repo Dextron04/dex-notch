@@ -86,7 +86,7 @@ class BetaFlowTests(unittest.TestCase):
         self.assertIn("Reminder set", self.tool(claude, "remind", {"text": "stand up", "when": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(), "source": "claude"}))
         r = json.loads(call("GET", self.base + "/v1/reminders/wait?after=", headers={"Authorization": "Bearer " + token})[2]); self.assertIn("stand up", r["files"][0]["content"])
         # 12. they can leave: the export needs the passphrase and the account erases everything
-        self.assertIn("isn&#x27;t right", self.form("/account/export", {}, ada)[2])
+        self.assertIn("to continue", self.form("/account/export", {}, ada)[2])
         self.assertEqual(self.form("/account/delete", {"confirm": "ada@example.com"}, ada)[0], 302)
         self.assertFalse((self.store.root / "data" / uid).exists()); self.assertIsNone(self.store.by_email("ada@example.com"))
         self.assertEqual(call("GET", self.base + "/v1/me", headers={"Authorization": "Bearer " + token})[0], 401)

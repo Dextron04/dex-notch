@@ -114,7 +114,7 @@ class PasskeyServerTests(unittest.TestCase):
         ck, pk, prf = self.session(), Passkey(), self.prf(); self.enroll(ck, pk, prf)
         st, h, r = self.sign_in(pk, ""); self.assertEqual(st, 200)
         new = {"Cookie": h["Set-Cookie"].split(";")[0]}; s = self.j("/v1/link/start", {"name": "Mac"})[2]
-        page = call("GET", self.base + "/link?code=" + s["code"].replace("-", ""), headers=new)[2]; self.assertIn('name="passphrase"', page)
+        page = call("GET", self.base + "/link?code=" + s["code"].replace("-", ""), headers=new)[2]; self.assertIn("Touch your passkey", page); self.assertNotIn('name="passphrase"', page)       # shut, and there is no passphrase to type: only the touch
         self.assertEqual(self.form("/link", {"code": s["code"].replace("-", ""), "decision": "allow"}, new)[0], 200)
         self.assertEqual(self.j("/v1/link/poll", {"secret": s["secret"]})[2]["status"], "pending")                                                        # nothing approved
 
@@ -169,9 +169,22 @@ class PasskeyServerTests(unittest.TestCase):
     def test_a_stolen_unlocked_cookie_cannot_export_and_unlocked_sessions_are_short(self):
         ck, pk, prf = self.session(), Passkey(), self.prf(); self.enroll(ck, pk, prf)
         _, h, _ = self.sign_in(pk, prf); new = {"Cookie": h["Set-Cookie"].split(";")[0]}
-        self.assertIn("isn&#x27;t right", self.form("/account/export", {}, new)[2])                                  # the open session is not enough: export asks again
+        self.assertIn("to continue", self.form("/account/export", {}, new)[2])                                  # the open session is not enough: export asks again
         with self.store.conn() as c: exps = [r[0] for r in c.execute("SELECT exp - ? FROM sessions WHERE wrapped IS NOT NULL", (__import__("time").time(),))]
         self.assertTrue(exps and all(e <= 12 * 3600 + 5 for e in exps))
+
+    def test_a_vault_with_no_passphrase_never_asks_for_one(self):
+        ck, pk, prf = self.session(), Passkey(), self.prf(); self.enroll(ck, pk, prf)
+        cid = json.loads(call("POST", self.base + "/register", {"redirect_uris": ["https://chatgpt.com/cb"], "client_name": "ChatGPT"})[2])["client_id"]
+        q = {"response_type": "code", "client_id": cid, "redirect_uri": "https://chatgpt.com/cb", "code_challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", "code_challenge_method": "S256"}
+        shut = self.session()                                                                                 # a fresh email-link session: the vault is shut
+        page = call("GET", self.base + "/authorize?" + urllib.parse.urlencode(q), headers=shut)[2]
+        self.assertNotIn('name="passphrase"', page); self.assertIn("Touch your passkey", page); self.assertIn('data-passkey="unlock"', page)      # nothing required that cannot be filled
+        st, _, body = self.form("/authorize", dict(q, decision="allow"), shut); self.assertEqual(st, 200); self.assertIn("to continue", body)       # no touch and no passphrase: it says what to do, not nothing
+        st, h, _ = self.form("/authorize", dict(q, decision="allow", credential=pk.id, prf=prf), shut); self.assertEqual(st, 302)                    # with the touch it goes through
+        self.assertTrue(h["Location"].startswith("https://chatgpt.com/cb?code="))
+        both = self.session("bob@example.com"); self.form("/account/vault", {"passphrase": "a long enough passphrase", "confirm": "a long enough passphrase", "next": "/account"}, both)
+        self.assertIn('name="passphrase"', call("GET", self.base + "/authorize?" + urllib.parse.urlencode(q), headers=self.session("bob@example.com"))[2])       # a passphrase vault still asks for it
 
     def test_the_security_contact_is_published(self):
         st, _, body = call("GET", self.base + "/.well-known/security.txt"); self.assertEqual(st, 200); self.assertIn("security/advisories/new", body)

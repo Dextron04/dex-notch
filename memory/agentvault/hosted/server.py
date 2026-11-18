@@ -32,7 +32,7 @@ class Limiter:
 
 STATIC_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".woff2": "font/woff2", ".svg": "image/svg+xml", ".png": "image/png"}
 CSP = ("default-src 'none'; style-src 'self'; script-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; "
-       "form-action 'self' https:; base-uri 'none'; frame-ancestors 'none'")  # nothing inline, nothing from anywhere else
+       "form-action 'self' https: http://127.0.0.1:* http://localhost:* http://[::1]:*; base-uri 'none'; frame-ancestors 'none'")   # a form may end by sending the person back to an https app, or to a tool on this Mac (Codex, Claude Code)  # nothing inline, nothing from anywhere else
 
 def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[str, str], None],
                 stripe: Optional[billing.Stripe] = None, stripe_webhook_secret: bytes = b"", port: int = 8766, host: str = "127.0.0.1",
@@ -136,8 +136,10 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if f.get("prf") and f.get("credential"):
                 key = keys.unlock_passkey(store, uid, f["credential"], f["prf"])
                 return (key, "") if key else (None, "That passkey didn't unlock your notes.")
+            if not f.get("passphrase"): return None, "Use your passkey, or enter your vault passphrase, to continue."
             key = keys.unlock(store, uid, f.get("passphrase", ""))
             return (key, "") if key else (None, "That passphrase isn't right.")
+        def has_pass(self, uid): return bool((store.vault_keys(uid) or {}).get("salt"))      # a vault made with a passkey has no passphrase to type
         def creds(self, uid): return [p["id"] for p in store.passkeys(uid) if p["unlocks"]]
         def json_in(self, limit=65536):
             if "application/json" not in (self.headers.get("Content-Type") or ""): self.send(415, {"error": "json"}); return None   # a form on another site can't send this without asking first
@@ -234,7 +236,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if not uid: return self.html(200, pages.login(beta=auth.invite_only, client_name=c["name"], fields=fields))
             if not store.may_use(uid): return self.html(402, pages.need_plan(store.email(uid), public + "/billing/checkout" if stripe else None))
             if encrypt and not store.encrypted(uid): return self.html(200, pages.vault_setup(store.email(uid), "/authorize?" + urlencode(fields)))
-            self.html(200, pages.consent(self.who(c, q["redirect_uri"]), "this Mac" if is_loopback(q["redirect_uri"]) else urlparse(q["redirect_uri"]).hostname or "", store.email(uid), fields, ask=store.encrypted(uid) and not self.session_key(), creds=self.creds(uid)))
+            self.html(200, pages.consent(self.who(c, q["redirect_uri"]), "this Mac" if is_loopback(q["redirect_uri"]) else urlparse(q["redirect_uri"]).hostname or "", store.email(uid), fields, ask=store.encrypted(uid) and not self.session_key(), creds=self.creds(uid), has_pass=self.has_pass(uid)))
 
         def login(self):
             f = self.form()
@@ -276,7 +278,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if f.get("decision") == "allow":
                 if encrypt and not store.encrypted(uid): return self.fail(400, "Lock your vault first.")
                 key, why = self.open_vault(uid, f)
-                if why: return self.html(200, pages.consent(self.who(c, f["redirect_uri"]), "this Mac" if is_loopback(f["redirect_uri"]) else urlparse(f["redirect_uri"]).hostname or "", store.email(uid), {k: f.get(k, "") for k in OAUTH_FIELDS}, ask=True, error=why, creds=self.creds(uid)))
+                if why: return self.html(200, pages.consent(self.who(c, f["redirect_uri"]), "this Mac" if is_loopback(f["redirect_uri"]) else urlparse(f["redirect_uri"]).hostname or "", store.email(uid), {k: f.get(k, "") for k in OAUTH_FIELDS}, ask=True, error=why, creds=self.creds(uid), has_pass=self.has_pass(uid)))
             q = {"error": "access_denied"} if f.get("decision") != "allow" else {"code": auth.issue_code(f["client_id"], uid, f["redirect_uri"], f["code_challenge"], key)}
             if f.get("state"): q["state"] = f["state"]
             self.redirect(f["redirect_uri"] + ("&" if "?" in f["redirect_uri"] else "?") + urlencode(q))
@@ -342,7 +344,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             uid, code = self.user(), link.normalize(q["code"])
             if not uid: return self.html(200, pages.login(beta=auth.invite_only, link_name=name, fields={"link": code}))
             if encrypt and not store.encrypted(uid): return self.html(200, pages.vault_setup(store.email(uid), "/link?" + urlencode({"code": code})))
-            self.html(200, pages.link_confirm(store.email(uid), name, code, ask=store.encrypted(uid) and not self.session_key(), creds=self.creds(uid)))
+            self.html(200, pages.link_confirm(store.email(uid), name, code, ask=store.encrypted(uid) and not self.session_key(), creds=self.creds(uid), has_pass=self.has_pass(uid)))
 
         def link_approve(self):
             f = self.form()
@@ -355,7 +357,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if why:
                 nm = link.peek(store, f.get("code", ""), now())
                 if not nm: return self.fail(400, "This link has expired. Go back to Dex Notch and start again.")
-                return self.html(200, pages.link_confirm(store.email(uid), nm, link.normalize(f.get("code", "")), ask=True, error=why, creds=self.creds(uid)))
+                return self.html(200, pages.link_confirm(store.email(uid), nm, link.normalize(f.get("code", "")), ask=True, error=why, creds=self.creds(uid), has_pass=self.has_pass(uid)))
             try: name = link.approve(store, f.get("code", ""), uid, now(), key)
             except link.LinkError as e: return self.bad(e)
             self.html(200, pages.link_done(name, store.email(uid)))

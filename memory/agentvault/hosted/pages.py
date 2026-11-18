@@ -212,12 +212,16 @@ def _passkey(kind: str, label: str, *, creds=(), fields=None, nxt: str = "", sub
     attrs = " ".join('%s="%s"' % (k, esc(v)) for k, v in data.items())
     return '<button class="btn btn-ghost" type="button" hidden %s>%s</button><p class="form-error" role="alert" data-passkey-msg hidden></p>' % (attrs, esc(label))
 
-def _pass_field(error: str = "", creds=(), submit: str = "") -> str:
+def _pass_field(error: str = "", creds=(), submit: str = "", has_pass: bool = True) -> str:
+    """How someone opens their vault on a page that needs it. A vault made with a passkey has no passphrase, so there is nothing to type: just the touch.
+    With both, the touch is offered first and the passphrase is optional (the button does the touch by itself when nothing is typed)."""
     err = '<p class="form-error" role="alert">%s</p>' % esc(error) if error else ""
     pk = (_passkey("unlock", "Use my passkey", creds=creds, submit=submit) + '<input type="hidden" name="credential"><input type="hidden" name="prf">') if creds else ""
-    return (pk + err + '<div class="field"><label for="passphrase">Your vault passphrase</label>'
-            '<input type="password" id="passphrase" name="passphrase" required autocomplete="current-password" spellcheck="false" autocapitalize="none">'
-            '<p class="hint">It unlocks your notes. Dex Notch never sees it after this page.</p></div>')
+    if not has_pass:
+        return pk + err + ('<p class="hint">Touch your passkey to continue.</p>' if creds else '<p class="form-error" role="alert">Your vault has no passphrase and this browser has no passkey for it. Use your recovery code on the account page.</p>')
+    return (pk + err + '<div class="field"><label for="passphrase">%s</label>'
+            '<input type="password" id="passphrase" name="passphrase"%s autocomplete="current-password" spellcheck="false" autocapitalize="none">'
+            '<p class="hint">It unlocks your notes. Dex Notch never sees it after this page.</p></div>' % ("Or your vault passphrase" if creds else "Your vault passphrase", "" if creds else " required"))
 
 def vault_setup(email: str, nxt: str, error: str = "", available_for: str = "") -> str:
     err = '<p class="form-error" role="alert">%s</p>' % esc(error) if error else ""
@@ -262,7 +266,7 @@ def vault_recovery(email: str, code: str, nxt: str) -> str:
 """
     return layout("Recovery code", body, user=email)
 
-def consent(client_name: str, host: str, email: str, fields: dict, ask: bool = False, error: str = "", creds=()) -> str:
+def consent(client_name: str, host: str, email: str, fields: dict, ask: bool = False, error: str = "", creds=(), has_pass: bool = True) -> str:
     body = f"""
 <div class="wrap-narrow auth-single">
 <div class="card auth-card consent">
@@ -277,7 +281,7 @@ def consent(client_name: str, host: str, email: str, fields: dict, ask: bool = F
 </ul>
 <form method="post" action="/authorize">
 {hidden(fields)}
-{_pass_field(error, creds, 'button[value=allow]') if ask else ""}
+{_pass_field(error, creds, 'button[value=allow]', has_pass) if ask else ""}
 <div class="consent-actions">
 <button class="btn btn-ghost" type="submit" name="decision" value="deny">Deny</button>
 <button class="btn" type="submit" name="decision" value="allow">Allow</button>
@@ -289,7 +293,7 @@ def consent(client_name: str, host: str, email: str, fields: dict, ask: bool = F
 """
     return layout("Connect " + client_name, body, user=email)
 
-def link_confirm(email: str, name: str, code: str, ask: bool = False, error: str = "", creds=()) -> str:
+def link_confirm(email: str, name: str, code: str, ask: bool = False, error: str = "", creds=(), has_pass: bool = True) -> str:
     body = f"""
 <div class="wrap-narrow auth-single">
 <div class="card auth-card consent">
@@ -304,7 +308,7 @@ def link_confirm(email: str, name: str, code: str, ask: bool = False, error: str
 </ul>
 <form method="post" action="/link">
 {hidden({"code": code})}
-{_pass_field(error, creds, 'button[value=allow]') if ask else ""}
+{_pass_field(error, creds, 'button[value=allow]', has_pass) if ask else ""}
 <div class="consent-actions">
 <button class="btn btn-ghost" type="submit" name="decision" value="deny">Cancel</button>
 <button class="btn" type="submit" name="decision" value="allow">Add this Mac</button>
@@ -424,7 +428,7 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
 <section class="card" aria-labelledby="data-title">
 <div class="card-head"><h2 id="data-title">Your data</h2></div>
 <div class="row-actions">
-<form method="post" action="/account/export">{(_passkey("unlock", "Use my passkey", creds=creds, submit="button[type=submit]") + '<input type="hidden" name="credential"><input type="hidden" name="prf">' if creds else '') + '<input type="password" name="passphrase" required autocomplete="current-password" placeholder="Vault passphrase" aria-label="Vault passphrase" spellcheck="false"> ' if encrypted else ''}<button class="btn btn-ghost btn-sm" type="submit">Download my data</button></form>
+<form method="post" action="/account/export">{(_passkey("unlock", "Use my passkey", creds=creds, submit="button[type=submit]") + '<input type="hidden" name="credential"><input type="hidden" name="prf">' if creds else '') + ('<input type="password" name="passphrase"%s autocomplete="current-password" placeholder="Vault passphrase" aria-label="Vault passphrase" spellcheck="false"> ' % ("" if creds else " required") if has_passphrase else '') if encrypted else ''}<button class="btn btn-ghost btn-sm" type="submit">Download my data</button></form>
 <form method="post" action="/account/signout-all"><button class="btn btn-ghost btn-sm" type="submit">Sign out everywhere</button></form>
 </div>
 <p class="hint">The download is a zip of every note and a small account file.</p>

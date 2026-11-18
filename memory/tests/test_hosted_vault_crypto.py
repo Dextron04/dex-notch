@@ -136,7 +136,7 @@ class EncryptedVaultTests(unittest.TestCase):
 
     def test_export_needs_the_passphrase_and_gives_readable_notes(self):
         ck = self.session(); self.lock(ck); _, got = self.link(ck); self.upload(got["token"])
-        self.assertIn("isn&#x27;t right", self.post("/account/export", {}, ck)[2])
+        self.assertIn("to continue", self.post("/account/export", {}, ck)[2])
         self.assertIn("isn&#x27;t right", self.post("/account/export", {"passphrase": "wrong"}, ck)[2])
         import urllib.request
         r = urllib.request.urlopen(urllib.request.Request(self.base + "/account/export", data=urllib.parse.urlencode({"passphrase": PASS}).encode(), headers=ck), timeout=10)

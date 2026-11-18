@@ -104,6 +104,12 @@ class AttackTests(unittest.TestCase):
         page = call("GET", self.base + "/authorize?" + urllib.parse.urlencode(dict(base_q, redirect_uri="http://127.0.0.1:2222/callback/x")), headers=ck)[2]
         self.assertIn("Codex on this Mac", page)                                      # the name is the tool's own claim, so the page says where it runs
 
+    def test_the_page_policy_lets_a_sign_in_return_to_this_mac_and_to_https_apps_only(self):
+        csp = call("GET", self.base + "/login")[1]["Content-Security-Policy"]
+        action = [d for d in csp.split(";") if d.strip().startswith("form-action")][0]
+        for ok in ("'self'", "https:", "http://127.0.0.1:*", "http://localhost:*"): self.assertIn(ok, action)
+        self.assertNotIn(" http: ", action + " "); self.assertNotIn("*;", action); self.assertIn("script-src 'self'", csp)       # no plain-http sites, no wildcard, scripts still only ours
+
     def test_oversized_and_malformed_bodies_are_refused_not_processed(self):
         import http.client, urllib.error, urllib.request
         c = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=10)       # claim 9 MB and send none: refused on the header, before anything is read

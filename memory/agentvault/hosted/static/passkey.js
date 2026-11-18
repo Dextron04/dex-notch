@@ -69,12 +69,12 @@
     },
     setup(b) { return run.create(b, true); },
     add(b) { return run.create(b, false); },
-    async unlock(b) {
+    async unlock(b, submitter) {
       const form = b.closest('form'), got = await unlockWith(JSON.parse(b.dataset.creds || '[]'));
       if (!got.prf) throw new Error("This passkey can't open your notes here. Use your passphrase.");
       form.elements.credential.value = got.id; form.elements.prf.value = got.prf;
       const pass = form.elements.passphrase; if (pass) pass.required = false;
-      form.requestSubmit(b.dataset.submit ? form.querySelector(b.dataset.submit) : undefined);
+      form.requestSubmit(submitter || (b.dataset.submit ? form.querySelector(b.dataset.submit) : undefined));
     },
   };
 
@@ -83,6 +83,16 @@
   const sync = document.querySelector('[data-passkey-sync]');
   if (sync) PublicKeyCredential.signalAllAcceptedCredentials?.({ rpId: sync.dataset.rp, userId: sync.dataset.user, allAcceptedCredentialsIds: JSON.parse(sync.dataset.ids || '[]') }).catch(() => {});
 
+  // pressing Allow (or Add this Mac, or Download) with nothing typed does the touch first, then goes on: no separate button to find
+  document.addEventListener('submit', async (e) => {
+    const f = e.target, b = f.querySelector?.('[data-passkey="unlock"]');
+    if (!b || b.hidden || (f.elements.prf && f.elements.prf.value) || (f.elements.passphrase && f.elements.passphrase.value)) return;
+    if (e.submitter && e.submitter.value === 'deny') return;
+    e.preventDefault();
+    const msg = b.nextElementSibling?.matches('[data-passkey-msg]') ? b.nextElementSibling : null;
+    try { await run.unlock(b, e.submitter); }
+    catch (err) { if (msg && err.name !== 'NotAllowedError' && err.name !== 'AbortError') { msg.textContent = err.message || "That didn't work."; msg.hidden = false; } }
+  });
   document.querySelectorAll('[data-passkey-or]').forEach((e) => { e.hidden = false; });
   document.querySelectorAll('[data-passkey]').forEach((b) => {
     b.hidden = false;
