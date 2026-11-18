@@ -23,6 +23,8 @@ The newest version is at the top. Every release is on the [Releases page](https:
     <img src="docs/assets/shot-addclaude.png" alt="The Connect page: an Add to Claude button above the steps, with Claude Code and ChatGPT with Codex below" width="62%">
   </p>
 
+- **Codex and Claude Code can now actually sign in.** Their sign-in comes back to your own Mac (a local address, as the standard for command-line tools requires), and the server refused it, so `codex mcp add` ended in "registration failed" however carefully you set it up. The server now accepts it, only for the Mac itself and only with the usual safeguards, and the sign-in page says "Codex on this Mac". Tested with the real Codex, from registration to a signed-in `codex mcp list`.
+- **Connection status you can trust.** Settings → Memory used to say "couldn't check" or "not connected" for things that were fine: it couldn't read the lines `claude mcp list` prints for servers added from the terminal, one failed look was remembered for six hours, a timeout threw away what had already been printed, and ChatGPT showed as unknown whenever Codex couldn't be checked. Each of those is fixed, the last good answer is kept, and a half-known row says what it does know.
 - **Fewer repeats.** Choosing a passphrase signs you in to the vault for the next hour, so adding your Mac right afterwards doesn't ask for it again.
 - **A full install guide**, [docs/install.md](docs/install.md): invitation to first conversation, what each step does, troubleshooting, uninstalling, building from source and running your own server. The invitation and welcome emails now walk through the same steps.
 

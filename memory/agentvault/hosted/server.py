@@ -11,7 +11,7 @@ from ..index import session_files
 from .. import seal
 from . import billing, devices, keys, link, pages, story, tools, ui, webauthn
 from .ingest import MAX_BODY as INGEST_MAX, IngestError, ingest, vault_bytes
-from .oauth import SESSION_TTL, Auth, AuthError
+from .oauth import SESSION_TTL, Auth, AuthError, is_loopback, redirect_ok
 from .store import EMAIL, Store
 
 OAUTH_FIELDS = ("response_type", "client_id", "redirect_uri", "code_challenge", "code_challenge_method", "state")
@@ -112,7 +112,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             return d
         def validate(self, q):
             c = auth.client(q.get("client_id", ""))
-            if q.get("redirect_uri") not in c["redirect_uris"]: raise AuthError("redirect_uri not registered")
+            if not redirect_ok(c["redirect_uris"], q.get("redirect_uri", "")): raise AuthError("redirect_uri not registered")
             if q.get("response_type") != "code": raise AuthError("response_type must be code")
             if q.get("code_challenge_method") != "S256" or not q.get("code_challenge"): raise AuthError("PKCE S256 required")
             return c
@@ -147,6 +147,9 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             except ValueError: d = None
             if not isinstance(d, dict): self.send(400, {"error": "bad_json"}); return None
             return d
+        def who(self, client, redirect_uri):
+            """How the consent page names the app: a tool on this Mac says so, because anyone can pick any name when registering."""
+            return client["name"] + (" on this Mac" if is_loopback(redirect_uri) else "")
         def next_for(self, f):
             """Where a sign-in goes next, rebuilt on the server from the fields of the page it started on (never a URL taken from the client). None if that page is no longer valid."""
             f = {k: v for k, v in (f or {}).items() if isinstance(k, str) and isinstance(v, str)}
@@ -231,7 +234,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if not uid: return self.html(200, pages.login(beta=auth.invite_only, client_name=c["name"], fields=fields))
             if not store.may_use(uid): return self.html(402, pages.need_plan(store.email(uid), public + "/billing/checkout" if stripe else None))
             if encrypt and not store.encrypted(uid): return self.html(200, pages.vault_setup(store.email(uid), "/authorize?" + urlencode(fields)))
-            self.html(200, pages.consent(c["name"], urlparse(q["redirect_uri"]).hostname or "", store.email(uid), fields, ask=store.encrypted(uid) and not self.session_key(), creds=self.creds(uid)))
+            self.html(200, pages.consent(self.who(c, q["redirect_uri"]), "this Mac" if is_loopback(q["redirect_uri"]) else urlparse(q["redirect_uri"]).hostname or "", store.email(uid), fields, ask=store.encrypted(uid) and not self.session_key(), creds=self.creds(uid)))
 
         def login(self):
             f = self.form()
@@ -273,7 +276,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if f.get("decision") == "allow":
                 if encrypt and not store.encrypted(uid): return self.fail(400, "Lock your vault first.")
                 key, why = self.open_vault(uid, f)
-                if why: return self.html(200, pages.consent(c["name"], urlparse(f["redirect_uri"]).hostname or "", store.email(uid), {k: f.get(k, "") for k in OAUTH_FIELDS}, ask=True, error=why, creds=self.creds(uid)))
+                if why: return self.html(200, pages.consent(self.who(c, f["redirect_uri"]), "this Mac" if is_loopback(f["redirect_uri"]) else urlparse(f["redirect_uri"]).hostname or "", store.email(uid), {k: f.get(k, "") for k in OAUTH_FIELDS}, ask=True, error=why, creds=self.creds(uid)))
             q = {"error": "access_denied"} if f.get("decision") != "allow" else {"code": auth.issue_code(f["client_id"], uid, f["redirect_uri"], f["code_challenge"], key)}
             if f.get("state"): q["state"] = f["state"]
             self.redirect(f["redirect_uri"] + ("&" if "?" in f["redirect_uri"] else "?") + urlencode(q))

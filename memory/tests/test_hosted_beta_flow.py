@@ -74,7 +74,7 @@ class BetaFlowTests(unittest.TestCase):
             for f in fs: self.assertTrue((Path(root) / f).read_bytes().startswith(seal.MAGIC), f)         # nothing readable on the server's disk
         # 8. they connect Claude and ChatGPT
         claude, chatgpt = self.connect_assistant(ada, "Claude"), self.connect_assistant(ada, "ChatGPT")
-        self.assertEqual(self.me(token)["assistants"], {"claude": True, "chatgpt": True})
+        self.assertEqual(self.me(token)["assistants"], {"claude": True, "chatgpt": True, "codex": False})
         # 9. their first conversation: Claude saves something, ChatGPT finds it, and both can see the Claude Code session
         self.assertIn("Saved", self.tool(claude, "remember", {"title": "Trying Dex Memory", "content": "My favorite color is amber.", "source": "claude"}))
         found = self.tool(chatgpt, "vault_search", {"query": "favorite color"}); self.assertIn("Trying Dex Memory", found)

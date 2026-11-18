@@ -58,6 +58,14 @@ class StoryTests(unittest.TestCase):
 if __name__ == "__main__": unittest.main()
 
 class ConnectPageTests(unittest.TestCase):
+    def test_an_authorization_from_before_the_vault_was_locked_is_not_called_connected(self):
+        from agentvault.hosted import keys
+        st = Store(Path(tempfile.mkdtemp())); a = Auth(st); uid = st.create_user("old@x.io"); cid = a.register(["https://claude.ai/cb"], "Claude")
+        with st.conn() as c: c.execute("INSERT INTO grants(hash,kind,user_id,client_id,exp) VALUES('h','refresh',?,?,9e12)", (uid, cid))
+        self.assertTrue(a.assistants(uid)["claude"])                       # not locked yet: it still works
+        keys.setup(st, uid, "a long enough passphrase")
+        self.assertFalse(a.assistants(uid)["claude"])                      # now it can open nothing, so it must be added again
+
     def setUp(self):
         self.d = tempfile.TemporaryDirectory(); self.addCleanup(self.d.cleanup)
         self.store = Store(Path(self.d.name)); self.auth = Auth(self.store)
@@ -76,9 +84,9 @@ class ConnectPageTests(unittest.TestCase):
         from agentvault.hosted import devices
         uid = self.store.create_user("a@x.io"); _, tok = devices.create(self.store, uid, "Mac")
         me = lambda: json.loads(call("GET", self.base + "/v1/me", headers={"Authorization": "Bearer " + tok})[2])["assistants"]
-        self.assertEqual(me(), {"claude": False, "chatgpt": False})
+        self.assertEqual(me(), {"claude": False, "chatgpt": False, "codex": False})
         self.assertFalse(json.loads(call("GET", self.base + "/v1/me", headers={"Authorization": "Bearer " + tok})[2])["vault_locked"])
         for name in ("Claude", "ChatGPT"):
             cid = self.auth.register(["https://claude.ai/cb"], name)
             with self.store.conn() as c: c.execute("INSERT INTO grants(hash,kind,user_id,client_id,exp) VALUES(?,?,?,?,?)", ("h" + name, "refresh", uid, cid, 9e12))
-        self.assertEqual(me(), {"claude": True, "chatgpt": True})
+        self.assertEqual(me(), {"claude": True, "chatgpt": True, "codex": False})

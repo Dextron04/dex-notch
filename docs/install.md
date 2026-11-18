@@ -51,7 +51,7 @@ Within a few seconds Dex Notch starts a small helper in the background that watc
 **Settings → Memory → Get started** always shows the next thing to do. You can also use the **Connections** list there, or your account page at <https://vault.dextron04.in/account>.
 
 - **Claude (and Claude Code):** press **Add in Claude**. Claude opens with *Dex Memory* and its address already filled in; confirm it, sign in with the same email, and press **Allow**. Claude Code on your Mac uses the connectors on your Claude account, so it picks this one up too.
-- **ChatGPT (and Codex):** press **Connect**. ChatGPT's steps open in your browser: Settings → Connectors → create a connector (it may ask you to turn on developer mode), paste the address from the page, choose **OAuth**, sign in, and press **Allow**. If Codex is installed, the same button adds Dex Memory to Codex and opens its sign-in, because ChatGPT on the web doesn't pass connectors on to Codex.
+- **ChatGPT (and Codex):** press **Connect**. ChatGPT's steps open in your browser: Settings → Connectors → create a connector (it may ask you to turn on developer mode), paste the address from the page, choose **OAuth**, sign in, and press **Allow**. If Codex is installed, the same button adds Dex Memory to Codex and opens its sign-in in your browser, because ChatGPT on the web doesn't pass connectors on to Codex. Claude Code and Codex sign in through your own Mac, so the sign-in page says "on this Mac".
 
 Each assistant shows a sign-in page on this site. If your vault is locked with a passphrase it asks for it; with a passkey it asks for a touch.
 
@@ -91,6 +91,8 @@ Then try it with real work: have a conversation in Claude Code, Codex or Gemini,
 | Nothing is uploading | Settings → Memory → **Record my conversations** must say *Recording*. Also check that **Keep my conversations in my account** is on. |
 | "Needs Python" | Run `xcode-select --install`, then press **Start recording**. |
 | Claude or ChatGPT says unauthorized or asks you to sign in again | Press **Connect** again in Settings → Memory, or remove the old Dex connector in the assistant first. Connectors added before you locked your vault must be re-added once. |
+| Codex or Claude Code says "registration failed" or "redirect_uri not allowed" | Update to Dex Notch 0.9.1 and make sure the server is current: earlier servers refused the local sign-in these tools use. |
+| The status says "couldn't check" | It couldn't reach the server or run `claude` or `codex` just then. Press **Check again**; it keeps the last good answer and tries again at the next check. |
 | The old Dex connector still shows | Remove it in the assistant's Connectors list and add the new one. |
 | "That passphrase isn't right" | Eight wrong tries pause sign-in for 15 minutes. Use your passkey or your recovery code instead. |
 | iPhone alerts stopped after an update | macOS asks for **Full Disk Access** again after each update of this beta (a signed release will fix that). Settings → iPhone shows the steps. |

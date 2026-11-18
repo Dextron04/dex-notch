@@ -88,6 +88,22 @@ class AttackTests(unittest.TestCase):
         self.assertEqual(call("POST", self.base + "/register", {"redirect_uris": ["https://evil.example/cb"], "client_name": "x"})[0], 400)
         self.assertEqual(call("POST", self.base + "/register", {"redirect_uris": ["http://claude.ai/cb"], "client_name": "x"})[0], 400)   # https only
 
+    def test_command_line_tools_may_sign_in_through_their_own_machine_and_nothing_else(self):
+        reg = lambda uri: call("POST", self.base + "/register", {"redirect_uris": [uri], "client_name": "Codex"})[0]
+        for ok in ("http://127.0.0.1:49198/callback/abc", "http://localhost:8123/callback", "http://[::1]:5000/cb"): self.assertEqual(reg(ok), 201, ok)
+        for bad in ("http://evil.example/cb", "http://127.0.0.1.evil.example/cb", "http://localhost.evil.com:80/cb", "http://127.0.0.1@evil.example/cb", "http://user:pw@127.0.0.1/cb",
+                    "https://127.0.0.1/cb", "http://192.168.1.5:80/cb", "http://127.0.0.1/cb#frag", "ftp://127.0.0.1/cb", "javascript:alert(1)"):
+            self.assertEqual(reg(bad), 400, bad)
+        # a registered loopback address may use another port next time, but not another path or host
+        cid = json.loads(call("POST", self.base + "/register", {"redirect_uris": ["http://127.0.0.1:1111/callback/x"], "client_name": "Codex"})[2])["client_id"]
+        base_q = {"response_type": "code", "client_id": cid, "code_challenge": CHALLENGE, "code_challenge_method": "S256"}
+        ck = self.users["ann"]["ck"]
+        self.assertEqual(call("GET", self.base + "/authorize?" + urllib.parse.urlencode(dict(base_q, redirect_uri="http://127.0.0.1:2222/callback/x")), headers=ck)[0], 200)
+        for bad in ("http://127.0.0.1:2222/callback/y", "http://localhost:1111/callback/x", "http://evil.example:1111/callback/x"):
+            self.assertEqual(call("GET", self.base + "/authorize?" + urllib.parse.urlencode(dict(base_q, redirect_uri=bad)), headers=ck)[0], 400, bad)
+        page = call("GET", self.base + "/authorize?" + urllib.parse.urlencode(dict(base_q, redirect_uri="http://127.0.0.1:2222/callback/x")), headers=ck)[2]
+        self.assertIn("Codex on this Mac", page)                                      # the name is the tool's own claim, so the page says where it runs
+
     def test_oversized_and_malformed_bodies_are_refused_not_processed(self):
         import http.client, urllib.error, urllib.request
         c = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=10)       # claim 9 MB and send none: refused on the header, before anything is read

@@ -13,6 +13,21 @@ ALLOWED_REDIRECT_HOSTS = ("chatgpt.com", "claude.ai", "claude.com")
 class AuthError(Exception):
     pass
 
+def is_loopback(uri: str) -> bool:
+    """A command-line tool (Codex, Claude Code) receives its sign-in answer on a port of its own machine: http://127.0.0.1:PORT/... (RFC 8252). Only the machine itself, no other host."""
+    try: p = urlparse(str(uri))
+    except ValueError: return False
+    return p.scheme == "http" and (p.hostname or "") in ("127.0.0.1", "localhost", "::1") and p.username is None and p.password is None and not p.fragment
+
+def redirect_ok(registered: List[str], uri: str) -> bool:
+    """The address a client asks to be sent back to must be one it registered. For a loopback address the port may differ: the tool picks a free one each time."""
+    if uri in registered: return True
+    if not is_loopback(uri): return False
+    u = urlparse(uri)
+    for r in registered:
+        if is_loopback(r) and (urlparse(r).hostname, urlparse(r).path, urlparse(r).query) == (u.hostname, u.path, u.query): return True
+    return False
+
 def _h(v: str) -> str:
     return hashlib.sha256(v.encode()).hexdigest()
 
@@ -45,7 +60,7 @@ class Auth:
         if not redirect_uris or not isinstance(redirect_uris, list): raise AuthError("redirect_uris required")
         for u in redirect_uris:
             p = urlparse(str(u))
-            if p.scheme != "https" or (p.hostname or "") not in self.allowed: raise AuthError("redirect_uri not allowed: %s" % u)
+            if not is_loopback(u) and (p.scheme != "https" or (p.hostname or "") not in self.allowed): raise AuthError("redirect_uri not allowed: %s" % u)
         cid = "c_" + secrets.token_urlsafe(16)
         with self.store.conn() as c:
             c.execute("INSERT INTO clients VALUES(?,?,?,?)", (cid, str(name)[:80], json.dumps(redirect_uris), self.now()))
@@ -102,10 +117,12 @@ class Auth:
             return bool(c.execute("SELECT 1 FROM grants WHERE user_id=? AND kind='refresh' AND exp>? LIMIT 1", (uid, self.now())).fetchone())
 
     def assistants(self, uid: str) -> dict:
-        """Which assistants hold a live authorization: {"claude": bool, "chatgpt": bool}. From the name each one registered under; shown to the person and to their Mac, nothing more."""
+        """Which assistants hold a live authorization: {"claude", "chatgpt", "codex"}. From the name each one registered under; shown to the person and to their Mac, nothing more.
+        An authorization made before the vault was locked is not counted: it can no longer open anything, so saying "connected" would be wrong."""
         with self.store.conn() as c:
-            names = [r["name"].lower() for r in c.execute("SELECT DISTINCT c.name FROM grants g JOIN clients c ON c.id=g.client_id WHERE g.user_id=? AND g.kind='refresh' AND g.exp>?", (uid, self.now()))]
-        return {"claude": any("claude" in n for n in names), "chatgpt": any("chatgpt" in n or "openai" in n for n in names)}
+            locked = bool(c.execute("SELECT 1 FROM vault_keys WHERE user_id=?", (uid,)).fetchone())
+            names = [r["name"].lower() for r in c.execute("SELECT DISTINCT c.name FROM grants g JOIN clients c ON c.id=g.client_id WHERE g.user_id=? AND g.kind='refresh' AND g.exp>?" + (" AND g.wrapped IS NOT NULL" if locked else ""), (uid, self.now()))]
+        return {"claude": any("claude" in n for n in names), "chatgpt": any("chatgpt" in n or "openai" in n for n in names), "codex": any("codex" in n for n in names)}
 
     def end_session(self, sess: str) -> None:
         with self.store.conn() as c: c.execute("DELETE FROM sessions WHERE hash=?", (_h(sess or ""),))
@@ -117,7 +134,7 @@ class Auth:
 
     # -- OAuth grants
     def issue_code(self, cid: str, uid: str, redirect_uri: str, challenge: str, key: bytes = None) -> str:
-        if redirect_uri not in self.client(cid)["redirect_uris"]: raise AuthError("redirect_uri mismatch")
+        if not redirect_ok(self.client(cid)["redirect_uris"], redirect_uri): raise AuthError("redirect_uri mismatch")
         if not challenge: raise AuthError("code_challenge required")
         code = secrets.token_urlsafe(32)
         with self.store.conn() as c:
