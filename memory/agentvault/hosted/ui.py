@@ -6,7 +6,8 @@ from typing import Optional
 STATIC = Path(__file__).resolve().parent / "static"
 REPO = "https://github.com/Dextron04/dex-notch"
 RELEASES = REPO + "/releases/latest"
-PRIVACY, TERMS, STORY, CONNECT = "/privacy", "/terms", "/about", "/connect"   # read on this site: the documents live in content/
+PRIVACY, TERMS, STORY, CONNECT = "/privacy", "/terms", "/about", "/connect"
+INSTALL = REPO + "/blob/master/docs/install.md"   # the step-by-step guide for testers   # read on this site: the documents live in content/
 DESCRIPTION = "Dex Notch turns your Mac's notch into a quiet place for mail, iPhone alerts and reminders. Dex Memory keeps every AI conversation you've had where Claude and ChatGPT can search it."
 
 def esc(s) -> str:
@@ -77,6 +78,7 @@ def layout(title: str, body: str, *, user: Optional[str] = None, current: str = 
 <div class="wrap">
 <p>Dex Notch is open source and made for the Mac.<br>Early access: expect rough edges.</p>
 <nav aria-label="Footer"><ul>
+<li><a href="{INSTALL}">Install guide</a></li>
 <li><a href="{CONNECT}">Connect an assistant</a></li>
 <li><a href="{STORY}">The long read</a></li>
 <li><a href="{PRIVACY}">Privacy</a></li>

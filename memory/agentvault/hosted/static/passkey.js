@@ -1,7 +1,7 @@
 /* Passkeys: sign in with Touch ID, and open the vault with the same touch. Progressive enhancement: every page works without this file, and the buttons
    stay hidden in a browser that cannot do passkeys. The secret a passkey makes for the vault (its PRF output) goes to the server like a passphrase would: over https, once. */
 (() => {
-  if (!window.PublicKeyCredential || !navigator.credentials) return;
+  if (!window.PublicKeyCredential || !navigator.credentials) { document.documentElement.classList.add('no-passkey'); return; }       // frees the room kept for the sign-in button
   const enc = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const dec = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4)), (c) => c.charCodeAt(0));
   const post = async (url, body) => {
@@ -83,6 +83,7 @@
   const sync = document.querySelector('[data-passkey-sync]');
   if (sync) PublicKeyCredential.signalAllAcceptedCredentials?.({ rpId: sync.dataset.rp, userId: sync.dataset.user, allAcceptedCredentialsIds: JSON.parse(sync.dataset.ids || '[]') }).catch(() => {});
 
+  document.querySelectorAll('[data-passkey-or]').forEach((e) => { e.hidden = false; });
   document.querySelectorAll('[data-passkey]').forEach((b) => {
     b.hidden = false;
     const msg = b.nextElementSibling?.matches('[data-passkey-msg]') ? b.nextElementSibling : null;

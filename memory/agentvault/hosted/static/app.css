@@ -405,6 +405,22 @@
   form[action="/account/export"] { display: grid; gap: 0.6rem; justify-items: start; }
   form[action="/account/export"] input[type="password"] { inline-size: min(100%, 22rem); }
 
+
+  /* sign-in page: room kept for the passkey button so nothing jumps when the script shows it */
+  .pk-slot { min-block-size: 4.6rem; display: grid; align-content: start; }
+  .pk-slot .btn[data-passkey] { margin-block: 0 0.75rem; }
+  .no-passkey .pk-slot { display: none; }
+  .or { display: flex; align-items: center; gap: 0.75rem; margin: 0 0 1.1rem; font-size: var(--step--1); color: var(--text-dim); }
+  .or::before, .or::after { content: ""; flex: 1; border-block-start: 1px solid var(--line); }
+  /* gaps the first pass missed: a form after its explanation, a field after a row of fields, a banner above the cards */
+  .dim + form, .form-error + form, .hint + form { margin-block-start: 1.1rem; }
+  .form-row + .field { margin-block-start: 1.1rem; }
+  .notice + .stack { margin-block-start: 1.25rem; }
+  @media (max-width: 40rem) {
+    .auth-aside .lede { font-size: 1.05rem; line-height: 1.5; margin-block-start: 0.75rem; }
+    .auth-aside .dim { font-size: var(--step--1); }
+  }
+
   /* ===== auth / account / flows ===== */
   .auth { padding-block: clamp(2rem, 7vw, 5rem) 0; display: grid; gap: clamp(2rem, 6vw, 4rem); align-items: center; }
   @media (min-width: 56rem) { .auth { grid-template-columns: 1.05fr 0.95fr; } }

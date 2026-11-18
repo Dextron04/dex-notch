@@ -3,7 +3,7 @@ Copy rule: say what happens, in the order it happens, without drama."""
 import json, time
 from urllib.parse import quote
 from typing import List, Optional
-from .ui import CHECK, CROSS, MAIL, PRIVACY, RELEASES, STORY, TERMS, REPO, esc, hidden, layout
+from .ui import CHECK, CROSS, INSTALL, MAIL, PRIVACY, RELEASES, STORY, TERMS, REPO, esc, hidden, layout
 
 def _ago(ts: Optional[float], now: float) -> str:
     if not ts: return "never"
@@ -145,9 +145,9 @@ def home(user: Optional[str] = None, beta: bool = False) -> str:
 # ---------------------------------------------------------------- sign in
 
 def login(*, beta: bool = False, client_name: Optional[str] = None, fields: Optional[dict] = None, email: str = "", error: str = "", user: Optional[str] = None, link_name: Optional[str] = None) -> str:
-    heading = ("Let %s use your memory" % esc(client_name) if client_name else "Add <em>%s</em> to Dex Notch" % esc(link_name) if link_name else "One link. <em>No password.</em>")
+    heading = ("Let %s use your memory" % esc(client_name) if client_name else "Add <em>%s</em> to Dex Notch" % esc(link_name) if link_name else "Sign in. <em>No password.</em>")
     lede = ("Sign in to connect it. New here? This creates your account." if client_name or link_name
-            else "Enter your email and we'll send a link that signs you in. New here? It creates your account.")
+            else "Use a passkey (Touch ID), or enter your email and we'll send a one-time link. New here? The link creates your account.")
     err = '<p class="form-error" role="alert">%s</p>' % esc(error) if error else ""
     body = f"""
 <div class="wrap auth">
@@ -157,7 +157,7 @@ def login(*, beta: bool = False, client_name: Optional[str] = None, fields: Opti
 <p class="lede">{lede}</p>
 </div>
 <div class="card auth-card">
-{_passkey("login", "Sign in with a passkey", fields=fields)}
+<div class="pk-slot">{_passkey("login", "Sign in with a passkey", fields=fields)}<p class="or" data-passkey-or hidden aria-hidden="true">or</p></div>
 <h2>Email me a link</h2>
 <p class="sub">It works once and expires in 15 minutes.</p>
 {err}
@@ -226,7 +226,7 @@ def vault_setup(email: str, nxt: str, error: str = "", available_for: str = "") 
 <div class="auth-aside">
 <span class="eyebrow">Before anything is saved</span>
 <h1>Lock your <em>vault.</em></h1>
-<p class="lede">Your notes are encrypted with a key that only your passphrase can open. The server keeps the notes and the wrapped key, never the passphrase, so a copy of the disk or a backup is unreadable.</p>
+<p class="lede">Your notes are encrypted with a key that only you can open, with a passphrase or a touch of your finger. The server keeps the notes and a wrapped copy of the key, never your passphrase, so a copy of the disk or a backup is unreadable.</p>
 <p class="dim">While a Mac or an assistant you approved is using your memory, the service opens your notes for that request, as it has to in order to search them. The <a href="{PRIVACY}">privacy notes</a> say exactly what that means.</p>
 </div>
 <div class="card auth-card">
@@ -374,7 +374,7 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
 <div class="card-head"><h2 id="setup-title">Get set up</h2><p>{done_n} of {len(steps)} done</p></div>
 <ol class="checklist">
 <li {"data-done" if devices else ""}><span class="dot" aria-hidden="true"></span><h3>Install Dex Notch and sign in</h3>
-<div class="body"><p>Version 0.9 or later, on macOS 14 or newer. Open it, press <b>Continue in browser</b>, and check that the code on the page matches the one on your Mac.</p><div class="row-actions"><a class="btn btn-ghost btn-sm" href="{RELEASES}">Download for Mac</a><a class="btn btn-quiet btn-sm" href="{REPO}/blob/master/docs/install.md">Install guide</a></div></div></li>
+<div class="body"><p>Version 0.9 or later, on macOS 14 or newer. Open it, press <b>Continue in browser</b>, and check that the code on the page matches the one on your Mac. <a href="{INSTALL}">Install guide</a></p><div class="row-actions"><a class="btn btn-ghost btn-sm" href="{RELEASES}">Download for Mac</a></div></div></li>
 {('<li %s><span class="dot" aria-hidden="true"></span><h3>Lock your vault</h3><div class="body"><p>Choose Touch ID or a passphrase, and keep the recovery code. Your notes are encrypted with a key only you can open.%s</p></div></li>' % ("data-done" if encrypted else "", "" if encrypted else ' <a href="#vault-title">Lock it now</a>')) if can_encrypt else ""}
 <li {"data-done" if "uploaded" in progress else ""}><span class="dot" aria-hidden="true"></span><h3>Record your conversations</h3>
 <div class="body"><p>Dex Notch starts a small helper after you sign in that saves your Claude Code, Codex and Gemini conversations and uploads them. This step is done when the first ones arrive. If it isn't, open <b>Settings → Memory</b> in Dex Notch and press <b>Start recording</b>.</p></div></li>
@@ -527,7 +527,7 @@ def connect(mcp_url: str, user: Optional[str] = None, assistants: Optional[dict]
 <header class="page-head">
 <span class="eyebrow">Cross-context memory</span>
 <h1>Connect your <em>assistants</em></h1>
-<p class="dim">One memory, every assistant. Connect each one once, and Claude, ChatGPT and your coding agents can all search what the others learned: decide something in a terminal, ask about it from your phone. They all use the same address.</p>
+<p class="dim">New here? The <a href="{INSTALL}">install guide</a> goes from invitation to your first conversation. One memory, every assistant. Connect each one once, and Claude, ChatGPT and your coding agents can all search what the others learned: decide something in a terminal, ask about it from your phone. They all use the same address.</p>
 </header>
 <div class="stack">
 <section class="card" aria-labelledby="url-title">
@@ -607,7 +607,7 @@ def waitlist_form(*, error: str = "", email: str = "", user: Optional[str] = Non
 <div class="field" hidden><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
 <button class="btn" type="submit">Join the waitlist</button>
 </form>
-<p class="fine">It needs a Mac on macOS 14 or later. See the <a href="{TERMS}">terms</a> and <a href="{PRIVACY}">privacy notes</a>. Already invited? <a href="/login">Sign in</a>.</p>
+<p class="fine">It needs a Mac on macOS 14 or later (<a href="{INSTALL}">install guide</a>). See the <a href="{TERMS}">terms</a> and <a href="{PRIVACY}">privacy notes</a>. Already invited? <a href="/login">Sign in</a>.</p>
 </div>
 </div>
 """

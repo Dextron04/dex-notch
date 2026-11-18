@@ -21,11 +21,11 @@ class StoryTests(unittest.TestCase):
     def test_pages_are_read_on_the_site_not_redirected_to_github(self):
         for path, word in (("/privacy", "Hosted memory"), ("/terms", "closed beta"), ("/about", "Many people, one session")):
             st, _, body = call("GET", self.base + path)
-            self.assertEqual(st, 200, path); self.assertIn(word, body); self.assertNotIn("github.com/Dextron04/dex-notch/blob", body)
+            self.assertEqual(st, 200, path); self.assertIn(word, body); self.assertNotIn("blob/master/PRIVACY.md", body); self.assertNotIn("blob/master/docs/terms.md", body)         # these two are read here, not on GitHub
 
     def test_the_site_links_to_its_own_privacy_page(self):
         _, _, home = call("GET", self.base + "/")
-        self.assertIn('href="/privacy"', home); self.assertNotIn("PRIVACY.md", home); self.assertNotIn("Download for Mac", home.split("</section>")[0])
+        self.assertIn('href="/privacy"', home); self.assertNotIn("PRIVACY.md", home); self.assertIn("docs/install.md", home)      # and the install guide is one click away; self.assertNotIn("Download for Mac", home.split("</section>")[0])
 
     def test_the_long_read_is_honest_about_what_is_planned(self):
         _, _, body = call("GET", self.base + "/about")
