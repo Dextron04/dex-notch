@@ -18,6 +18,11 @@ final class ConnectionTests: XCTestCase {
         XCTAssertEqual(ConnectionLogic.parseClaudeList(list, host: "other.example.com"), .missing)
         XCTAssertEqual(ConnectionLogic.parseClaudeList("", host: host), .missing)
     }
+    func testClaudeListReadsLinesForServersAddedFromTheTerminal() {      // real output: the address is followed by "(HTTP)", then the status
+        XCTAssertEqual(ConnectionLogic.parseClaudeList("dex-memory: https://vault.dextron04.in/mcp (HTTP) - ! Needs authentication", host: host), .needsSignIn)
+        XCTAssertEqual(ConnectionLogic.parseClaudeList("dex-memory: https://vault.dextron04.in/mcp (HTTP) - ✔ Connected", host: host), .connected)
+        XCTAssertEqual(ConnectionLogic.parseClaudeList("Checking MCP server health…\n\nother: https://a.example/mcp (HTTP) - ✔ Connected\ndex-memory: https://VAULT.dextron04.in/mcp (HTTP) - ✔ Connected\n", host: host), .connected)
+    }
     func testClaudeListReadsSignInAndFailure() {
         XCTAssertEqual(ConnectionLogic.parseClaudeList("dex-memory: https://vault.dextron04.in/mcp - ! Needs authentication", host: host), .needsSignIn)
         XCTAssertEqual(ConnectionLogic.parseClaudeList("dex-memory: https://vault.dextron04.in/mcp - ✘ Failed to connect", host: host), .unknown)   // down is not "missing"
@@ -38,6 +43,11 @@ final class ConnectionTests: XCTestCase {
         XCTAssertEqual(ConnectionLogic.parseCodex(Data("not json".utf8), host: host), .unknown)
     }
 
+    func testCodexJSONAsCodexReallyPrintsIt() {
+        let json = Data(#"[{"name":"dex-memory","enabled":true,"disabled_reason":null,"transport":{"type":"streamable_http","url":"https://vault.dextron04.in/mcp","bearer_token_env_var":null,"http_headers":null,"env_http_headers":null,"http_headers_helper":null},"startup_timeout_sec":null,"tool_timeout_sec":null,"auth_status":"o_auth"}]"#.utf8)
+        XCTAssertEqual(ConnectionLogic.parseCodex(json, host: host), .connected)                       // after a successful sign-in
+        XCTAssertEqual(ConnectionLogic.parseCodex(Data(String(decoding: json, as: UTF8.self).replacingOccurrences(of: "o_auth", with: "not_logged_in").utf8), host: host), .needsSignIn)
+    }
     func testServerAnswer() {
         let a = ConnectionLogic.parseAssistants(Data(#"{"email":"a@b.co","assistants":{"claude":true,"chatgpt":false}}"#.utf8))
         XCTAssertEqual(a?.claude, true); XCTAssertEqual(a?.chatgpt, false)
@@ -45,6 +55,7 @@ final class ConnectionTests: XCTestCase {
         XCTAssertNil(a?.vault)                                                              // and no claim about the vault either
         XCTAssertEqual(ConnectionLogic.parseAssistants(Data(#"{"assistants":{},"vault_locked":true,"progress":{"uploaded":true,"used":false}}"#.utf8))?.vault, true)
         XCTAssertEqual(ConnectionLogic.parseAssistants(Data(#"{"assistants":{},"progress":{"uploaded":true,"used":false}}"#.utf8))?.used, false)
+        XCTAssertEqual(ConnectionLogic.parseAssistants(Data(#"{"assistants":{"codex":true}}"#.utf8))?.codex, true)
         XCTAssertEqual(ConnectionLogic.lockURL(host: host)?.absoluteString, "https://vault.dextron04.in/account#vault-title")
         XCTAssertEqual(ConnectionLogic.web(nil), .unknown); XCTAssertEqual(ConnectionLogic.web(false), .missing)
     }
@@ -59,6 +70,18 @@ final class ConnectionTests: XCTestCase {
         XCTAssertEqual(ConnectionLogic.rollUp(.chatgpt, report([.chatgpt: .connected, .codex: .needsSignIn]), installed: [.codex]).state, .needsSignIn)
         XCTAssertEqual(ConnectionLogic.rollUp(.claude, report([.claude: .unknown]), installed: []).state, .unknown)
         XCTAssertEqual(ConnectionLogic.rollUp(.claude, nil, installed: []).detail, "Checking…")
+    }
+    func testAHalfKnownRowIsNotReportedAsAFailure() {
+        func row(_ web: Conn, _ codex: Conn, codexHere: Bool = true) -> (state: Conn, detail: String) {
+            ConnectionLogic.rollUp(.chatgpt, report([.chatgpt: web, .codex: codex]), installed: codexHere ? [.codex] : [])
+        }
+        XCTAssertEqual(row(.connected, .unknown).state, .connected)                      // ChatGPT is connected; Codex just couldn't be checked
+        XCTAssertEqual(row(.unknown, .connected).state, .connected)                      // Codex is connected; ChatGPT on the web couldn't be checked
+        XCTAssertEqual(row(.unknown, .unknown).state, .unknown)
+        XCTAssertEqual(row(.unknown, .unknown, codexHere: false).state, .unknown)
+        XCTAssertEqual(row(.unknown, .connected, codexHere: false).state, .unknown)      // no Codex here: that says nothing about ChatGPT
+        XCTAssertEqual(row(.missing, .connected).detail, "Codex is connected. ChatGPT isn't yet.")
+        XCTAssertEqual(row(.connected, .missing).state, .missing)
     }
     func testOnlyThingsThisMacHasAreWorthACard() {
         let r = report([.claude: .missing, .chatgpt: .missing, .claudeCode: .missing, .codex: .connected])

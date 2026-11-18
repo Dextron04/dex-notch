@@ -39,12 +39,20 @@ enum ConnectionLogic {
     }
     static func guideURL(host: String, _ s: Surface) -> URL? { URL(string: "https://\(host)/connect#\(s.anchor)") }
 
-    /// The server's own answer (`/v1/me`): which web assistants hold a live authorization.
-    static func parseAssistants(_ d: Data) -> (claude: Bool, chatgpt: Bool, vault: Bool?, uploaded: Bool?, used: Bool?)? {
+    /// The server's own answer (`/v1/me`): who holds a live authorization, and how far along the account is.
+    struct ServerView: Equatable, Sendable {
+        var claude: Bool, chatgpt: Bool, codex: Bool
+        var vault: Bool?, uploaded: Bool?, used: Bool?
+    }
+
+    static func parseAssistants(_ d: Data) -> ServerView? {
         guard let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any], let a = o["assistants"] as? [String: Any] else { return nil }
         let p = o["progress"] as? [String: Any]
-        return ((a["claude"] as? Bool) ?? false, (a["chatgpt"] as? Bool) ?? false, o["vault_locked"] as? Bool, p?["uploaded"] as? Bool, p?["used"] as? Bool)
+        return ServerView(claude: (a["claude"] as? Bool) ?? false, chatgpt: (a["chatgpt"] as? Bool) ?? false, codex: (a["codex"] as? Bool) ?? false,
+                          vault: o["vault_locked"] as? Bool, uploaded: p?["uploaded"] as? Bool, used: p?["used"] as? Bool)
     }
+    /// The account page, at the passphrase form.
+    static func lockURL(host: String) -> URL? { URL(string: "https://\(host)/account#vault-title") }
 
     // MARK: getting started
 
@@ -72,7 +80,6 @@ enum ConnectionLogic {
     static let firstPrompt = "Remember this for me: I'm trying out Dex Memory, and my favorite color is amber."
     static let secondPrompt = "Search my Dex memory: what did I say my favorite color was?"
     /// The account page, at the passphrase form.
-    static func lockURL(host: String) -> URL? { URL(string: "https://\(host)/account#vault-title") }
 
     static func web(_ on: Bool?) -> Conn { on.map { $0 ? .connected : .missing } ?? .unknown }
 
@@ -82,8 +89,8 @@ enum ConnectionLogic {
             let line = String(raw)
             guard let r = line.range(of: "https://") else { continue }
             let rest = String(line[r.lowerBound...])
-            let target = rest.components(separatedBy: " - ").first ?? rest
-            guard URL(string: target.trimmingCharacters(in: .whitespaces))?.host?.lowercased() == host.lowercased() else { continue }
+            let target = rest.prefix { !$0.isWhitespace }          // the address is the first word; "(HTTP)" and " - status" follow it
+            guard URL(string: String(target))?.host?.lowercased() == host.lowercased() else { continue }
             let status = String(rest.dropFirst(target.count))
             if status.contains("Connected") && !status.contains("Failed") { return .connected }
             if status.lowercased().contains("auth") { return .needsSignIn }
@@ -121,13 +128,20 @@ enum ConnectionLogic {
             if cli == .needsSignIn { return (.needsSignIn, "Needs you to sign in again.") }
             return (.unknown, "Couldn't check just now.")
         }
-        let web = r.state(.chatgpt), codex = installed.contains(.codex) ? r.state(.codex) : Conn.connected     // no Codex here: nothing more to add
-        if web == .connected && codex == .connected { return (.connected, "Connected." + (installed.contains(.codex) ? " Codex too." : "")) }
-        if codex == .needsSignIn && web != .missing { return (.needsSignIn, "Codex is added but needs you to sign in.") }
-        if web == .missing && codex == .missing { return (.missing, "Not connected to your memory.") }
-        if web == .missing { return (.missing, "Not connected in ChatGPT.") }
-        if codex == .missing { return (.missing, web == .connected ? "Connected in ChatGPT. Codex still needs adding." : "Codex still needs adding.") }
-        return (.unknown, "Couldn't check just now.")
+        let web = r.state(.chatgpt), hasCodex = installed.contains(.codex), codex = hasCodex ? r.state(.codex) : Conn.connected     // no Codex here: nothing more to add
+        switch (web, codex) {
+        case (.connected, .connected): return (.connected, "Connected." + (hasCodex ? " Codex too." : ""))
+        case (.connected, .unknown): return (.connected, "Connected in ChatGPT. Couldn't check Codex just now.")
+        case (.connected, .needsSignIn): return (.needsSignIn, "Codex is added but needs you to sign in.")
+        case (.connected, _): return (.missing, "Connected in ChatGPT. Codex still needs adding.")
+        case (.missing, .missing): return (.missing, "Not connected to your memory.")
+        case (.missing, .needsSignIn): return (.needsSignIn, "Codex needs you to sign in. ChatGPT isn't connected either.")
+        case (.missing, _): return (.missing, hasCodex && codex == .connected ? "Codex is connected. ChatGPT isn't yet." : "Not connected in ChatGPT.")
+        case (.unknown, .connected): return hasCodex ? (.connected, "Codex is connected. Couldn't check ChatGPT just now.") : (.unknown, "Couldn't check just now.")
+        case (.unknown, .needsSignIn): return (.needsSignIn, "Codex is added but needs you to sign in.")
+        case (.unknown, .missing): return (.missing, "Codex still needs adding. Couldn't check ChatGPT just now.")
+        default: return (.unknown, "Couldn't check just now.")
+        }
     }
 
     /// Which missing connection (if any) deserves a card at the notch now: only for things this Mac has, never twice inside `every`, never on a guess.

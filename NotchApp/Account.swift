@@ -95,7 +95,7 @@ enum HostedAPI {
     }
 
     /// Which of Claude and ChatGPT hold a live authorization for this account (nil when the server can't be asked).
-    static func assistants(host: String, token: String) async -> (claude: Bool, chatgpt: Bool, vault: Bool?, uploaded: Bool?, used: Bool?)? {
+    static func assistants(host: String, token: String) async -> ConnectionLogic.ServerView? {
         guard let b = base(host) else { return nil }
         var r = URLRequest(url: b.appendingPathComponent("v1/me"), timeoutInterval: 10)
         r.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")

@@ -3,7 +3,7 @@ import Observation
 
 /// Runs a command-line tool and returns what it printed, or nil if it couldn't start or ran past `timeout`.
 enum Probe {
-    static func run(_ exe: String, _ args: [String], timeout: TimeInterval = 45, mergeErrors: Bool = false) -> String? {
+    static func run(_ exe: String, _ args: [String], timeout: TimeInterval = 90, mergeErrors: Bool = false) -> String? {
         let p = Process(), out = Pipe()
         p.executableURL = URL(fileURLWithPath: exe); p.arguments = args; p.environment = AgentRunner.environment
         p.currentDirectoryURL = AgentRunner.scratch
@@ -13,7 +13,8 @@ enum Probe {
         DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: stop)
         let data = out.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit(); stop.cancel()
-        return p.terminationReason == .exit ? String(decoding: data, as: UTF8.self) : nil
+        let text = String(decoding: data, as: UTF8.self)
+        return p.terminationReason == .exit || !text.isEmpty ? text : nil      // cut off at the timeout: whatever it had printed is still worth reading
     }
 }
 
@@ -39,7 +40,7 @@ final class ConnectionMonitor {
     private let url = Settings.defaultURL
     private var loop: Task<Void, Never>?
     private var lastProbe: Date?
-    private var cli: [Surface: Conn] = [:]
+    private var cli: [Surface: Conn] = [:]          // the last answer the terminal tools gave: a failed look does not erase it
     private static let nudgedKey = "connectNudged"
 
     var host: String? { HostedAccount.connectedHost(at: url) }
@@ -70,12 +71,14 @@ final class ConnectionMonitor {
         let here = await Task.detached { Self.findInstalled() }.value
         installed = here
         if full || lastProbe.map({ Date().timeIntervalSince($0) > 6 * 3600 }) ?? true {
-            cli = await Task.detached { Self.probe(host: host, installed: here) }.value
-            lastProbe = Date()
+            let fresh = await Task.detached { Self.probe(host: host, installed: here) }.value
+            for (k, v) in fresh where v != .unknown { cli[k] = v }
+            if fresh.values.contains(where: { $0 != .unknown }) || here.isDisjoint(with: [.claudeCode, .codex]) { lastProbe = Date() }      // a look that found nothing is tried again at the next check
         }
         let web = await HostedAPI.assistants(host: host, token: token)
         var s: [Surface: Conn] = [.claude: ConnectionLogic.web(web?.claude), .chatgpt: ConnectionLogic.web(web?.chatgpt)]
         for (k, v) in cli { s[k] = v }
+        if cli[.codex] == nil || cli[.codex] == .unknown { s[.codex] = web?.codex == true ? .connected : (cli[.codex] ?? .unknown) }     // the tool said nothing: the server knows if Codex holds a live sign-in
         let r = ConnectionReport(states: s, checked: Date(), vaultLocked: web?.vault, uploaded: web?.uploaded, used: web?.used); report = r
         guard nudge else { return }
         var nudged = (UserDefaults.standard.dictionary(forKey: Self.nudgedKey) as? [String: Date]) ?? [:]
@@ -151,7 +154,7 @@ final class ConnectionMonitor {
         Task {
             let added = await Task.detached { Self.add(.codex, mcp: mcp) }.value
             note = (before + [added.message]).joined(separator: " ")
-            if added.ok { _ = await Task.detached { Self.login(.codex) }.value }       // opens the browser to sign in, and waits
+            if added.ok && added.needsLogin { _ = await Task.detached { Self.login(.codex) }.value }       // only if the add didn't already sign in
             busy = nil
             await refresh(full: true)
         }
@@ -167,18 +170,17 @@ final class ConnectionMonitor {
         else { openSettings?() }                                            // only Codex is left: the button that adds it is in Settings
     }
 
-    struct Added: Sendable { var ok: Bool; var message: String }
+    struct Added: Sendable { var ok: Bool; var message: String; var needsLogin = false }
 
+    /// `codex mcp add` already starts the browser sign-in and waits for it, so it gets as long as a person needs. Its own words tell us what happened.
     nonisolated static func add(_ s: Surface, mcp: String) -> Added {
-        let name = ConnectionLogic.serverName
-        let (tool, args) = ("codex", ["mcp", "add", name, "--url", mcp])
-        guard let exe = AgentRunner.locate(tool) else { return Added(ok: false, message: "\(s.name) wasn't found on this Mac.") }
-        let r = Probe.run(exe, args, timeout: 30, mergeErrors: true) ?? ""
-        let first = r.split(whereSeparator: \.isNewline).first.map { String($0.prefix(140)) } ?? "no answer"
-        let exists = r.lowercased().contains("already exists")
-        let ok = exists || r.lowercased().contains("added") || (s == .codex && !r.lowercased().contains("error"))
-        if !ok { return Added(ok: false, message: "\(s.name) said: \(first)") }
-        return Added(ok: true, message: "Added to Codex. Finish signing in in your browser.")
+        guard let exe = AgentRunner.locate("codex") else { return Added(ok: false, message: "Codex wasn't found on this Mac.") }
+        let r = Probe.run(exe, ["mcp", "add", ConnectionLogic.serverName, "--url", mcp], timeout: 300, mergeErrors: true) ?? ""
+        let low = r.lowercased(), lines = r.split(whereSeparator: \.isNewline).map { String($0.prefix(160)) }
+        if low.contains("successfully logged in") { return Added(ok: true, message: "Added to Codex and signed in.") }
+        if let err = lines.first(where: { $0.lowercased().hasPrefix("error") }) { return Added(ok: false, message: "Codex said: \(err)") }
+        if low.contains("already exists") || low.contains("added") { return Added(ok: true, message: "Added to Codex. Finish signing in in your browser.", needsLogin: true) }
+        return Added(ok: false, message: "Codex said: \(lines.first ?? "nothing")")
     }
 
     nonisolated static func login(_ s: Surface) -> Bool {
