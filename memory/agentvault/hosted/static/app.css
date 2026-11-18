@@ -445,9 +445,17 @@
   .page-head h1 { font-size: var(--step-3); }
   .page-head .who { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; color: var(--text-dim); }
   .stack { display: grid; gap: 1.25rem; padding-block-end: 1rem; }
+  .stack > * { min-inline-size: 0; }      /* a long command inside a card scrolls inside it; it never widens the page */
   .card h2 { font-size: var(--step-2); }
   .card .card-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.5rem 1rem; margin-block-end: 1.1rem; }
   .card .card-head p { color: var(--text-dim); font-size: var(--step--1); }
+  .card .card-head.split { align-items: flex-start; flex-wrap: nowrap; }
+  .card .card-head.split > div { display: grid; gap: 0.35rem; min-inline-size: 0; }
+  .card .card-head.split .chip { flex: none; margin-block-start: 0.45rem; white-space: nowrap; }
+  @media (max-width: 30rem) { .card .card-head.split { flex-wrap: wrap; } .card .card-head.split .chip { margin-block-start: 0; } }
+  /* the one thing to press, with room around it, then a hairline before the steps */
+  .card .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.25rem; padding-block-end: 1.5rem; margin-block-end: 1.5rem; border-block-end: 1px solid var(--line); }
+  .card .cta .hint { flex: 1 1 14rem; min-inline-size: 0; }
 
   .checklist { list-style: none; padding: 0; display: grid; gap: 0; counter-reset: c; }
   .checklist > li { counter-increment: c; display: grid; grid-template-columns: 2.25rem minmax(0, 1fr); gap: 0 1rem; padding-block: 1.25rem; border-block-start: 1px solid var(--line); }
@@ -459,12 +467,22 @@
   .checklist li[data-done] .dot::before { content: "✓"; font-weight: 700; }
   .checklist h3 { font: 600 1.05rem/1.3 var(--font-body); letter-spacing: 0; padding-block-start: 0.3rem; }
   .checklist .body { grid-column: 2; display: grid; gap: 0.75rem; margin-block-start: 0.5rem; color: var(--text-dim); font-size: 0.97rem; }
-  .checklist details { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0 1rem; }
-  .checklist details summary { padding-block: 0.8rem; min-block-size: 44px; font-weight: 550; color: var(--text); list-style: none; display: flex; justify-content: space-between; align-items: center; }
-  .checklist details summary::-webkit-details-marker { display: none; }
-  .checklist details summary::after { content: "+"; font: 400 1.4rem/1 var(--font-mono); color: var(--accent-text); transition: rotate var(--dur) var(--ease); }
-  .checklist details[open] summary::after { rotate: 45deg; }
-  .checklist details > :not(summary) { padding-block-end: 1rem; }
+  /* a disclosure: the arrow sits beside its label, turns when open, and the answer slides rather than jumps */
+  .card details { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0 1rem; }
+  .card > details { margin-block-start: 1.5rem; }
+  .card details .copybox code { white-space: pre; overflow-x: auto; }      /* a command is read whole: scroll it, never break it mid-flag */
+  .card details summary { padding-block: 0.8rem; min-block-size: 44px; font-weight: 550; font-size: 0.97rem; color: var(--text); list-style: none; display: flex; align-items: center; gap: 0.6rem; }
+  .card details summary::-webkit-details-marker { display: none; }
+  .card details summary::before { content: ""; flex: none; inline-size: 1rem; block-size: 1rem; background: var(--accent-text); mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E") center / contain no-repeat; rotate: -90deg; }
+  .card details:dir(rtl) summary::before { rotate: 90deg; }
+  .card details[open] summary::before { rotate: 0deg; }
+  .card details > :not(summary) { padding-block-end: 1rem; }
+  .card details > p { color: var(--text-dim); font-size: 0.97rem; margin-block-end: 0.75rem; }
+  @media (prefers-reduced-motion: no-preference) {
+    .card details summary::before { transition: rotate var(--dur-quick) var(--ease); }
+    .card details::details-content { interpolate-size: allow-keywords; overflow: clip; contain: layout; transition: block-size var(--dur) var(--ease), content-visibility var(--dur) allow-discrete; }
+    .card details:not([open])::details-content { block-size: 0; }
+  }
 
   .devices { list-style: none; padding: 0; display: grid; gap: 0; }
   .devices li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem 1rem; padding-block: 0.9rem; border-block-start: 1px solid var(--line); }

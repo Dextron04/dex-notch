@@ -541,10 +541,10 @@ def connect(mcp_url: str, user: Optional[str] = None, assistants: Optional[dict]
 </section>
 
 <section class="card" id="claude" aria-labelledby="claude-title">
-<div class="card-head"><h2 id="claude-title">Claude</h2><p>claude.ai, the desktop app, your phone and Claude Code {_state(a.get("claude") if user else None)}</p></div>
-<p><a class="btn btn-sm" href="{esc(add_to_claude(mcp_url))}" target="_blank" rel="noopener">Add to Claude</a></p>
+<div class="card-head split"><div><h2 id="claude-title">Claude</h2><p>claude.ai, the desktop app, your phone and Claude Code</p></div>{_state(a.get("claude") if user else None)}</div>
+<div class="cta"><a class="btn" href="{esc(add_to_claude(mcp_url))}" target="_blank" rel="noopener">Add to Claude</a><p class="hint">Opens Claude with Dex Memory filled in. You confirm it there.</p></div>
 <ol class="checklist">
-<li><span class="dot" aria-hidden="true"></span><h3>Add the connector</h3><div class="body"><p>The button above opens Claude with Dex Memory ready to add. Or do it by hand: <b>Settings → Connectors → Add custom connector</b>, name it Dex Memory, and paste the address above.</p></div></li>
+<li><span class="dot" aria-hidden="true"></span><h3>Add the connector</h3><div class="body"><p>Press the button above, or do it by hand: <b>Settings → Connectors → Add custom connector</b>, name it Dex Memory, and paste the address above.</p></div></li>
 <li><span class="dot" aria-hidden="true"></span><h3>Sign in and allow</h3><div class="body"><p>Claude opens this site. Sign in and press <b>Allow</b>.</p></div></li>
 <li><span class="dot" aria-hidden="true"></span><h3>Try it</h3><div class="body"><p>Ask Claude <i>"what did I decide about the schema last week?"</i> It searches your memory. <b>Claude Code</b> on your Mac shares the connectors on your Claude account, so it picks this one up too.</p></div></li>
 </ol>
@@ -553,7 +553,7 @@ def connect(mcp_url: str, user: Optional[str] = None, assistants: Optional[dict]
 </section>
 
 <section class="card" id="chatgpt" aria-labelledby="chatgpt-title">
-<div class="card-head"><h2 id="chatgpt-title">ChatGPT</h2><p>chatgpt.com, the apps and Codex {_state(a.get("chatgpt") if user else None)}</p></div>
+<div class="card-head split"><div><h2 id="chatgpt-title">ChatGPT</h2><p>chatgpt.com, the apps and Codex</p></div>{_state(a.get("chatgpt") if user else None)}</div>
 <ol class="checklist">
 <li><span class="dot" aria-hidden="true"></span><h3>Add the connector</h3><div class="body"><p>Open <b>Settings → Connectors</b> and create a connector. ChatGPT may ask you to turn on developer mode first. Name it Dex Memory, paste the address above, and choose <b>OAuth</b> for authentication.</p></div></li>
 <li><span class="dot" aria-hidden="true"></span><h3>Sign in and allow</h3><div class="body"><p>ChatGPT opens this site. Sign in and press <b>Allow</b>.</p></div></li>
