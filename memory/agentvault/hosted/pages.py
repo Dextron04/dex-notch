@@ -555,7 +555,8 @@ def connect(mcp_url: str, user: Optional[str] = None, assistants: Optional[dict]
 <section class="card" id="chatgpt" aria-labelledby="chatgpt-title">
 <div class="card-head split"><div><h2 id="chatgpt-title">ChatGPT</h2><p>chatgpt.com, the apps and Codex</p></div>{_state(a.get("chatgpt") if user else None)}</div>
 <ol class="checklist">
-<li><span class="dot" aria-hidden="true"></span><h3>Add the connector</h3><div class="body"><p>Open <b>Settings → Connectors</b> and create a connector. ChatGPT may ask you to turn on developer mode first. Name it Dex Memory, paste the address above, and choose <b>OAuth</b> for authentication.</p></div></li>
+<li><span class="dot" aria-hidden="true"></span><h3>Add the connector</h3><div class="body"><p>Open <b>Settings → Connectors</b> and create a connector. ChatGPT may ask you to turn on developer mode first. Name it Dex Memory, paste this address, and choose <b>OAuth</b> for authentication.</p>
+{_cmd("cmd-chatgpt-url", mcp_url)}</div></li>
 <li><span class="dot" aria-hidden="true"></span><h3>Sign in and allow</h3><div class="body"><p>ChatGPT opens this site. Sign in and press <b>Allow</b>.</p></div></li>
 <li><span class="dot" aria-hidden="true"></span><h3>Add it to Codex too</h3><div class="body"><p>ChatGPT on the web doesn't hand its connectors to <b>Codex</b>, so Codex needs its own copy. Dex Notch on your Mac does this when you press Connect in Settings → Memory, or run these commands. The first opens your browser to sign in; the second is only needed if it didn't:</p>
 <div id="codex">{_cmd("cmd-codex", "codex mcp add dex-memory --url " + mcp_url)}{_cmd("cmd-codex-login", "codex mcp login dex-memory")}</div></div></li>

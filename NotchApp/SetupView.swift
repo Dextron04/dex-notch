@@ -616,7 +616,7 @@ struct SetupView: View {
                 row(title: s.name, detail: st.detail,
                     lead: { Image(systemName: st.state == .connected ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(st.state == .connected ? Ink.ember : Ink.dim) },
                     trail: { if st.state != .connected && mon.report != nil {
-                        link(mon.busy == s ? "Working…" : s == .claude ? "Add in Claude" : st.state == .needsSignIn ? "Sign in" : "Connect") { mon.connect(s) }
+                        link(mon.busy == s ? "Working…" : s == .claude ? "Add in Claude" : st.state == .needsSignIn ? "Sign in" : "Show the steps") { mon.connect(s) }
                     } })
             }
             HStack(spacing: 18) {
