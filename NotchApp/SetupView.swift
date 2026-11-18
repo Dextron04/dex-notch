@@ -120,6 +120,7 @@ enum SetupPane: String, CaseIterable, Identifiable {
 
 /// One quiet window: a rail to pick the pane, one pane at a time, plain rows divided by hairlines. Same ink and ember as the notch.
 struct SetupView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     static let width: CGFloat = 780
     @Bindable var m: SetupModel
     var height: CGFloat = 600
@@ -238,6 +239,14 @@ struct SetupView: View {
     }
     private func row<L: View, T: View>(title: String, detail: String? = nil, mono: Bool = false, pad: CGFloat = 15, muted: Bool = false, @ViewBuilder lead: () -> L, @ViewBuilder trail: () -> T) -> some View {
         row(title: title, detail: detail, mono: mono, pad: pad, muted: muted, lead: lead, trail: trail, extra: { EmptyView() })
+    }
+
+    /// The one button that matters on a card: the same ember capsule as Continue.
+    private func primaryButton(_ title: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(.black).lineLimit(1).fixedSize()
+                .padding(.horizontal, 18).padding(.vertical, 7).background(Capsule().fill(Ink.ember)).contentShape(Capsule())
+        }.buttonStyle(.plain)
     }
 
     private func link(_ title: String, dim: Bool = false, _ action: @escaping () -> Void) -> some View {
@@ -529,6 +538,7 @@ struct SetupView: View {
                     lead: { Image(systemName: "ladybug").font(.system(size: 16)).foregroundStyle(Ink.dim) },
                     trail: { HStack(spacing: 18) {
                         link("Copy diagnostics") { m.copyDiagnostics(center: center) }
+                        link("Install guide", dim: true) { NSWorkspace.shared.open(Diagnostics.guideURL) }
                         link("Report a problem", dim: true) { NSWorkspace.shared.open(Diagnostics.issueURL) }
                     } })
                 getStartedCard
@@ -555,20 +565,21 @@ struct SetupView: View {
                 Text("Then, in a new chat: “\(ConnectionLogic.secondPrompt)”").font(.system(size: 13)).foregroundStyle(Ink.dim)
             }
             if let step {
-                link(t.button) {
+                primaryButton(t.button) {
                     switch step {
                     case .vault: mon.lockVault()
                     case .record: rec.install()
                     case .connect: mon.connect(.claude)
                     case .firstChat: NSPasteboard.general.clearContents(); NSPasteboard.general.setString(ConnectionLogic.firstPrompt, forType: .string); mon.note = "Copied. Paste it into Claude or ChatGPT."
                     }
-                }.padding(.top, 2)
+                }.padding(.top, 4)
                 if step == .connect { link("or ChatGPT", dim: true) { mon.connect(.chatgpt) } }
             }
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12).fill(Ink.text.opacity(0.06)))
         .padding(.vertical, 12)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: step)          // the card eases into the next step; nothing moves for people who asked for less motion
     }
 
     private var recorderRow: some View {

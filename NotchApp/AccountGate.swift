@@ -193,6 +193,7 @@ struct GateView: View {
             .toggleStyle(.switch).padding(16).background(RoundedRectangle(cornerRadius: 12).fill(Ink.text.opacity(0.06))).padding(.bottom, 26)
             primary("Continue in browser") { g.begin() }
             HStack(spacing: 22) {
+                quiet("Install guide") { NSWorkspace.shared.open(Diagnostics.guideURL) }
                 quiet("Privacy") { NSWorkspace.shared.open(URL(string: "https://github.com/Dextron04/dex-notch/blob/master/PRIVACY.md")!) }
                 quiet("Quit") { NSApp.terminate(nil) }
             }.padding(.top, 18)

@@ -115,6 +115,7 @@ enum HostedAPI {
 /// The text a tester pastes into a bug report. Facts about setup only: no email address, token, mail account name, folder path or conversation text.
 enum Diagnostics {
     static let issueURL = URL(string: "https://github.com/Dextron04/dex-notch/issues/new")!
+    static let guideURL = URL(string: "https://github.com/Dextron04/dex-notch/blob/master/docs/install.md")!
 
     static func report(version: String, macOS: String, host: String?, uploads: Bool, lastConfirmed: Date?, phoneAlerts: Bool, fullDiskAccess: Bool,
                        macAlerts: Bool, mailAccounts: Int, now: Date = Date()) -> String {
