@@ -16,6 +16,10 @@
 </p>
 
 <p align="center">
+  [![M8ven Score](https://m8ven.ai/badge/mcp/dextron04-dex-notch-1n66qe?v=d04d336eea84064f4e70bd3a0d805b55)](https://m8ven.ai/mcp/dextron04-dex-notch-1n66qe?s=readme)
+</p>
+
+<p align="center">
   <b>Press a key. The notch opens. Ask Claude, Codex or a model on your own server, every conversation you have with any AI lands in one searchable memory they can all read, and when an email that actually needs you arrives (Gmail or Outlook), or a notification from your iPhone, the notch tells you in two lines.</b>
 </p>
 
