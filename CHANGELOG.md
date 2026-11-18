@@ -6,6 +6,29 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.9.2: Honest ChatGPT steps, and Allow works with Touch ID
+
+*18 November 2026*
+
+- **The ChatGPT button says what it does.** ChatGPT has no one-click link the way Claude does, so **Connect** on the ChatGPT row could only open written steps, which looked like nothing had happened. It now reads **Show the steps**, and the steps put your address in a box with a **Copy** button right where you paste it. If Codex is installed, the same button still adds Dex Memory to Codex and opens its sign-in.
+
+  <p align="center">
+    <img src="docs/assets/shot-connect-chatgpt.png" alt="The ChatGPT card on the Connect page: three steps, with the address in a box with a Copy button in the first one, and the two Codex commands below." width="720">
+  </p>
+
+- **A tidier Connect page.** Each assistant card has its title and status on one line, the **Add to Claude** button in its own row with a line saying what it does, and a proper "Claude Code didn't pick it up?" row that opens smoothly. Commands wrap cleanly, or scroll on a phone, instead of breaking mid-flag.
+
+  <p align="center">
+    <img src="docs/assets/shot-connect-claude.png" alt="The Claude card on the Connect page: the Add to Claude button with its explanation, three numbered steps, and the opened Claude Code row with its command." width="720">
+  </p>
+  <p align="center">
+    <img src="docs/assets/gif-connect.gif" alt="The Claude Code row opening and closing on the Connect page." width="560"><br>
+    <a href="docs/assets/gif-connect.mp4">Watch it as a video</a>
+  </p>
+
+- **Allow works if you locked your vault with Touch ID.** A vault made with a passkey has no passphrase, but the Allow page still asked for one you couldn't type, so pressing **Allow** appeared to do nothing. The page now asks for your touch, and Allow does the touch itself. The same goes for adding a Mac and downloading your data. This and the next point are on the website, so they are already live for everyone and need no update.
+- **Codex and Claude Code can finish signing in.** Their sign-in returns to a local address on your own Mac, and the website's page policy blocked that final step even after the server accepted it. It now allows exactly that and nothing else.
+
 ## v0.9.1: One app to set up, and a guide for your first hour
 
 *18 November 2026*

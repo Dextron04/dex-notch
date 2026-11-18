@@ -445,6 +445,8 @@
   .page-head h1 { font-size: var(--step-3); }
   .page-head .who { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; color: var(--text-dim); }
   .stack { display: grid; gap: 1.25rem; padding-block-end: 1rem; }
+  #codex { display: grid; gap: 0.6rem; }      /* two commands side by side need air between them */
+  .card .checklist + .hint { margin-block-start: 1.25rem; }
   .stack > * { min-inline-size: 0; }      /* a long command inside a card scrolls inside it; it never widens the page */
   .card h2 { font-size: var(--step-2); }
   .card .card-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.5rem 1rem; margin-block-end: 1.1rem; }
@@ -470,13 +472,13 @@
   /* a disclosure: the arrow sits beside its label, turns when open, and the answer slides rather than jumps */
   .card details { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0 1rem; }
   .card > details { margin-block-start: 1.5rem; }
-  .card details .copybox code { white-space: pre; overflow-x: auto; }      /* a command is read whole: scroll it, never break it mid-flag */
+  @media (max-width: 40rem) { .card details .copybox code { white-space: pre; overflow-x: auto; } }      /* on a phone a command scrolls rather than breaking mid-flag; wider, it simply wraps */
   .card details summary { padding-block: 0.8rem; min-block-size: 44px; font-weight: 550; font-size: 0.97rem; color: var(--text); list-style: none; display: flex; align-items: center; gap: 0.6rem; }
   .card details summary::-webkit-details-marker { display: none; }
   .card details summary::before { content: ""; flex: none; inline-size: 1rem; block-size: 1rem; background: var(--accent-text); mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E") center / contain no-repeat; rotate: -90deg; }
   .card details:dir(rtl) summary::before { rotate: 90deg; }
   .card details[open] summary::before { rotate: 0deg; }
-  .card details > :not(summary) { padding-block-end: 1rem; }
+  .card details > :last-child { margin-block-end: 1rem; }      /* room under the last thing inside, outside its own box */
   .card details > p { color: var(--text-dim); font-size: 0.97rem; margin-block-end: 0.75rem; }
   @media (prefers-reduced-motion: no-preference) {
     .card details summary::before { transition: rotate var(--dur-quick) var(--ease); }
