@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="#get-started-in-two-minutes">Install</a> &nbsp;|&nbsp; <a href="CHANGELOG.md">What's new</a> &nbsp;|&nbsp; <a href="#add-ons-mail-and-iphone">Mail and iPhone alerts</a> &nbsp;|&nbsp; <a href="PRIVACY.md">Privacy</a>
+  <a href="docs/install.md">Install guide</a> &nbsp;|&nbsp; <a href="#get-started-in-two-minutes">Quick start</a> &nbsp;|&nbsp; <a href="CHANGELOG.md">What's new</a> &nbsp;|&nbsp; <a href="#add-ons-mail-and-iphone">Mail and iPhone alerts</a> &nbsp;|&nbsp; <a href="PRIVACY.md">Privacy</a>
 </p>
 
 <p align="center">

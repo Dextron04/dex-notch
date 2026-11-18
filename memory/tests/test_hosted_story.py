@@ -1,4 +1,4 @@
-import json, sys, tempfile, threading, unittest
+import json, sys, urllib.parse, tempfile, threading, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -70,6 +70,7 @@ class ConnectPageTests(unittest.TestCase):
         st, _, body = call("GET", self.base + "/connect"); self.assertEqual(st, 200)
         for word in ("Claude", "ChatGPT", "claude mcp add --transport http --scope user dex-memory " + PUB + "/mcp", "codex mcp add dex-memory --url " + PUB + "/mcp", "codex mcp login dex-memory"): self.assertIn(word, body)
         self.assertNotIn("Not connected yet", body)      # signed out: nothing is claimed about status
+        self.assertIn("modal=add-custom-connector&amp;connectorName=Dex%20Memory&amp;connectorUrl=" + urllib.parse.quote(PUB + "/mcp", safe=""), body)   # Claude's own prefilled dialog
 
     def test_me_and_the_page_say_which_assistants_are_connected(self):
         from agentvault.hosted import devices

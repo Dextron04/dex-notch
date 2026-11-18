@@ -1,6 +1,7 @@
 """Every page the hosted service shows to a person. Plain functions that return HTML; the server decides which one, this decides how it reads.
 Copy rule: say what happens, in the order it happens, without drama."""
 import json, time
+from urllib.parse import quote
 from typing import List, Optional
 from .ui import CHECK, CROSS, MAIL, PRIVACY, RELEASES, STORY, TERMS, REPO, esc, hidden, layout
 
@@ -327,7 +328,7 @@ def need_plan(user: str, checkout_link: Optional[str]) -> str:
 
 def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: List[dict], mcp_url: str, connected: bool, used_bytes: int, quota_bytes: int, notes: int,
             now: Optional[float] = None, usable: Optional[bool] = None, encrypted: bool = False, can_encrypt: bool = False, flash: str = "",
-            passkeys: Optional[List[dict]] = None, unlocked: bool = False, has_passphrase: bool = True, rp_id: str = "", passkey_user: str = "") -> str:
+            passkeys: Optional[List[dict]] = None, unlocked: bool = False, has_passphrase: bool = True, rp_id: str = "", passkey_user: str = "", progress: Optional[set] = None) -> str:
     now = now or time.time()
     usable = entitled if usable is None else usable
     tone, label = {"active": ("ok", "Active"), "past_due": ("warn", "Payment issue"), "canceled": ("warn", "Canceled"), "pending": ("ok", "Free plan")}.get(status, ("warn", status.title()))
@@ -356,7 +357,9 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
                + _passkey("add", "Add a passkey") + '</section>') if (encrypted or not can_encrypt) else ""
     pct = 0 if quota_bytes is None else min(100, used_bytes * 100 // max(quota_bytes, 1))
     used = "%.1f MB" % (used_bytes / 1048576) if used_bytes >= 104858 else "under 0.1 MB"
-    step2 = "data-done" if devices else ""
+    progress = progress or set()
+    steps = [bool(devices)] + ([encrypted] if can_encrypt else []) + ["uploaded" in progress, connected, "assistant_used" in progress]
+    done_n = sum(1 for x in steps if x)
     body = f"""
 <div class="wrap">
 <header class="page-head">
@@ -368,19 +371,24 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
 {('<div class="notice" role="status"><span><b>Lock your vault to keep your Mac and assistants working.</b> Until you do, they are paused and your saved notes are not encrypted. <a href="#vault-title">Lock it now</a>.</span></div>') if can_encrypt and not encrypted else ""}
 <div class="stack">
 <section class="card" aria-labelledby="setup-title">
-<div class="card-head"><h2 id="setup-title">Get set up</h2><p>About two minutes</p></div>
+<div class="card-head"><h2 id="setup-title">Get set up</h2><p>{done_n} of {len(steps)} done</p></div>
 <ol class="checklist">
-<li><span class="dot" aria-hidden="true"></span><h3>Install Dex Notch</h3>
-<div class="body"><p>Version 0.8 or later. It needs macOS 14.</p><div class="row-actions"><a class="btn btn-ghost btn-sm" href="{RELEASES}">Download for Mac</a></div></div></li>
-<li {step2}><span class="dot" aria-hidden="true"></span><h3>Add this Mac</h3>
-<div class="body"><p>Open Dex Notch on the Mac. It opens a page in your browser; sign in, check the code matches and tap <b>Add this Mac</b>. Your history starts uploading within a minute (you can turn that off in Settings → Memory).</p></div></li>
+<li {"data-done" if devices else ""}><span class="dot" aria-hidden="true"></span><h3>Install Dex Notch and sign in</h3>
+<div class="body"><p>Version 0.9 or later, on macOS 14 or newer. Open it, press <b>Continue in browser</b>, and check that the code on the page matches the one on your Mac.</p><div class="row-actions"><a class="btn btn-ghost btn-sm" href="{RELEASES}">Download for Mac</a><a class="btn btn-quiet btn-sm" href="{REPO}/blob/master/docs/install.md">Install guide</a></div></div></li>
+{('<li %s><span class="dot" aria-hidden="true"></span><h3>Lock your vault</h3><div class="body"><p>Choose Touch ID or a passphrase, and keep the recovery code. Your notes are encrypted with a key only you can open.%s</p></div></li>' % ("data-done" if encrypted else "", "" if encrypted else ' <a href="#vault-title">Lock it now</a>')) if can_encrypt else ""}
+<li {"data-done" if "uploaded" in progress else ""}><span class="dot" aria-hidden="true"></span><h3>Record your conversations</h3>
+<div class="body"><p>Dex Notch starts a small helper after you sign in that saves your Claude Code, Codex and Gemini conversations and uploads them. This step is done when the first ones arrive. If it isn't, open <b>Settings → Memory</b> in Dex Notch and press <b>Start recording</b>.</p></div></li>
 <li {"data-done" if connected else ""}><span class="dot" aria-hidden="true"></span><h3>Connect Claude or ChatGPT{' <span class="chip" data-tone="ok"><i></i>Connected</span>' if connected else ''}</h3>
-<div class="body"><p><b>In Claude:</b> open <b>Settings → Connectors → Add custom connector</b>, name it Dex Memory, and paste this address.</p>
+<div class="body"><p><a class="btn btn-sm" href="{esc(add_to_claude(mcp_url))}" target="_blank" rel="noopener">Add to Claude</a> opens Claude with Dex Memory ready to add: confirm it, sign in as <span class="mono">{esc(email)}</span>, and press <b>Allow</b>. For ChatGPT, or to do it by hand, paste this address:</p>
 <div class="copybox"><code id="mcp-url">{esc(mcp_url)}</code><button class="btn btn-ghost btn-sm" type="button" data-copy-from="mcp-url">Copy</button></div>
-<p>Claude then opens this site. Sign in as <span class="mono">{esc(email)}</span> and tap <b>Allow</b>. That's all: ask Claude "what did I decide about…" and it searches your memory.</p>
-<details><summary>Already have an older Dex connector?</summary><p>Remove it in the same Connectors list first, then add this one. The old one points at a previous vault that no longer updates.</p></details>
 <p><a href="/connect">Step-by-step for Claude, ChatGPT, Claude Code and Codex</a></p>
-<details><summary>ChatGPT</summary><p>Settings → Connectors, then create a connector (it may need developer mode). Use the same address and the same sign-in.</p></details></div></li>
+<details><summary>Already have an older Dex connector?</summary><p>Remove it in the same Connectors list first, then add this one. The old one points at a previous vault that no longer updates.</p></details></div></li>
+<li {"data-done" if "assistant_used" in progress else ""}><span class="dot" aria-hidden="true"></span><h3>Have your first conversation{' <span class="chip" data-tone="ok"><i></i>Done</span>' if "assistant_used" in progress else ''}</h3>
+<div class="body"><p>In Claude or ChatGPT, paste this:</p>
+<div class="copybox"><code id="try-1">Remember this for me: I'm trying out Dex Memory, and my favorite color is amber.</code><button class="btn btn-ghost btn-sm" type="button" data-copy-from="try-1">Copy</button></div>
+<p>Then open a <b>new</b> chat, in the same assistant or the other one, and paste:</p>
+<div class="copybox"><code id="try-2">Search my Dex memory: what did I say my favorite color was?</code><button class="btn btn-ghost btn-sm" type="button" data-copy-from="try-2">Copy</button></div>
+<p class="hint">If it answers "amber", everything works: each assistant can use what the others saved. Conversations you have in Claude Code, Codex or Gemini are saved on their own, so you can also ask <i>"what did I work on in Claude Code today?"</i></p></div></li>
 </ol>
 </section>
 
@@ -506,10 +514,14 @@ def _cmd(cid: str, text: str) -> str:
 def _state(on: Optional[bool]) -> str:
     return "" if on is None else ('<span class="chip" data-tone="ok"><i></i>Connected</span>' if on else '<span class="chip" data-tone="warn"><i></i>Not connected yet</span>')
 
+def add_to_claude(mcp_url: str) -> str:
+    """claude.ai's add-a-custom-connector dialog with the name and address filled in (documented by Anthropic); the person confirms there."""
+    return "https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Dex%20Memory&connectorUrl=" + quote(mcp_url, safe="")
+
 def connect(mcp_url: str, user: Optional[str] = None, assistants: Optional[dict] = None, encrypted: bool = False) -> str:
     a = assistants or {}
     who = ("Signed in as <b class=\"mono\">%s</b>. " % esc(user)) if user else '<a href="/login">Sign in</a> to see which are connected. '
-    unlock = " You'll be asked for your vault passphrase on the way." if encrypted else ""
+    unlock = " You'll be asked for your vault passphrase, or a touch, on the way." if encrypted else ""
     body = f"""
 <div class="wrap">
 <header class="page-head">
@@ -525,34 +537,26 @@ def connect(mcp_url: str, user: Optional[str] = None, assistants: Optional[dict]
 </section>
 
 <section class="card" id="claude" aria-labelledby="claude-title">
-<div class="card-head"><h2 id="claude-title">Claude</h2><p>claude.ai, the desktop app and your phone {_state(a.get("claude") if user else None)}</p></div>
+<div class="card-head"><h2 id="claude-title">Claude</h2><p>claude.ai, the desktop app, your phone and Claude Code {_state(a.get("claude") if user else None)}</p></div>
+<p><a class="btn btn-sm" href="{esc(add_to_claude(mcp_url))}" target="_blank" rel="noopener">Add to Claude</a></p>
 <ol class="checklist">
-<li><span class="dot" aria-hidden="true"></span><h3>Add the connector</h3><div class="body"><p>Open <b>Settings → Connectors → Add custom connector</b>, name it Dex Memory, and paste the address above.</p></div></li>
-<li><span class="dot" aria-hidden="true"></span><h3>Sign in and allow</h3><div class="body"><p>Claude opens this site. Sign in with your email link and press <b>Allow</b>.</p></div></li>
-<li><span class="dot" aria-hidden="true"></span><h3>Try it</h3><div class="body"><p>Ask Claude <i>"what did I decide about the schema last week?"</i> It searches your memory. Claude Code on your Mac usually picks the same connector up on its own.</p></div></li>
+<li><span class="dot" aria-hidden="true"></span><h3>Add the connector</h3><div class="body"><p>The button above opens Claude with Dex Memory ready to add. Or do it by hand: <b>Settings → Connectors → Add custom connector</b>, name it Dex Memory, and paste the address above.</p></div></li>
+<li><span class="dot" aria-hidden="true"></span><h3>Sign in and allow</h3><div class="body"><p>Claude opens this site. Sign in and press <b>Allow</b>.</p></div></li>
+<li><span class="dot" aria-hidden="true"></span><h3>Try it</h3><div class="body"><p>Ask Claude <i>"what did I decide about the schema last week?"</i> It searches your memory. <b>Claude Code</b> on your Mac shares the connectors on your Claude account, so it picks this one up too.</p></div></li>
 </ol>
+<details id="claude-code"><summary>Claude Code didn't pick it up?</summary><p>Add it from the terminal, then start <code>claude</code>, type <code>/mcp</code>, choose <b>dex-memory</b> and sign in:</p>
+{_cmd("cmd-claude", "claude mcp add --transport http --scope user dex-memory " + mcp_url)}</details>
 </section>
 
 <section class="card" id="chatgpt" aria-labelledby="chatgpt-title">
-<div class="card-head"><h2 id="chatgpt-title">ChatGPT</h2><p>chatgpt.com and the apps {_state(a.get("chatgpt") if user else None)}</p></div>
+<div class="card-head"><h2 id="chatgpt-title">ChatGPT</h2><p>chatgpt.com, the apps and Codex {_state(a.get("chatgpt") if user else None)}</p></div>
 <ol class="checklist">
 <li><span class="dot" aria-hidden="true"></span><h3>Add the connector</h3><div class="body"><p>Open <b>Settings → Connectors</b> and create a connector. ChatGPT may ask you to turn on developer mode first. Name it Dex Memory, paste the address above, and choose <b>OAuth</b> for authentication.</p></div></li>
 <li><span class="dot" aria-hidden="true"></span><h3>Sign in and allow</h3><div class="body"><p>ChatGPT opens this site. Sign in and press <b>Allow</b>.</p></div></li>
-<li><span class="dot" aria-hidden="true"></span><h3>Use it across assistants</h3><div class="body"><p>Tell Claude <i>"remember this conversation"</i>, then ask ChatGPT about it. Both read and write the same memory.</p></div></li>
+<li><span class="dot" aria-hidden="true"></span><h3>Add it to Codex too</h3><div class="body"><p>ChatGPT on the web doesn't hand its connectors to <b>Codex</b>, so Codex needs its own copy. Dex Notch on your Mac does this when you press Connect in Settings → Memory, or run these two commands:</p>
+<div id="codex">{_cmd("cmd-codex", "codex mcp add dex-memory --url " + mcp_url)}{_cmd("cmd-codex-login", "codex mcp login dex-memory")}</div></div></li>
 </ol>
-</section>
-
-<section class="card" id="claude-code" aria-labelledby="cc-title">
-<div class="card-head"><h2 id="cc-title">Claude Code</h2><p>in the terminal</p></div>
-{_cmd("cmd-claude", "claude mcp add --transport http --scope user dex-memory " + mcp_url)}
-<p class="hint">Then start <code>claude</code>, type <code>/mcp</code>, choose <b>dex-memory</b> and sign in. Dex Notch on your Mac can run the first command for you: Settings → Memory → Connections.</p>
-</section>
-
-<section class="card" id="codex" aria-labelledby="codex-title">
-<div class="card-head"><h2 id="codex-title">Codex</h2><p>in the terminal</p></div>
-{_cmd("cmd-codex", "codex mcp add dex-memory --url " + mcp_url)}
-{_cmd("cmd-codex-login", "codex mcp login dex-memory")}
-<p class="hint">The second command opens your browser to sign in. Dex Notch on your Mac can do both for you: Settings → Memory → Connections.</p>
+<p class="hint">Then tell Claude <i>"remember this conversation"</i> and ask ChatGPT about it. Both read and write the same memory.</p>
 </section>
 
 <section class="card" id="save" aria-labelledby="save-title">

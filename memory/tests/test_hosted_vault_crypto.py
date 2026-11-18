@@ -107,7 +107,7 @@ class EncryptedVaultTests(unittest.TestCase):
         self.assertIn("pineapple", self.mcp(t2["access_token"], "vault_search", {"query": "pineapple"}))   # the key follows the rotating refresh token
 
     def test_a_wrong_passphrase_opens_nothing_and_tries_are_limited(self):
-        ck = self.session(); self.lock(ck)
+        self.lock(self.session()); ck = self.session()          # a fresh email-link session is shut: the one that just set the passphrase stays open
         page, got = self.link(ck, "not the passphrase"); self.assertIn("isn&#x27;t right", page); self.assertEqual(got["status"], "pending")
         self.assertIsNone(self.connector_token(ck, "nope")[0])
         for _ in range(8): self.link(ck, "wrong again")

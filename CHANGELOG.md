@@ -6,6 +6,26 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.9.1: One app to set up, and a guide for your first hour
+
+*18 November 2026*
+
+- **Dex Notch records your conversations by itself.** Until now the recorder was a separate install (a git clone and a script), so a new tester signed up and nothing uploaded. The app now carries it: after you sign up it starts a small helper in the background (Python, standard library only; it needs Python 3.9 or later, and tells you to run `xcode-select --install` if you have none), saves your Claude Code, Codex and Gemini conversations, uploads them, and imports your existing history once. **Settings → Memory → Record my conversations** shows whether it is running and stops it. If you already run the recorder from a checkout, the app leaves yours alone.
+- **A Get started card shows what to do next, and does it.** In **Settings → Memory**: lock your vault, start recording, connect Claude or ChatGPT, then have your first conversation, with the exact two lines to paste. Your account page has the same five steps, ticked off by what has really happened (your first conversations uploaded, an assistant using your memory), not by what you clicked.
+
+  <p align="center">
+    <img src="docs/assets/shot-getstarted.png" alt="The account page's Get set up card: install, lock your vault and record your conversations are ticked, 3 of 5 done, with an Add to Claude button for the next step" width="62%">
+  </p>
+
+- **Connecting Claude is one click.** **Add in Claude** opens Claude's own add-a-connector dialog with Dex Memory and its address already filled in; you confirm it there. Claude Code uses the same connection, so Settings → Memory now has two rows, **Claude** (with Claude Code) and **ChatGPT** (with Codex). ChatGPT has no prefilled link, and ChatGPT on the web doesn't pass connectors on to Codex, so the ChatGPT button opens its steps and, if Codex is installed, adds Dex Memory to Codex too.
+
+  <p align="center">
+    <img src="docs/assets/shot-addclaude.png" alt="The Connect page: an Add to Claude button above the steps, with Claude Code and ChatGPT with Codex below" width="62%">
+  </p>
+
+- **Fewer repeats.** Choosing a passphrase signs you in to the vault for the next hour, so adding your Mac right afterwards doesn't ask for it again.
+- **A full install guide**, [docs/install.md](docs/install.md): invitation to first conversation, what each step does, troubleshooting, uninstalling, building from source and running your own server. The invitation and welcome emails now walk through the same steps.
+
 ## v0.9.0: Locked vaults, an assistant checklist, and a page to connect them all
 
 *17 November 2026*

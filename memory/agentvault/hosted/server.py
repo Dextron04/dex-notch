@@ -463,8 +463,9 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                 if nxt == "/account": return self.account(flash=why)
                 self.html(200, pages.vault_setup(email, nxt, error=why))
             if f.get("passphrase") != f.get("confirm"): return again("The two passphrases don't match.")
-            try: code = keys.setup(store, uid, f.get("passphrase", ""))
+            try: code, key = keys.setup_with_key(store, uid, f.get("passphrase", ""))
             except keys.KeyError_ as e: return again(str(e))
+            auth.unlock_session(self.cookie(), key)       # they just typed it: adding their Mac a minute later should not ask again
             self.html(200, pages.vault_recovery(email, code, nxt))
 
         def vault_passphrase(self):
@@ -505,7 +506,8 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             d = devices.check(store, a[7:] if a.startswith("Bearer ") else "", now())
             if not d: return self.send(401, {"error": "unauthorized"})
             if not by_device.allow(d[1]): return self.send(429, {"error": "slow_down"})
-            self.send(200, {"email": store.email(d[0]), "status": store.status(d[0]), "entitled": store.entitled(d[0]), "device": d[1], "assistants": auth.assistants(d[0]), "vault_locked": store.encrypted(d[0])})
+            self.send(200, {"email": store.email(d[0]), "status": store.status(d[0]), "entitled": store.entitled(d[0]), "device": d[1], "assistants": auth.assistants(d[0]), "vault_locked": store.encrypted(d[0]),
+                            "progress": {"uploaded": "uploaded" in store.milestones(d[0]), "used": "assistant_used" in store.milestones(d[0]), "saved": "assistant_saved" in store.milestones(d[0])}})
 
         # -- account page: sign-out and the Macs allowed to upload
         def account(self, flash=""):
@@ -514,7 +516,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             vault = store.root / "data" / uid / "Vault"
             self.html(200, pages.account(email=store.email(uid), status=store.status(uid), entitled=store.entitled(uid), stripe=bool(stripe), devices=devices.listing(store, uid),
                                          mcp_url=public + "/mcp", connected=auth.connected(uid), used_bytes=vault_bytes(vault) if vault.is_dir() else 0, quota_bytes=store.quota(uid), usable=store.may_use(uid),
-                                         notes=len(session_files(vault)) if vault.is_dir() else 0, now=now(),
+                                         notes=len(session_files(vault)) if vault.is_dir() else 0, now=now(), progress=store.milestones(uid),
                                          encrypted=store.encrypted(uid), can_encrypt=encrypt, flash=flash, passkeys=store.passkeys(uid), unlocked=bool(self.session_key()), has_passphrase=bool((store.vault_keys(uid) or {}).get("salt")), rp_id=rp_id, passkey_user=webauthn.b64u(uid.encode())))
 
         def add_device(self):
@@ -592,7 +594,10 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             d = self.device()
             if not d: return
             try:
-                with seal.unlocked(devices.key(store, self.bearer())): self.send(200, ingest(store, d[0], json.loads(raw), len(raw)))
+                with seal.unlocked(devices.key(store, self.bearer())):
+                    out = ingest(store, d[0], json.loads(raw), len(raw))
+                if out.get("new_turns"): store.milestone(d[0], "uploaded")
+                self.send(200, out)
             except (IngestError, ValueError) as e: self.send(413 if "quota" in str(e) else 400, {"error": str(e)[:200]})
 
         def reminders_wait(self, q):
@@ -685,7 +690,11 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if not by_user.allow(uid): return self.send(429, {"error": "slow_down"})
             try: req = json.loads(raw)
             except ValueError: return self.send(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}})
-            extra = ([REMEMBER, REMIND], lambda name, args: tools.call(store, uid, name, args))
+            def tool(name, args):
+                text = tools.call(store, uid, name, args); store.milestone(uid, "assistant_used")
+                if name == "remember": store.milestone(uid, "assistant_saved")
+                return text
+            extra = ([REMEMBER, REMIND], tool)
             batch = req if isinstance(req, list) else [req]
             with seal.unlocked(auth.key(a[7:])):
                 out = [r for r in (mcp_server.handle(x, store.user_vault(uid), extra) for x in batch if isinstance(x, dict)) if r is not None]

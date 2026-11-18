@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS passkeys(id TEXT PRIMARY KEY, user_id TEXT NOT NULL R
   sign_count INTEGER NOT NULL DEFAULT 0, created REAL NOT NULL, last_used REAL, wrapped BLOB);  -- see webauthn.py; `wrapped` is the data key under this passkey's PRF secret (null: it can sign in but not unlock)
 CREATE INDEX IF NOT EXISTS passkeys_user ON passkeys(user_id);
 CREATE TABLE IF NOT EXISTS nudges(user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL, at REAL NOT NULL, PRIMARY KEY(user_id, kind));
+CREATE TABLE IF NOT EXISTS milestones(user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL, at REAL NOT NULL, PRIMARY KEY(user_id, kind));  -- first time each step of getting started happened
 CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), exp REAL NOT NULL);
 """
 STATUSES = {"pending", "active", "past_due", "canceled", "deleted"}
@@ -89,7 +90,7 @@ class Store:
         with self.conn() as c:
             r = c.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
             if not r: raise KeyError(uid)
-            for t in ("devices", "grants", "sessions", "links", "vault_keys", "passkeys", "nudges"): c.execute("DELETE FROM %s WHERE user_id=?" % t, (uid,))
+            for t in ("devices", "grants", "sessions", "links", "vault_keys", "passkeys", "nudges", "milestones"): c.execute("DELETE FROM %s WHERE user_id=?" % t, (uid,))
             for t in ("login_links", "waitlist", "invites"): c.execute("DELETE FROM %s WHERE email=?" % t, (r["email"],))   # the address itself goes too, not only the account
             c.execute("UPDATE users SET status='deleted', status_at=?, email=? WHERE id=?", (time.time(), "deleted-%s@invalid" % uid, uid))
         shutil.rmtree(self.root / "data" / uid, ignore_errors=True)
@@ -183,6 +184,13 @@ class Store:
             return [(r["id"], r["email"]) for r in c.execute(
                 "SELECT u.id, u.email FROM users u WHERE u.status IN ('pending','active','past_due') AND NOT EXISTS (SELECT 1 FROM vault_keys v WHERE v.user_id=u.id) "
                 "AND NOT EXISTS (SELECT 1 FROM nudges n WHERE n.user_id=u.id AND n.kind=? AND n.at>?) ORDER BY u.created_at", (kind, older_than))]
+
+    def milestone(self, uid: str, kind: str) -> None:
+        """Remembers that this step of getting started has happened (the first time only)."""
+        with self.conn() as c: c.execute("INSERT OR IGNORE INTO milestones VALUES(?,?,?)", (uid, kind, time.time()))
+
+    def milestones(self, uid: str) -> set:
+        with self.conn() as c: return {r["kind"] for r in c.execute("SELECT kind FROM milestones WHERE user_id=?", (uid,))}
 
     def nudged(self, uid: str, kind: str) -> None:
         with self.conn() as c: c.execute("INSERT INTO nudges VALUES(?,?,?) ON CONFLICT(user_id,kind) DO UPDATE SET at=excluded.at", (uid, kind, time.time()))

@@ -57,13 +57,16 @@ def _install(store: Store, uid: str, key: bytes, salt: bytes, by_pass: bytes) ->
     with ingest.user_lock(uid), seal.unlocked(key): migrate(store.user_vault(uid))
     return code
 
-def setup(store: Store, uid: str, passphrase: str) -> str:
-    """Turns encryption on for an account and returns its recovery code (shown once). Notes already stored are sealed in place.
+def setup_with_key(store: Store, uid: str, passphrase: str):
+    """Turns encryption on for an account: (recovery code, data key). The code is shown once. Notes already stored are sealed in place.
     The key row goes in first: from then on a Mac or assistant linked before has to link again, so nothing can write plain text while the notes are being sealed."""
     check_passphrase(passphrase)
     if store.encrypted(uid): raise KeyError_("This account already has a vault passphrase.")
     key, salt = seal.new_key(), secrets.token_bytes(16)
-    return _install(store, uid, key, salt, seal.wrap(_by_passphrase(passphrase, salt), key))
+    return _install(store, uid, key, salt, seal.wrap(_by_passphrase(passphrase, salt), key)), key
+
+def setup(store: Store, uid: str, passphrase: str) -> str:
+    return setup_with_key(store, uid, passphrase)[0]
 
 def _by_prf(prf: str) -> bytes:
     if not isinstance(prf, str) or not 20 <= len(prf) <= 200: raise KeyError_("This passkey can't unlock notes on this device.")
