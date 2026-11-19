@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Pull-based deployer for the hosted service. A LaunchDaemon run by root: only root can swap /var/dexhosted/current and kickstart a
+     system daemon. Tests run as _dexhosted via sudo inside the script. Installed by scripts/install-deployer.sh (replaces __PREFIX__). RunAtLoad is off
+     on purpose: installing must not start a deploy. -->
+<plist version="1.0"><dict>
+<key>Label</key><string>in.dextron04.dex-deployer-hosted</string>
+<key>ProgramArguments</key><array>
+  <string>/bin/bash</string><string>__PREFIX__/dex-deployer.sh</string><string>__PREFIX__/targets/hosted.conf</string>
+</array>
+<key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+<key>StartInterval</key><integer>120</integer>
+<key>RunAtLoad</key><false/>
+<key>ProcessType</key><string>Background</string>
+<key>Nice</key><integer>10</integer>
+<key>StandardOutPath</key><string>/var/dexhosted/logs/deployer.err</string>
+<key>StandardErrorPath</key><string>/var/dexhosted/logs/deployer.err</string>
+</dict></plist>
