@@ -24,7 +24,7 @@ final class ReplySession {
     init(alert: AddonAlert, stage: Stage, backend: Backend) { self.alert = alert; self.stage = stage; self.backend = backend }
 
     var busy: Bool { drafting || asking }
-    /// Who the reply goes to, for the button: "Send to Priya Nair".
-    var recipientName: String { context.flatMap { MailReply.recipient($0) }.map(Triage.displayName) ?? alert.sender }
+    /// Who the reply goes to, in full, for the button: "Priya Nair <p@corp.example>". The address is shown so a lookalike name can't hide it.
+    var recipientName: String { context.flatMap { MailReply.recipient($0) } ?? alert.sender }
     var canSend: Bool { stage == .ready && !busy && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && outcome == .none }
 }

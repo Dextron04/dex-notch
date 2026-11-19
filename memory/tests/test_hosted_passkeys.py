@@ -175,14 +175,14 @@ class PasskeyServerTests(unittest.TestCase):
 
     def test_a_vault_with_no_passphrase_never_asks_for_one(self):
         ck, pk, prf = self.session(), Passkey(), self.prf(); self.enroll(ck, pk, prf)
-        cid = json.loads(call("POST", self.base + "/register", {"redirect_uris": ["https://chatgpt.com/cb"], "client_name": "ChatGPT"})[2])["client_id"]
-        q = {"response_type": "code", "client_id": cid, "redirect_uri": "https://chatgpt.com/cb", "code_challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", "code_challenge_method": "S256"}
+        cid = json.loads(call("POST", self.base + "/register", {"redirect_uris": ["https://chatgpt.com/connector/oauth/abc123"], "client_name": "ChatGPT"})[2])["client_id"]
+        q = {"response_type": "code", "client_id": cid, "redirect_uri": "https://chatgpt.com/connector/oauth/abc123", "code_challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", "code_challenge_method": "S256"}
         shut = self.session()                                                                                 # a fresh email-link session: the vault is shut
         page = call("GET", self.base + "/authorize?" + urllib.parse.urlencode(q), headers=shut)[2]
         self.assertNotIn('name="passphrase"', page); self.assertIn("Touch your passkey", page); self.assertIn('data-passkey="unlock"', page)      # nothing required that cannot be filled
         st, _, body = self.form("/authorize", dict(q, decision="allow"), shut); self.assertEqual(st, 200); self.assertIn("to continue", body)       # no touch and no passphrase: it says what to do, not nothing
         st, h, _ = self.form("/authorize", dict(q, decision="allow", credential=pk.id, prf=prf), shut); self.assertEqual(st, 302)                    # with the touch it goes through
-        self.assertTrue(h["Location"].startswith("https://chatgpt.com/cb?code="))
+        self.assertTrue(h["Location"].startswith("https://chatgpt.com/connector/oauth/abc123?code="))
         both = self.session("bob@example.com"); self.form("/account/vault", {"passphrase": "a long enough passphrase", "confirm": "a long enough passphrase", "next": "/account"}, both)
         self.assertIn('name="passphrase"', call("GET", self.base + "/authorize?" + urllib.parse.urlencode(q), headers=self.session("bob@example.com"))[2])       # a passphrase vault still asks for it
 

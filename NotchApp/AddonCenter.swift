@@ -600,7 +600,7 @@ final class AddonCenter {
     /// Send, with a few seconds to change your mind. Nothing leaves before they run out.
     func beginSend() {
         guard let s = session, s.canSend, let ctx = s.context, MailReply.raw(ctx, body: s.draft) != nil else {
-            session?.note = session?.context.flatMap { MailReply.recipient($0) } == nil ? "This sender has no address to reply to." : session?.note
+            session?.note = session?.context.flatMap { MailReply.recipient($0) } == nil ? MailReply.noRecipient : session?.note
             return
         }
         let acct = ctx.account

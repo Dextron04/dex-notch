@@ -62,7 +62,7 @@ def setup_with_key(store: Store, uid: str, passphrase: str):
     The key row goes in first: from then on a Mac or assistant linked before has to link again, so nothing can write plain text while the notes are being sealed."""
     check_passphrase(passphrase)
     if store.encrypted(uid): raise KeyError_("This account already has a vault passphrase.")
-    key, salt = seal.new_key(), secrets.token_bytes(16)
+    key, salt = seal.new_key(), seal.new_salt()
     return _install(store, uid, key, salt, seal.wrap(_by_passphrase(passphrase, salt), key)), key
 
 def setup(store: Store, uid: str, passphrase: str) -> str:
@@ -94,9 +94,22 @@ def unlock(store: Store, uid: str, passphrase: str = "", recovery: str = "") -> 
     if not row: return None
     if recovery: return seal.unwrap(_by_recovery(recovery), row["by_recovery"])
     if not row["salt"]: return None            # a vault made with a passkey has no passphrase until one is set
-    return seal.unwrap(_by_passphrase(passphrase or "", row["salt"]), row["by_passphrase"]) if passphrase else None
+    if not passphrase: return None
+    key = seal.unwrap(_by_passphrase(passphrase, row["salt"]), row["by_passphrase"])
+    if key is not None and not seal.salt_is_current(row["salt"]): _rewrap(store, uid, key, passphrase, row)
+    return key
+
+def _rewrap(store: Store, uid: str, key: bytes, passphrase: str, old) -> None:
+    """A wrap made with the old, cheaper scrypt setting is redone with the current one now that the passphrase is in hand.
+    Skipped if the keys changed meanwhile (a passphrase change must never be overwritten by this); a failure just leaves the old wrap, which still opens."""
+    try:
+        salt = seal.new_salt()
+        now = store.vault_keys(uid)
+        if now and now["salt"] == old["salt"] and now["by_passphrase"] == old["by_passphrase"]:
+            store.put_vault_keys(uid, salt, seal.wrap(_by_passphrase(passphrase, salt), key), now["by_recovery"])
+    except Exception as ex: print("vault rewrap skipped: %s" % type(ex).__name__, file=sys.stderr, flush=True)
 
 def change_passphrase(store: Store, uid: str, key: bytes, new: str) -> None:
     check_passphrase(new)
-    row, salt = store.vault_keys(uid), secrets.token_bytes(16)
+    row, salt = store.vault_keys(uid), seal.new_salt()
     store.put_vault_keys(uid, salt, seal.wrap(_by_passphrase(new, salt), key), row["by_recovery"])
