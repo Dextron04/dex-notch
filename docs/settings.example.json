@@ -13,6 +13,11 @@
     "check_minutes": 5,
     "max_model_calls_per_hour": 8,
     "importance": "Recruiters and interview scheduling, anything from my landlord, payment problems.",
+    "name": "Sam",
+    "replies_on_connect": true,
+    "mac_alerts": false,
+    "urgent_words": ["interview", "deadline", "verification code"],
+    "phone_alerts": false,
     "gmail": {
       "client_id": "1234-abc.apps.googleusercontent.com",
       "client_secret": "GOCSPX-..."
@@ -20,5 +25,9 @@
     "microsoft": {
       "client_id": "00000000-0000-0000-0000-000000000000"
     }
+  },
+  "hosted": {
+    "host": "vault.example.com",
+    "upload": true
   }
 }

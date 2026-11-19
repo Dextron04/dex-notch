@@ -10,7 +10,7 @@
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="Universal app" src="https://img.shields.io/badge/Apple%20silicon%20%2B%20Intel-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
-  <img alt="323 tests" src="https://img.shields.io/badge/tests-323%20passing-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
+  <img alt="Tested in CI" src="https://img.shields.io/badge/tests-run%20in%20CI-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
   <img alt="No API keys" src="https://img.shields.io/badge/API%20keys-none%20needed-0b0a09?style=flat-square&labelColor=0b0a09&color=ffb059">
 </p>
@@ -68,7 +68,7 @@ Don't have `claude` or `codex` yet? The notch tells you what to install and wait
 | Want | Add |
 |---|---|
 | **Just ask Claude or Codex from a hotkey** | nothing else. That is the DMG. |
-| **A shared memory across all your agents** | the recorder: `cd memory && sh install.sh` ([below](#shared-memory-the-recorder)) |
+| **A shared memory across all your agents** | the recorder, which is inside the app: Menu bar → **Settings…** → *Memory* → **Start recording** ([below](#shared-memory-the-recorder)) |
 | **A model on your own server** | Menu bar → **Settings…** → *Models* → *Local model*, or [edit `settings.json`](#settings) |
 | **Your important email at the notch** | Menu bar → **Settings…** → *Mail* → **Connect Gmail** or **Connect Outlook** ([below](#add-ons-mail-and-iphone)) |
 | **Your iPhone's notifications at the notch** | Menu bar → **Settings…** → *iPhone* → switch on, and allow Full Disk Access ([below](#iphone-notifications)) |
@@ -187,6 +187,7 @@ Press `⌥⇧ Space` to see what you and your agents have been doing.
 
 | Key | Action |
 |---|---|
+| `⌥R` | **Reply**: grow the card into the reply panel |
 | `⌥↩` | open the email in the right Gmail inbox |
 | `⌥⌫` | **Not important**: never show mail from this sender |
 | `⌥esc` | dismiss |
@@ -227,13 +228,19 @@ The settings window writes `~/Library/Application Support/NotchApp/settings.json
 | `gemma.host` | Your Ollama server's hostname (HTTPS only). A pasted `https://…/` is tidied. |
 | `gemma.model` | The model name your server knows (`ollama list`). There is no default. |
 | `gemma.keychain_service` / `keychain_account` | Where the token lives in your Keychain. Default: the host, and `notchapp`. |
-| `addons.check_minutes` | How often to look for new mail while the Mac is awake. Default 5, from 2 to 1440. Also a choice in Settings → Mail. |
+| `addons.check_minutes` | How often to look for new mail while the Mac is awake. Default 5. Settings → Mail offers 2, 5, 15, 30, 60 and 240 minutes; a value you type into the file is honoured from 2 up to 1440 (anything outside that is pulled in). After a failed check it waits at least 15 minutes before trying again, so a rate limit or an outage isn't hammered. |
+| `addons.replies_on_connect` | Default `true`: connecting an account also asks for permission to draft and send replies. `false` keeps new accounts read-only. Also the **Allow replies** switch in Settings → Mail. |
+| `addons.name` | Your name, for the sign-off on a drafted reply. Optional, up to 80 characters. |
+| `addons.mac_alerts` | `true` also judges this Mac's own notifications and shows the important ones. That sends notification text to your AI, so it is off by default. |
+| `addons.urgent_words` | A list of words. A Mac notification containing one skips the model and always shows. Default: interview, offer letter, job offer, deadline, otp, verification code, security alert, payment failed, meeting. `[]` turns it off. |
 | `addons.max_model_calls_per_hour` | A ceiling on how often the AI reads mail. Default 8. |
 | `addons.order` | Which model reads your mail first, then the fallbacks. Default `claude`, `codex`, `gemma`. |
 | `addons.importance` | One or two lines on what matters to you. Added to the rules that decide what interrupts you. |
 | `addons.phone_alerts` | `true` shows iPhone notifications at the notch (see [iPhone notifications](#iphone-notifications)). Off by default. Also a switch in Settings → iPhone. |
 | `addons.microsoft` | `client_id` of your own Microsoft application for Outlook sign-in (see [Outlook](#outlook-and-microsoft-365)). Release builds carry their own. |
 | `addons.gmail` | `client_id` and `client_secret` of your own Google client. Only needed when building from source; release builds carry their own. |
+| `hosted.host` | The hosted Dex memory server this Mac is linked to. Written when you sign in; point it at another server to self-host. The device token is never in this file: it lives in your Keychain. |
+| `hosted.upload` | `false` stops the recorder uploading conversations to your account. Leave it out for the default, `true`. Also **Keep my conversations in my account** in Settings → Memory. |
 
 **Folder rules.** A folder must exist, sit *inside* your home folder, and not be your home folder itself, a hidden top-level folder (`~/.ssh`, `~/.aws`, …) or `~/Library`. `..` and symlinks can't be used to escape. Rejected entries are reported and ignored; the rest still apply.
 
@@ -339,13 +346,38 @@ Updating is [Sparkle](https://sparkle-project.org) (MIT licence). A release atta
 
 ## Shared memory (the recorder)
 
-The app works on its own. To make your agents remember each other, install the recorder, which is Python standard library only:
+The app works on its own. To make your agents remember each other, turn on the recorder. It is Python standard library only (3.9 or later) and it is **inside the app**: **Settings → Memory → Record my conversations** installs it as a background job that writes `~/Vault` every 30 seconds and imports your existing history once. It also starts by itself after you sign up for a hosted account. If the page says it needs Python, run `xcode-select --install` and press **Start recording** again.
+
+**From source, or if you want to run it yourself** (the app notices a recorder you set up and leaves it alone):
 
 ```bash
 git clone https://github.com/Dextron04/dex-notch && cd dex-notch/memory
-sh install.sh                      # records into ~/Vault every 30 s
+sh install.sh                      # records into ~/Vault every 30 s (VAULT=/other/folder to change it)
 python3 -m agentvault backfill     # one-time import of your existing history
 ```
+
+**Start-up digest for Claude Code.** `memory/hooks/session_start.py` prints a short briefing of your recent conversations when a Claude Code session starts, so it opens already briefed. `sh install.sh` registers it in `~/.claude/settings.json` for you: it merges into what is there, backs the file up first as `settings.json.dex-backup`, and running it again changes nothing. Set `NO_HOOK=1` to skip it, and undo it with `python3 claude_hook.py remove`. The app never edits that file itself, so if you use the app's recorder, add the hook yourself with the same script from a checkout (`python3 memory/claude_hook.py add`), or by hand:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "python3 /path/to/dex-notch/memory/hooks/session_start.py" }] }
+    ]
+  }
+}
+```
+
+If your vault isn't `~/Vault`, put `AGENTVAULT_VAULT=/your/vault` in front of `python3`. The hook never blocks a session: any error, or more than two seconds, and it prints nothing.
+
+**Import a ChatGPT export.** ChatGPT doesn't expose your history to apps, but you can bring it in from the official export (ChatGPT → Settings → Data controls → Export data). Unzip it or leave it zipped, then:
+
+```bash
+python3 -m agentvault import chatgpt                      # the newest export in ~/Downloads
+python3 -m agentvault import chatgpt path/to/export.zip   # or a folder, or conversations.json
+```
+
+Each chat becomes a note under `Sessions/chatgpt/`, with secrets removed. Only the final branch of a chat is kept, and running it again adds nothing.
 
 Let your agents read the vault:
 
@@ -378,8 +410,8 @@ REMOTE=host:agentvault/Vault sh install.sh   # keeps both vault copies in step
 ## Honest limits
 
 - **The DMG is not notarized.** The first launch needs one extra step (Privacy & Security → Open Anyway on macOS 15 and later). Notarizing takes a paid Apple Developer ID.
-- **Memory is a separate install for now.** The recorder and MCP server live in `memory/` and aren't bundled in the app yet. Without them the recall view is empty and the local model has no vault to search.
-- **ChatGPT and Claude.ai chats are not captured live.** Neither exposes chat history to apps, and MCP is pull-only. The connector lets them *read* your vault and *save* a chat when you ask. A full import from the official data export is not built yet.
+- **The recorder needs Python 3.9 or later.** It is bundled in the app and started from Settings → Memory, but macOS only ships Python with the Command Line Tools (`xcode-select --install`). The MCP server for Claude Code and Codex isn't registered by the app: add it with the commands [above](#shared-memory-the-recorder). Without a recorder the recall view is empty and the local model has no vault to search.
+- **ChatGPT and Claude.ai chats are not captured live.** Neither exposes chat history to apps, and MCP is pull-only. The connector lets them *read* your vault and *save* a chat when you ask, and you can import your history from the official data export with `python3 -m agentvault import chatgpt` ([above](#shared-memory-the-recorder)). Claude.ai exports aren't supported.
 - **The local model is a chat model with retrieved snippets, not an agent.** It cannot open a note or run tools.
 - **The vault is plain text.** Redaction is pattern-based. Treat the vault like any other folder of your private conversations.
 - **iPhone notifications rely on an undocumented macOS file.** Apple does not document where Notification Center keeps notifications, so a macOS update could break it; Settings then says so instead of failing quietly. It needs Full Disk Access and iPhone Mirroring.
@@ -400,7 +432,7 @@ scripts/make-dmg.sh v0.2.0                               # a universal, ad-hoc s
 
 Releases are built by GitHub Actions: push a tag (`git tag v0.2.0 && git push --tags`) and a DMG is attached to a new release. CI runs every test on each push. A release also carries the app's own Google sign-in, read from the `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` repository secrets.
 
-**Demo mode.** `NOTCH_VAULT`, `NOTCH_SETTINGS` and `NOTCH_CLIS` (for example `none`, or `claude,codex`) point the app at other data or pretend which CLIs are installed. `NOTCH_ADDONS` points the alert queue and accounts at a throwaway file, `NOTCH_ALERT_DEMO` (`gmail`, `phone`, or anything else for all of them) shows made-up alert cards, and `NOTCH_OPEN_SETTINGS` (`models`, `folders`, `mail`, `iphone`, `updates`) opens Settings on a page. That is how the screenshots here were made, and how to rehearse the first run:
+**Demo mode.** `NOTCH_VAULT`, `NOTCH_SETTINGS` and `NOTCH_CLIS` (for example `none`, or `claude,codex`) point the app at other data or pretend which CLIs are installed. `NOTCH_ADDONS` points the alert queue and accounts at a throwaway file, `NOTCH_ALERT_DEMO` (`gmail`, `phone`, or anything else for all of them) shows made-up alert cards, and `NOTCH_OPEN_SETTINGS` (`models`, `folders`, `mail`, `iphone`, `memory`, `updates`) opens Settings on a page. That is how the screenshots here were made, and how to rehearse the first run:
 
 ```bash
 python3 scripts/demo_vault.py /tmp/demo-vault
@@ -415,7 +447,24 @@ NotchApp/                 SwiftUI + AppKit menu-bar agent
   NotchView.swift           pill, wings, the model announcement, transcript, setup card
   ModelMark.swift           the model marks: official Claude and Codex logos, plus the local-model mark
   SVGPath.swift             reads SVG path data so the real vector logos can be drawn (tested)
-  SetupView.swift           the settings window and the first-run walk-through: a rail and one page at a time (Models, Folders, Mail, iPhone, Updates)
+  SetupView.swift           the settings window and the first-run walk-through: a rail and one page at a time (Models, Folders, Mail, iPhone, Memory, Updates)
+  Account.swift             the hosted-account calls and the rule for when the app may run (tested)
+  AccountGate.swift         runs that rule at launch, walks a new person through sign-up, and keeps checking
+  ConnectionLogic.swift     what the `claude`/`codex` tools and the server say about your connectors, and the next step to take (tested)
+  ConnectionMonitor.swift   runs those checks now and then and asks the notch to say when a connector is missing
+  RecorderInstaller.swift   puts the bundled recorder in place and runs it as a background job (Settings → Memory)
+  RecorderLogic.swift       the recorder's status and launchd plist text (pure, tested)
+  AgentFiles.swift          adds and removes the "save this conversation to memory" lines in the terminal agents' global files (tested)
+  Reminders.swift           reminders set from other assistants, and when they come due (tested)
+  MailReply.swift           reading one email in full and building the reply and the prompt (pure, tested)
+  ReplySession.swift        one reply in progress: the draft, your edits, the questions about the email
+  ReplyView.swift           the reply panel: draft, Ask tab, Send with Undo, Save draft
+  AnswerBody.swift          renders a model answer: prose, and code blocks with light highlighting
+  ConversationStore.swift   the open conversation in one small private file, so a quit or a crash loses nothing (tested)
+  Journal.swift             the local model's own private journal (tested)
+  KeychainStore.swift       the local model's token, through Apple's `security` tool (tested)
+  Changelog.swift           turns CHANGELOG.md into what the What's new panel shows (tested)
+  WhatsNewView.swift        the What's new page, with the screenshots, GIFs and videos
   Addons.swift              mail triage: filters, the model prompt, parsing, settings and state; also reads iPhone notifications from Notification Center (pure, tested)
   Gmail.swift               Google sign-in (PKCE), the Gmail client, one token per account (tested)
   Outlook.swift             Microsoft sign-in, the Outlook client (Microsoft Graph), and the mail-provider interface (tested)
@@ -433,17 +482,21 @@ memory/
   agentvault/               recorder, adapters, redaction, MCP server, RAG push
     remote/                 OAuth + MCP over HTTP for ChatGPT and Claude.ai
   hooks/                    Claude Code start-up digest
-  tests/                    118 tests
-NotchAppTests/             205 tests
+  claude_hook.py            registers that digest in ~/.claude/settings.json (merge, backup, undo)
+  install.sh                the from-source recorder install
+  tests/                    the Python tests
+NotchAppTests/             the Swift tests
 scripts/                   make-dmg.sh, appcast.sh (the update feed), demo_vault.py
 .github/workflows/         CI and release
 docs/                      specs, plans, example settings, assets
 ```
 
 ```bash
-xcodebuild test -scheme NotchApp -destination 'platform=macOS'   # 205 Swift tests
-cd memory && python3 -m unittest discover -s tests               # 118 Python tests
+xcodebuild test -scheme NotchApp -destination 'platform=macOS'   # the Swift tests
+cd memory && python3 -m unittest discover -s tests               # the Python tests (recorder, MCP server, connector, hosted service)
 ```
+
+CI runs both on every push, and runs the recorder's tests again on Python 3.9, the oldest version the bundled recorder supports.
 
 Everything here was built test-first where it could be: the stream parsers, the sandbox arguments, the folder rules, the OAuth flows, the mail filters, the lockout, the redaction rules, the idempotent note writer.
 

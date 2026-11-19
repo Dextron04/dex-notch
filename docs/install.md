@@ -73,6 +73,23 @@ Then try it with real work: have a conversation in Claude Code, Codex or Gemini,
 
 **Settings → Memory → Save every conversation** adds a short instruction to the global files that Claude Code, Codex and Gemini read, so they save a summary when a conversation ends. For ChatGPT and Claude on the web, copy the same text from the [Connect page](https://vault.dextron04.in/connect#save) into Custom instructions or personal preferences. An assistant decides for itself when a conversation is over, so you can always say *"save this to my memory"*.
 
+### Let Claude Code open already briefed (optional)
+
+A small script can print a digest of your recent conversations whenever a Claude Code session starts. Dex Notch doesn't edit `~/.claude/settings.json` for you, so add it once from a checkout of the repository:
+
+```bash
+git clone https://github.com/Dextron04/dex-notch
+python3 dex-notch/memory/claude_hook.py add      # undo with: ... remove
+```
+
+It merges one `SessionStart` entry into the file and saves the old file as `settings.json.dex-backup` first. Running it again changes nothing. The same entry by hand:
+
+```json
+{ "hooks": { "SessionStart": [ { "hooks": [ { "type": "command", "command": "python3 /path/to/dex-notch/memory/hooks/session_start.py" } ] } ] } }
+```
+
+If your notes aren't in `~/Vault`, add `--vault /your/folder` to the first command. The digest never delays a session: after two seconds, or on any error, it prints nothing.
+
 ## Everyday use
 
 - **`⌥ Space`** opens the notch to ask a question; **`⌥ ⇧ Space`** opens recall of your past conversations.
@@ -117,7 +134,7 @@ open NotchApp.xcodeproj
 cd memory && python3 -m unittest discover -s tests          # the recorder and the hosted service
 ```
 
-The recorder is bundled into the app by a build step. Developers who already run the recorder from a checkout (`cd memory && sh install.sh`) keep it: the app notices and leaves it alone.
+The recorder is bundled into the app by a build step. Developers who already run the recorder from a checkout (`cd memory && sh install.sh`) keep it: the app notices and leaves it alone. `install.sh` also registers the start-up digest above (`NO_HOOK=1 sh install.sh` skips that).
 
 ## Run your own server
 
