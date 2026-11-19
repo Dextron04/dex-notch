@@ -14,8 +14,9 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "offset": {"type": "integer", "description": "start character; notes are returned in pages of 20000 chars"}, "limit": {"type": "integer"}}, "required": ["path"]}},
 ]
 
-def call(vault: Path, name: str, a: dict) -> str:
-    if name == "vault_search": return json.dumps([asdict(h) for h in S.search(vault, a["query"], a.get("agent"), a.get("since"), semantic=rag_push.semantic_paths)], indent=1)
+def call(vault: Path, name: str, a: dict, semantic: bool = True) -> str:
+    """`semantic=False` for hosted users: the operator's RAG indexes the operator's own vault, never theirs."""
+    if name == "vault_search": return json.dumps([asdict(h) for h in S.search(vault, a["query"], a.get("agent"), a.get("since"), semantic=rag_push.semantic_paths if semantic else None)], indent=1)
     if name == "vault_recent": return json.dumps([asdict(h) for h in S.recent(vault, a.get("agent"), int(a.get("n", 5)))], indent=1)
     if name == "vault_read": return S.read(vault, a["path"], int(a.get("offset", 0)), int(a.get("limit", S.READ_LIMIT)))
     raise KeyError(name)

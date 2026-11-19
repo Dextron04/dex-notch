@@ -14,6 +14,7 @@ from .ingest import MAX_BODY as INGEST_MAX, IngestError, ingest, vault_bytes
 from .oauth import SESSION_TTL, Auth, AuthError, is_loopback, redirect_ok
 from .store import EMAIL, Store
 
+CROSS_ORIGIN_OK = frozenset(("/mcp", "/register", "/token", "/v1/ingest", "/v1/link/start", "/v1/link/poll", "/hooks/stripe"))
 OAUTH_FIELDS = ("response_type", "client_id", "redirect_uri", "code_challenge", "code_challenge_method", "state")
 COOKIE = "av_session"
 
@@ -216,6 +217,11 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
         def do_POST(self):
             if self.plain_http(): return
             path = urlparse(self.path).path
+            # Login CSRF: a page on another site must not be able to post to the cookie-backed forms (sign the visitor into
+            # someone else's account, approve a Mac, ...). Browsers always send Origin on POST; tools that send none (curl,
+            # the Mac app) don't carry the cookie anyway. Assistants (claude.ai, chatgpt.com) call only the paths in CROSS_ORIGIN_OK.
+            o = self.headers.get("Origin")
+            if o is not None and o != origin and path not in CROSS_ORIGIN_OK: return self.fail(403, "This form must be sent from %s." % public)
             fn = {"/mcp": self.mcp, "/register": self.register, "/authorize": self.consent, "/token": self.token,
                   "/login": self.login, "/login/verify": self.verify, "/hooks/stripe": self.stripe_hook,
                   "/account/devices": self.add_device, "/account/devices/revoke": self.revoke_device, "/account/signout-all": self.signout_all,

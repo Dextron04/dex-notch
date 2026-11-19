@@ -122,6 +122,17 @@ class HostedServerTests(unittest.TestCase):
         self.t[0] += 901; call("POST", self.base + "/login", {"email": "flood@x.io"}, form=True)
         self.assertEqual(len([m for m in self.mail if m[0] == "flood@x.io"]), 4)
 
+    def test_cookie_forms_refuse_other_sites(self):
+        for path in ("/login", "/login/verify", "/authorize", "/account/delete", "/link", "/admin/invite"):
+            self.assertEqual(call("POST", self.base + path, {"email": "a@x.io"}, form=True, headers={"Origin": "https://evil.example"})[0], 403, path)
+            self.assertEqual(call("POST", self.base + path, {}, form=True, headers={"Origin": "null"})[0], 403, path)
+        # the site itself, and clients that send no Origin, still get through to the normal handling
+        self.assertNotEqual(call("POST", self.base + "/login", {"email": "a@x.io"}, form=True, headers={"Origin": PUB})[0], 403)
+        self.assertNotEqual(call("POST", self.base + "/login", {"email": "a@x.io"}, form=True)[0], 403)
+        # assistants register and exchange tokens from their own origin
+        self.assertEqual(call("POST", self.base + "/register", {"redirect_uris": [REDIR], "client_name": "C"}, headers={"Origin": "https://claude.ai"})[0], 201)
+        self.assertNotEqual(call("POST", self.base + "/token", {"grant_type": "x"}, form=True, headers={"Origin": "https://chatgpt.com"})[0], 403)
+
     def test_oauth_hardening(self):
         self.assertEqual(call("POST", self.base + "/register", {"redirect_uris": ["https://evil.test/cb"]})[0], 400)
         for u in ["https://evil.test\\@claude.ai/", "https://evil@claude.ai/cb", "https://claude.ai/cb\r\nSet-Cookie: x=1", "http://127.0.0.1:9/cb\r\nX: 1", "http://127.0.0.1:80:80/cb"]:

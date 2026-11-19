@@ -19,4 +19,4 @@ def call(store: Store, uid: str, name: str, args: dict) -> str:
         if name == "remind" and len(list((vault / "Reminders").glob("*.md"))) >= MAX_PENDING_REMINDERS: raise PermissionError("too many reminders (%d)" % MAX_PENDING_REMINDERS)
     if name == "remember": return remember(vault, args)
     if name == "remind": return remind(vault, args)
-    return mcp_server.call(vault, name, args)
+    return mcp_server.call(vault, name, args, semantic=False)

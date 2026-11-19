@@ -20,6 +20,13 @@ class HostedTests(unittest.TestCase):
 
     def paths(self, uid, q="secret"): return [h["path"] for h in json.loads(tools.call(self.s, uid, "vault_search", {"query": q}))]
 
+    def test_search_never_asks_the_operators_rag(self):
+        from unittest import mock
+        from agentvault import rag_push
+        with mock.patch.object(rag_push, "semantic_paths", side_effect=AssertionError("hosted search reached the operator's RAG")) as m:
+            self.paths(self.a, "no exact match here")
+            m.assert_not_called()
+
     def test_users(self):
         self.assertTrue(self.a.startswith("u_") and self.a != self.b)
         self.assertEqual(self.s.by_email(" a@X.io "), self.a)
