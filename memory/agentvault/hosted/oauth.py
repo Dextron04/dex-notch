@@ -4,6 +4,7 @@ import base64, hashlib, hmac, json, secrets, time
 from typing import Callable, List, Optional, Tuple
 from urllib.parse import urlparse
 from .. import seal
+from ..remote.oauth import https_redirect_ok, plain_url
 from .store import EMAIL, Store
 
 CODE_TTL, ACCESS_TTL, REFRESH_TTL, LINK_TTL, SESSION_TTL = 300, 3600, 30 * 86400, 900, 7 * 86400
@@ -15,13 +16,15 @@ class AuthError(Exception):
 
 def is_loopback(uri: str) -> bool:
     """A command-line tool (Codex, Claude Code) receives its sign-in answer on a port of its own machine: http://127.0.0.1:PORT/... (RFC 8252). Only the machine itself, no other host."""
-    try: p = urlparse(str(uri))
+    if not plain_url(uri): return False
+    p = urlparse(str(uri))
+    try: p.port   # "127.0.0.1:80:80" or ":5!" has no real port; a browser won't open it either
     except ValueError: return False
     return p.scheme == "http" and (p.hostname or "") in ("127.0.0.1", "localhost", "::1") and p.username is None and p.password is None and not p.fragment
 
 def redirect_ok(registered: List[str], uri: str) -> bool:
     """The address a client asks to be sent back to must be one it registered. For a loopback address the port may differ: the tool picks a free one each time."""
-    if uri in registered: return True
+    if uri in registered: return plain_url(uri)   # also refuses a client registered before register() checked this
     if not is_loopback(uri): return False
     u = urlparse(uri)
     for r in registered:
@@ -59,8 +62,7 @@ class Auth:
     def register(self, redirect_uris: List[str], name: str) -> str:
         if not redirect_uris or not isinstance(redirect_uris, list): raise AuthError("redirect_uris required")
         for u in redirect_uris:
-            p = urlparse(str(u))
-            if not is_loopback(u) and (p.scheme != "https" or (p.hostname or "") not in self.allowed): raise AuthError("redirect_uri not allowed: %s" % u)
+            if not (is_loopback(u) or https_redirect_ok(u, self.allowed)): raise AuthError("redirect_uri not allowed: %s" % u)
         cid = "c_" + secrets.token_urlsafe(16)
         with self.store.conn() as c:
             c.execute("INSERT INTO clients VALUES(?,?,?,?)", (cid, str(name)[:80], json.dumps(redirect_uris), self.now()))

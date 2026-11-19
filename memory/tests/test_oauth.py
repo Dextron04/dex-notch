@@ -62,6 +62,17 @@ class OAuthTests(unittest.TestCase):
         with self.assertRaises(OAuthError): self.s.register(["http://claude.ai/cb"], "x")  # https only
         with self.assertRaises(OAuthError): self.s.register([], "x")
 
+    def test_register_rejects_addresses_browsers_read_differently(self):
+        # urlparse says claude.ai for all of these; a browser goes to evil.example, or the CR/LF splits the Location header
+        for u in ["https://evil.example\\@claude.ai/", "https://evil.example\\.claude.ai/", "https://evil@claude.ai/cb",
+                  "https://claude.ai:8443/cb", "https://claude.ai/cb\r\nSet-Cookie: x=1", "https://claude.ai/c b", "https://claude.ai\t/cb"]:
+            with self.assertRaises(OAuthError, msg=u): self.s.register([u], "x")
+
+    def test_client_registered_before_the_check_cannot_get_a_code(self):
+        bad = "https://evil.example\\@claude.ai/"
+        self.s.s["clients"]["c_old"] = {"redirect_uris": [bad], "name": "old"}
+        with self.assertRaises(OAuthError): self.s.issue_code("c_old", bad, pkce()[1])
+
     def test_unknown_client_rejected(self):
         with self.assertRaises(OAuthError): self.s.issue_code("nope", REDIR, pkce()[1])
 

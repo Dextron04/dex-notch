@@ -124,6 +124,12 @@ class HostedServerTests(unittest.TestCase):
 
     def test_oauth_hardening(self):
         self.assertEqual(call("POST", self.base + "/register", {"redirect_uris": ["https://evil.test/cb"]})[0], 400)
+        for u in ["https://evil.test\\@claude.ai/", "https://evil@claude.ai/cb", "https://claude.ai/cb\r\nSet-Cookie: x=1", "http://127.0.0.1:9/cb\r\nX: 1", "http://127.0.0.1:80:80/cb"]:
+            self.assertEqual(call("POST", self.base + "/register", {"redirect_uris": [u]})[0], 400, u)
+        # a client stored before register() checked this must not get a code or a redirect
+        bad = "https://evil.test\\@claude.ai/"
+        with self.store.conn() as c: c.execute("INSERT INTO clients VALUES(?,?,?,?)", ("c_old", "old", json.dumps([bad]), 0))
+        self.assertEqual(call("GET", self.base + "/authorize?" + urllib.parse.urlencode(dict(self.oauth_q(), client_id="c_old", redirect_uri=bad)))[0], 400)
         self.assertEqual(call("GET", self.base + "/authorize?" + urllib.parse.urlencode(dict(self.oauth_q(), redirect_uri="https://claude.ai/other")))[0], 400)
         self.assertEqual(call("GET", self.base + "/authorize?" + urllib.parse.urlencode(dict(self.oauth_q(), code_challenge_method="plain")))[0], 400)
         self.assertEqual(call("POST", self.base + "/login", dict(self.oauth_q(), redirect_uri="https://evil.test/", email="a@x.io"), form=True)[0], 400)
