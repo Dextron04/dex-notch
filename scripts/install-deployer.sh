@@ -9,7 +9,8 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$HERE/.." && pwd)
 PREFIX=/usr/local/dex-deployer
-HOSTED_BASE=/var/dexhosted
+HOSTED_SVC=/var/dexhosted            # the service's own tree: data/, logs/ (owned by _dexhosted; the deployer never works in here)
+HOSTED_BASE=/var/dexhosted-deploy    # everything root manages: releases/, current, tmp/, logs/deploy.log, deploy-seen (root:wheel 755)
 HOSTED_LABEL=in.dextron04.agentvault-hosted
 HOSTED_PLIST=/Library/LaunchDaemons/$HOSTED_LABEL.plist
 PERSONAL_USER=mac-agent
@@ -40,10 +41,32 @@ migrate_layout() {
   ln -s "releases/$name" "$base/current"        # dangling for a moment: the rename below is the only gap
   mv "$base/app" "$base/releases/$name"
   ln -s current "$base/app"
+  chmod -R go-w "$base/releases/$name"
   say "  $base: migrated. backup $bk; current -> releases/$name; app -> current"
 }
 
+# Copy an old plain app dir into <base>/releases/<stamp>-initial (root-owned, 644/755) and point <base>/current at it. Backs up first. Idempotent.
+migrate_copy() {
+  local old=$1 base=$2 name bk
+  case $base in ''|/|//) die "refusing to migrate into '$base'";; esac
+  [[ $base == /* && $base != *..* ]] || die "refusing to migrate into '$base'"
+  [ -d "$base" ] && [ ! -L "$base" ] || die "$base is not a directory"
+  for d in releases tmp logs backups; do [ -L "$base/$d" ] && die "$base/$d is a symlink"; [ -e "$base/$d" ] || mkdir "$base/$d"; done
+  chmod 700 "$base/backups"
+  if [ -L "$base/current" ]; then say "  $base: already migrated (current -> $(readlink "$base/current"))"; return 0; fi
+  [ -d "$old" ] && [ ! -L "$old" ] || { say "  no $old to migrate (the first deploy creates current)"; return 0; }
+  bk="$base/backups/pre-deployer-$STAMP"; name="$STAMP-initial"
+  mkdir "$bk" && cp -Rp "$old" "$bk/"
+  mkdir "$base/releases/$name"
+  rsync -a --exclude __pycache__ --exclude '*.pyc' "$old/" "$base/releases/$name/"
+  if [ "$(id -u)" = 0 ]; then chown -R root:wheel "$base/releases/$name"; fi
+  chmod -R u+w,go-w,a+rX "$base/releases/$name"
+  ln -s "releases/$name" "$base/current"
+  say "  $base: copied $old -> releases/$name; backup $bk; current -> releases/$name (the old dir is left in place)"
+}
+
 if [ "${1:-}" = --migrate-only ]; then migrate_layout "${2:-}"; exit 0; fi
+if [ "${1:-}" = --migrate-copy ]; then migrate_copy "${2:-}" "${3:-}"; exit 0; fi
 
 DEPLOY_NOW=0 SKIP_PERSONAL=0
 for a in "$@"; do
@@ -68,16 +91,20 @@ for c in hosted personal; do install -m 644 -o root -g wheel "$HERE/deploy-targe
 install -m 644 -o root -g wheel "$REPO_ROOT/memory/launchd/in.dextron04.dex-deployer-hosted.plist.template" "$PREFIX/hosted.plist.template"
 install -m 644 -o root -g wheel "$REPO_ROOT/memory/launchd/in.dextron04.dex-deployer-personal.plist.template" "$PREFIX/personal.plist.template"
 
-say "2. Hosted: $HOSTED_BASE"
-[ -d "$HOSTED_BASE" ] || die "$HOSTED_BASE missing: do docs/hosted-isolation.md first"
+say "2. Hosted: code and deploy state in $HOSTED_BASE (root:wheel); data and logs stay in $HOSTED_SVC"
+[ -d "$HOSTED_SVC" ] || die "$HOSTED_SVC missing: do docs/hosted-isolation.md first"
 HOSTED_NEW=0; [ -f /Library/LaunchDaemons/in.dextron04.dex-deployer-hosted.plist ] || HOSTED_NEW=1
-migrate_layout "$HOSTED_BASE"
-chown root:wheel "$HOSTED_BASE/releases"; chmod 755 "$HOSTED_BASE/releases"
-mkdir -p "$HOSTED_BASE/tmp"; chown _dexhosted:_dexhosted "$HOSTED_BASE/tmp"; chmod 700 "$HOSTED_BASE/tmp"
+[ -L "$HOSTED_BASE" ] && die "$HOSTED_BASE is a symlink"
+install -d -m 755 -o root -g wheel "$HOSTED_BASE"
+chown root:wheel "$HOSTED_BASE"; chmod 755 "$HOSTED_BASE"
+migrate_copy "$HOSTED_SVC/app" "$HOSTED_BASE"
+for d in releases tmp logs; do chown root:wheel "$HOSTED_BASE/$d"; chmod 755 "$HOSTED_BASE/$d"; done
+chown root:wheel "$HOSTED_BASE/backups"
 if [ -f "$HOSTED_PLIST" ]; then
   tmp=$(mktemp "${TMPDIR:-/tmp}/hosted-plist.XXXXXX")
   cp "$HOSTED_PLIST" "$tmp"
   plutil -replace WorkingDirectory -string "$HOSTED_BASE/current" "$tmp"
+  if plutil -extract EnvironmentVariables.PYTHONPATH raw -o - "$tmp" >/dev/null 2>&1; then plutil -replace EnvironmentVariables.PYTHONPATH -string "$HOSTED_BASE/current" "$tmp"; fi
   plutil -lint "$tmp" >/dev/null
   if cmp -s <(plutil -convert xml1 -o - "$HOSTED_PLIST") <(plutil -convert xml1 -o - "$tmp"); then
     say "  $HOSTED_PLIST already uses $HOSTED_BASE/current"
@@ -90,6 +117,10 @@ if [ -f "$HOSTED_PLIST" ]; then
     reload system "$HOSTED_LABEL" "$HOSTED_PLIST"
   fi
   rm -f "$tmp"
+  # the daemon no longer reads $HOSTED_SVC/app, and nothing else needs it (no compatibility symlink): move it aside, never delete it
+  if [ -d "$HOSTED_SVC/app" ] && [ ! -L "$HOSTED_SVC/app" ] && [ "$(plutil -extract WorkingDirectory raw -o - "$HOSTED_PLIST")" = "$HOSTED_BASE/current" ]; then
+    mv "$HOSTED_SVC/app" "$HOSTED_SVC/app.replaced-$STAMP"; say "  old code moved to $HOSTED_SVC/app.replaced-$STAMP (delete it yourself once happy)"
+  fi
 else
   say "  WARNING: $HOSTED_PLIST not found; set WorkingDirectory to $HOSTED_BASE/current when you create it"
 fi
@@ -139,5 +170,6 @@ for b in "$HOSTED_BASE" "$PERSONAL_BASE"; do
 done
 launchctl print system/in.dextron04.dex-deployer-hosted >/dev/null 2>&1 && say "  hosted deployer loaded" || say "  hosted deployer NOT loaded"
 say "  hosted health: GET /healthz -> $(curl -s -o /dev/null -m 5 -w '%{http_code}' http://127.0.0.1:8766/healthz || true)"
+say "  hosted service data (untouched): $HOSTED_SVC/data, $HOSTED_SVC/logs"
 say "  hosted daemon working directory: $(plutil -extract WorkingDirectory raw -o - "$HOSTED_PLIST" 2>/dev/null || echo unknown)"
 say "Logs: <base>/logs/deploy.log. Details: docs/deploy-pipeline.md"

@@ -56,6 +56,40 @@ while [ "${#BASE}" -gt 1 ] && [ "${BASE%/}" != "$BASE" ]; do BASE=${BASE%/}; don
 [ "${BASE##*/}" = "$BASE_SUFFIX" ]      || die 2 "refusing to run: base '$BASE' does not end in /$BASE_SUFFIX"
 { [ -d "$BASE" ] && [ ! -L "$BASE" ]; } || die 2 "refusing to run: $BASE is not a directory (run install-deployer.sh first)"
 
+BASE=$(cd "$BASE" && pwd -P)             # resolve system symlinks such as /var -> /private/var; below this, no component may be a symlink
+[ "${BASE##*/}" = "$BASE_SUFFIX" ]      || die 2 "refusing to run: canonical base '$BASE' does not end in /$BASE_SUFFIX"
+
+# ---- the tree this script works in must be ours: real directories, not group/world-writable, owned by root (as root) or by us ----
+ME=$(id -u)
+if [ "$(uname)" = Darwin ]; then fstat() { stat -f '%u %Lp' "$1"; }; else fstat() { stat -c '%u %a' "$1"; }; fi
+dir_ok() {   # real directory (not a symlink), owned by the running user, no group/world write
+  local o m
+  { [ -d "$1" ] && [ ! -L "$1" ]; } || return 1
+  read -r o m <<< "$(fstat "$1")" || return 1
+  [ "$o" = "$ME" ] && [ $((8#$m & 8#22)) -eq 0 ]
+}
+BADPATH=""
+tree_ok() {   # base, its working subdirs and every release dir; as root also every ancestor of base (a symlinked or writable parent would redirect root)
+  local p=$BASE e
+  if [ "$ME" = 0 ]; then
+    while [ "$p" != / ]; do dir_ok "$p" || { BADPATH=$p; return 1; }; p=${p%/*}; [ -n "$p" ] || p=/; done
+  else dir_ok "$BASE" || { BADPATH=$BASE; return 1; }; fi
+  for e in logs releases tmp; do
+    if [ -L "$BASE/$e" ]; then BADPATH=$BASE/$e; return 1; fi
+    if [ -e "$BASE/$e" ]; then dir_ok "$BASE/$e" || { BADPATH=$BASE/$e; return 1; }; fi
+  done
+  for e in "$BASE"/releases/*; do
+    if [ -L "$e" ]; then BADPATH=$e; return 1; fi
+    if [ -d "$e" ]; then dir_ok "$e" || { BADPATH=$e; return 1; }; fi
+  done
+  return 0
+}
+if [ -L "$BASE/logs" ] || [ -L "$BASE/releases" ] || [ -L "$BASE/tmp" ]; then
+  printf 'dex-deployer: refusing to run: a working directory under %s is a symlink\n' "$BASE" >&2; exit 2
+fi
+for d in logs releases tmp; do [ -e "$BASE/$d" ] || mkdir "$BASE/$d"; done
+tree_ok || { printf 'dex-deployer: refusing to run: %s is a symlink, not a real directory, not owned by us, or group/world-writable\n' "$BADPATH" >&2; exit 2; }
+
 API=${DEX_API_URL:-https://api.github.com}; API=${API%/}
 LAUNCHCTL=${DEX_LAUNCHCTL:-launchctl}
 UA="dex-deployer/1 (+https://github.com/$REPO)"
@@ -64,7 +98,6 @@ SEEN=$BASE/deploy-seen        # "<sha> <status> <etag>": last head looked at (de
 LOCK=$BASE/.deploy.lock
 if [ "$(uname)" = Darwin ]; then MVLINK=(mv -fh); else MVLINK=(mv -fT); fi   # replace a symlink-to-dir in place, not move into it
 
-mkdir -p "$BASE/logs" "$BASE/releases" "$BASE/tmp"
 log()  { printf '%s [%s] %s\n' "$(date -u '+%F %TZ')" "$NAME" "$*" >> "$LOG"; }
 say()  { [ -z "${DEPLOY_HOOK:-}" ] || log "hook: $*"; }          # routine polls stay quiet; a webhook-started run says why it stopped
 notify() {   # never fails the deploy. notify=osascript shows a macOS notification; notify=/path/to/cmd is run as `cmd MESSAGE` (no shell)
@@ -79,14 +112,20 @@ rm_release() {   # a release NAME under <base>/releases; prune never passes curr
   local n=$1 p
   case $n in ''|.|..|*/*|*[!0-9A-Za-z._-]*) return 1;; esac
   p="$BASE/releases/$n"
+  { dir_ok "$BASE" && dir_ok "$BASE/releases"; } || return 1       # the parent was just checked
   { [[ $p == "$BASE/releases/"* ]] && [ -d "$p" ] && [ ! -L "$p" ]; } || return 1
   chmod -R u+w "$p" && rm -rf -- "$p"
 }
-WORK=""
+WORK=""; RUNAS=()
 rm_work() {   # only our own mktemp dir: <base>/tmp/work.XXXXXX
   [ -n "$WORK" ] || return 0
   case $WORK in "$BASE"/tmp/work.*) ;; *) return 0;; esac
   case ${WORK#"$BASE/tmp/"} in */*|*..*) return 0;; esac
+  { dir_ok "$BASE" && dir_ok "$BASE/tmp" && dir_ok "$WORK"; } || return 0
+  if [ -e "$WORK/state" ]; then       # the service user's writable area: only that user removes it, so root never walks into it
+    "${RUNAS[@]}" rm -rf -- "$WORK/state" 2>/dev/null || true
+    [ ! -e "$WORK/state" ] || return 0
+  fi
   chmod -R u+w "$WORK" 2>/dev/null || true
   rm -rf -- "$WORK"
 }
@@ -134,7 +173,8 @@ wait_healthy() {   # retries for HEALTH_TIMEOUT seconds
   local end=$(( $(date +%s) + HEALTH_TIMEOUT ))
   while ! health_ok; do [ "$(date +%s)" -lt "$end" ] || return 1; sleep 1; done
 }
-prune() {   # keep the newest KEEP releases, and never remove current or the one just before it
+prune() {
+  tree_ok || { log "REFUSED to prune: $BADPATH is not a plain directory of ours"; return 0; }   # keep the newest KEEP releases, and never remove current or the one just before it
   local names=() n cur prev="" i total
   for n in $(ls -1 "$BASE/releases" | LC_ALL=C sort); do if re "$n" '^[0-9]{8}T[0-9]{6}Z-[0-9a-z]+$'; then names[${#names[@]}]=$n; fi; done
   total=${#names[@]}; cur=$(current_release)
@@ -161,7 +201,7 @@ else
   [ "$(id -un)" = "$RUN_USER" ] || die 2 "must run as root or as $RUN_USER"
   RUNAS=(env)
 fi
-WORK=$(mktemp -d "$BASE/tmp/work.XXXXXX"); chmod 711 "$WORK"
+WORK=$(mktemp -d "$BASE/tmp/work.XXXXXX"); chmod 755 "$WORK"
 
 # ---- 2. master head and its CI result ---------------------------------------------------------------------------
 seen_sha="" seen_status="" seen_etag=""
@@ -198,6 +238,7 @@ if [ "$ci" != success ]; then log "skip $s7: CI is $ci"; record_seen "$sha" "ski
 curl -fsSL --max-time 180 --max-filesize 200000000 -A "$UA" -o "$WORK/src.tgz" "$API/repos/$REPO/tarball/$sha" 2>>"$LOG" || { log "download failed for $s7"; exit 0; }
 reject_tarball() { log "REJECTED $s7: $1"; record_seen "$sha" rejected-tarball; exit 1; }
 tar -tzf "$WORK/src.tgz" > "$WORK/list.txt" 2>>"$LOG" || reject_tarball "tarball unreadable"
+if tar -tvzf "$WORK/src.tgz" 2>/dev/null | grep -q '^[lh]'; then reject_tarball "tarball contains links"; fi
 if grep -qE '(^/|(^|/)\.\.(/|$))' "$WORK/list.txt"; then reject_tarball "tarball has unsafe paths"; fi
 top=$(head -n1 "$WORK/list.txt"); top=${top%%/*}
 { re "$top" '^[A-Za-z0-9._-]+$' && [[ $top == *"$s7"* ]]; } || reject_tarball "top dir '$top' does not carry the sha"
@@ -214,12 +255,14 @@ if [ -n "$cur" ] && [ -f "$BASE/releases/$cur/.source-sha256" ] && [ "$(cat "$BA
 fi
 
 # ---- 5. test before switching, as the service user, never root -----------------------------------------------------
-mkdir "$WORK/test" "$WORK/test/tmp" "$WORK/test/home"
-cp -R "$PRIS/$TEST_DIR" "$WORK/test/$TEST_DIR"
-if [ "$(id -u)" = 0 ]; then chown -R "$RUN_USER" "$WORK/test"; fi
+# code under test: root-owned, readable by the service user. Its writable state (TMPDIR, HOME) is a separate dir owned by that user.
+mkdir "$WORK/test" "$WORK/state" && cp -R "$PRIS/$TEST_DIR" "$WORK/test/$TEST_DIR"
+if [ "$ME" = 0 ]; then chown "$RUN_USER" "$WORK/state"; fi
+chmod 700 "$WORK/state"
+"${RUNAS[@]}" mkdir "$WORK/state/tmp" "$WORK/state/home"
 log "testing $s7 as $RUN_USER"
 tests_ok=1
-( cd "$WORK/test/$TEST_DIR" && run_timeout "$TEST_TIMEOUT" "${RUNAS[@]}" env -i PATH="$PATH" HOME="$WORK/test/home" TMPDIR="$WORK/test/tmp" LANG=en_US.UTF-8 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests ) > "$WORK/test.log" 2>&1 || tests_ok=0
+( cd "$WORK/test/$TEST_DIR" && run_timeout "$TEST_TIMEOUT" "${RUNAS[@]}" env -i PATH="$PATH" HOME="$WORK/state/home" TMPDIR="$WORK/state/tmp" LANG=en_US.UTF-8 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests ) > "$WORK/test.log" 2>&1 || tests_ok=0
 if [ "$tests_ok" = 0 ]; then
   log "REJECTED $s7: tests failed (last lines follow)"; tail -n 12 "$WORK/test.log" >> "$LOG"
   record_seen "$sha" rejected-tests; notify "Rejected $s7 on $NAME: tests failed"; exit 1
@@ -229,12 +272,12 @@ fi
 rel_name="${DEX_TIMESTAMP:-$(date -u +%Y%m%dT%H%M%SZ)}-$s7"   # DEX_TIMESTAMP: test hook only
 re "$rel_name" '^[0-9]{8}T[0-9]{6}Z-[0-9a-z]+$' || die 2 "bad release name $rel_name"
 REL=$BASE/releases/$rel_name
+tree_ok || { log "REFUSED: $BADPATH changed under us (symlink, owner or permissions); nothing switched"; exit 2; }
 if [ -e "$REL" ]; then rm_release "$rel_name" || { log "release $rel_name exists and cannot be replaced"; exit 1; }; fi
 if ! { mkdir "$REL" && cp -R "$PRIS/$SRC_SUBDIR" "$REL/agentvault"; }; then rm_release "$rel_name" || true; log "unpack failed for $s7"; exit 1; fi
-find "$REL" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true       # only inside the release we just made
 printf '%s\n' "$new_hash" > "$REL/.source-sha256"; printf '%s\n' "$sha" > "$REL/.commit"
 if [ -n "$RELEASE_OWNER" ] && [ "$(id -u)" = 0 ]; then chown -R "$RELEASE_OWNER" "$REL"; fi
-chmod -R a+rX,a-w "$REL"
+chmod -R u+w,go-w,a+rX "$REL"       # root-owned (hosted) 644/755: the service can read, not change
 
 # ---- 7-9. switch, restart, health, roll back ----------------------------------------------------------------------
 fail_reason=""

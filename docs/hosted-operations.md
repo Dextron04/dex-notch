@@ -5,10 +5,10 @@ Runs on the mini as `in.dextron04.agentvault-hosted` (port 8766, `https://vault.
 > **Isolation.** [hosted-isolation.md](hosted-isolation.md) moves the service to its own macOS user, `_dexhosted`. After that move, the paths and commands below change: data is `/var/dexhosted/data`, and deploys and CLI calls use sudo as that file shows.
 
 ## Deploy
-Automatic: the mini pulls master and deploys when CI is green, tests it as `_dexhosted`, switches `/var/dexhosted/current`, health-checks and rolls back by itself. See [deploy-pipeline.md](deploy-pipeline.md) (install, pause, hand rollback, logs). Watch it with `sudo tail -f /var/dexhosted/logs/deploy.log`.
+Automatic: the mini pulls master and deploys when CI is green, tests it as `_dexhosted`, switches `/var/dexhosted-deploy/current`, health-checks and rolls back by itself. See [deploy-pipeline.md](deploy-pipeline.md) (install, pause, hand rollback, logs). Watch it with `sudo tail -f /var/dexhosted-deploy/logs/deploy.log`.
 
 ### Emergency manual deploy (fallback)
-Pause the deployer first (`sudo touch /var/dexhosted/deploy-paused`) so it does not switch `current` underneath you, and resume after. The steps below are the old pre-isolation ones (plain `app` directory). With the pipeline installed, create a `-manual` release instead (step 4 of [.claude/skills/dex-deploy/SKILL.md](../.claude/skills/dex-deploy/SKILL.md)).
+Pause the deployer first (`sudo touch /var/dexhosted-deploy/deploy-paused`) so it does not switch `current` underneath you, and resume after. The steps below are the old pre-isolation ones (plain `app` directory). With the pipeline installed, create a `-manual` release instead (step 4 of [.claude/skills/dex-deploy/SKILL.md](../.claude/skills/dex-deploy/SKILL.md)).
 ```
 cd memory
 ssh mac-agent 'cp -R ~/agentvault-hosted/app ~/agentvault-hosted/app.bak-$(date +%Y%m%d%H%M%S)'

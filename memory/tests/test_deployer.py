@@ -172,7 +172,7 @@ class DeployerTest(unittest.TestCase):
         self.assertEqual(self.kicks(), 1)
         self.assertIn("kickstart -k system/in.test.service", (self.dir / "launchctl.calls").read_text())
         self.assertIn("deployed " + sha[:7], self.log())
-        self.assertFalse(os.access(self.base / "current" / "agentvault" / "VERSION", os.W_OK))
+        self.assertEqual((self.base / "current" / "agentvault" / "VERSION").stat().st_mode & 0o777, 0o644)
         self.assertEqual(os.listdir(self.base / "tmp"), [])          # work dir cleaned up
         self.assertFalse((self.base / ".deploy.lock").exists())
 
@@ -274,6 +274,53 @@ class DeployerTest(unittest.TestCase):
         self.publish(1, mode="bad"); r = self.run_deployer()
         self.assertEqual(r.returncode, 1); self.assertIn("no previous release", self.log())
 
+    # ---- a compromised service must not be able to aim root's rm/mv/ln outside the tree --------------------------------
+    def _outside(self):
+        out = self.dir / "outside"; (out / "releases-victim").mkdir(parents=True)
+        (out / "20250101T000000Z-victim").mkdir(); (out / "20250101T000000Z-victim" / "precious").write_text("x")
+        (out / "keepme").write_text("x")
+        return out, sorted(str(p.relative_to(out)) for p in out.rglob("*"))
+
+    def _assert_refused(self, out, snapshot):
+        kicks = self.kicks()
+        self.assertEqual(self.run_deployer().returncode, 2)
+        self.assertEqual(sorted(str(p.relative_to(out)) for p in out.rglob("*")), snapshot)
+        self.assertEqual(self.kicks(), kicks)
+
+    def test_symlinked_releases_dir_is_refused_untouched(self):
+        self.deploy_ok(1); out, snap = self._outside()
+        for p in (self.base / "releases").iterdir(): os.chmod(p, 0o755)
+        shutil.rmtree(self.base / "releases"); os.symlink(out, self.base / "releases")
+        self.publish(2); self._assert_refused(out, snap)
+
+    def test_symlinked_tmp_dir_is_refused_untouched(self):
+        self.deploy_ok(1); out, snap = self._outside()
+        shutil.rmtree(self.base / "tmp"); os.symlink(out, self.base / "tmp")
+        self.publish(2); self._assert_refused(out, snap)
+
+    def test_symlinked_release_dir_is_refused_untouched(self):
+        self.deploy_ok(1); out, snap = self._outside()
+        rel = self.base / "releases" / self.releases()[0]
+        os.chmod(rel, 0o755); shutil.rmtree(rel); os.symlink(out, rel)
+        self.publish(2); self.run_deployer()
+        self.assertEqual(sorted(str(p.relative_to(out)) for p in out.rglob("*")), snap)
+        self.assertEqual(self.kicks(), 1); self.assertTrue(rel.is_symlink())
+
+    def test_symlinked_logs_dir_is_refused_untouched(self):
+        out, snap = self._outside(); (self.base / "logs").symlink_to(out)
+        self.publish(1); self._assert_refused(out, snap)
+
+    def test_symlinked_base_is_refused(self):
+        real = self.dir / "real" / "dexhosted"; real.mkdir(parents=True)
+        link = self.dir / "link" / "dexhosted"; link.parent.mkdir(); link.symlink_to(real)
+        self.write_conf(base=str(link)); self.publish(1)
+        self.assertEqual(self.run_deployer().returncode, 2); self.assertEqual(list(real.iterdir()), [])
+
+    def test_world_writable_base_is_refused(self):
+        self.publish(1); os.chmod(self.base, 0o777)
+        r = self.run_deployer()
+        self.assertEqual(r.returncode, 2); self.assertIn("refusing", r.stderr); self.assertIsNone(self.current())
+
     def test_unknown_config_key_is_refused(self):
         with open(self.conf, "a") as f: f.write("evil=$(touch /tmp/x)\n")
         self.assertEqual(self.run_deployer().returncode, 2)
@@ -294,6 +341,14 @@ class InstallerMigrationTest(unittest.TestCase):
             self.assertEqual(len(list((base / "releases").iterdir())), 1)
             self.assertEqual(len(list((base / "backups").iterdir())), 1)
             self.assertEqual((base / "backups").iterdir().__next__().joinpath("app/agentvault/x.py").read_text(), "1")
+            old, new = Path(d) / "old-app", Path(d) / "dexhosted-deploy"
+            (old / "agentvault").mkdir(parents=True); (old / "agentvault" / "y.py").write_text("2"); new.mkdir()
+            for _ in range(2):
+                r = subprocess.run([BASH, str(INSTALLER), "--migrate-copy", str(old), str(new)], capture_output=True, text=True)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual((new / "current" / "agentvault" / "y.py").read_text(), "2")
+                self.assertTrue((old / "agentvault" / "y.py").exists())               # the old dir is left alone
+            self.assertEqual(len(list((new / "releases").iterdir())), 1)
             r = subprocess.run([BASH, str(INSTALLER), "--migrate-only", "/"], capture_output=True, text=True)
             self.assertNotEqual(r.returncode, 0)
 
