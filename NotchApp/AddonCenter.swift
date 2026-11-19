@@ -58,6 +58,7 @@ final class AddonCenter {
         self.assistant = assistant
         state = AddonState.load(from: stateURL)
         state.applyConsent(current: Self.consentVersion); state.save(to: stateURL)
+        macBuffer = MacBuffer.load(from: macBufferURL)
         reload()
         queueReconnectCard()
         migrateLegacyAccount()
@@ -149,7 +150,7 @@ final class AddonCenter {
                 }
             }
             fresh = fresh.filter { !have.contains($0.id) }
-            if !judge.isEmpty { macBuffer = Array((macBuffer + judge).suffix(Triage.batch)); judgeMac() }
+            if !judge.isEmpty { macBuffer = Array((macBuffer + judge).suffix(Triage.batch)); saveBuffer(); judgeMac() }
             state.pending += fresh.suffix(10)                                   // a burst after sleep is a few cards, not a flood
             state.phoneCursor = last.rec; state.save(to: stateURL)
             if !fresh.isEmpty { presentIfPossible() }
@@ -188,7 +189,10 @@ final class AddonCenter {
     /// Reminders set from another assistant: when one comes due it becomes a card, and it keeps coming back every ten minutes until you say Done.
     func checkReminders() {
         let now = Date()
-        let due = Reminders.due(Reminders.load(vault: VaultReader.defaultVault), done: state.remindDone, snoozed: state.remindSnooze, now: now)
+        let all = Reminders.load(vault: VaultReader.defaultVault)
+        let onScreen = Set(state.pending.filter { $0.kind == "reminder" }.compactMap { $0.id.split(separator: "|", maxSplits: 1).last.map(String.init) })
+        Reminders.remove(Reminders.finished(all, done: state.remindDone, snoozed: state.remindSnooze, onScreen: onScreen))    // Done, given up on, or stale: the file goes, the id stays in remindDone
+        let due = Reminders.due(all, done: state.remindDone, snoozed: state.remindSnooze, now: now)
         guard !due.isEmpty else { return }
         for r in due {
             state.remindDone.append(r.id); state.remindSnooze[r.id] = nil; state.remindCount[r.id, default: 0] += 1
@@ -196,7 +200,7 @@ final class AddonCenter {
             state.pending.append(AddonAlert(id: "reminder|\(r.id)", addon: "reminder", sender: r.sourceName, address: "", headline: r.text,
                 reason: "Set from \(r.sourceName).", url: "", score: 10, created: now, account: nil, kind: "reminder"))
         }
-        if state.remindDone.count > 2000 { state.remindDone.removeFirst(state.remindDone.count - 2000) }
+        state.remindDone = Reminders.trimmed(state.remindDone, present: Set(all.map(\.id)))
         state.save(to: stateURL); presentIfPossible()
     }
 
@@ -240,7 +244,9 @@ final class AddonCenter {
     private(set) var notesOpen = false
     private(set) var notes: [Changelog.Block] = []
     private(set) var notesState = NotesState.loading
-    private var macBuffer: [MailItem] = []      // ponytail: memory only; a quit before the model answers drops them
+    private var macBuffer: [MailItem] = []      // also kept in mac-buffer.json (newest 25, under an hour old) so a quit before the model answers doesn't drop them
+    private let macBufferURL = MacBuffer.defaultURL
+    private func saveBuffer() { macBuffer = MacBuffer.prune(macBuffer, now: Date()); MacBuffer.save(macBuffer, to: macBufferURL) }
     private var judging = false
 
     /// Mac notifications go to the same model as mail, in one batch, within the hourly model budget. Failure keeps them for the next poll.
@@ -251,6 +257,7 @@ final class AddonCenter {
         lastJudgeLog = m; Logger(subsystem: "in.dextron04.notch", category: "notes").info("judge: \(m, privacy: .public)")
     }
     private func judgeMac() {
+        saveBuffer()
         guard !judging, !macBuffer.isEmpty else { return }
         guard let assistant else { judgeNote("no AI connected, \(macBuffer.count) waiting"); return }
         guard state.canCallModel(now: Date(), limit: settings.maxModelCallsPerHour) else { judgeNote("hourly model limit reached, \(macBuffer.count) waiting"); return }
@@ -262,7 +269,7 @@ final class AddonCenter {
             guard let r = await Triage.run(items: batch, importance: settings.importance, order: order, ask: { [self] b, s, u in try await ask(b, s, u) }) else {
                 judgeNote("no model answered, \(batch.count) kept to retry"); return
             }
-            let done = Set(batch.map(\.id)); macBuffer.removeAll { done.contains($0.id) }
+            let done = Set(batch.map(\.id)); macBuffer.removeAll { done.contains($0.id) }; saveBuffer()
             let have = Set(state.pending.map(\.id))
             let found = r.alerts.filter { !have.contains($0.id) && !state.muted.contains($0.address) }
             judgeNote("\(r.backend.rawValue) judged \(batch.count), showing \(found.count)")
@@ -273,7 +280,7 @@ final class AddonCenter {
     }
     func setMacAlerts(_ on: Bool) {
         do { try AddonSettings.saveMacAlerts(at: settingsURL, on) } catch { phoneStatus = "Couldn't save settings.json: \(error.localizedDescription)"; return }
-        macBuffer = []; reload()
+        macBuffer = []; saveBuffer(); reload()
     }
 
     /// Reading failed: say so at the notch (once a day) instead of only in Settings.

@@ -3,6 +3,7 @@ The connector answers the moment ChatGPT/Claude saves one (or after ~25s with no
 import json, re, time, urllib.request
 from pathlib import Path
 from .notes import write_atomic
+from .remote.tools import is_retired
 
 _NAME = re.compile(r"[0-9a-f]{16}\.md")
 
@@ -12,6 +13,7 @@ def store(vault: Path, files) -> int:
     for f in files if isinstance(files, list) else []:
         name, body = (f.get("name"), f.get("content")) if isinstance(f, dict) else (None, None)
         if not (isinstance(name, str) and _NAME.fullmatch(name) and isinstance(body, str) and body.startswith("---\n") and len(body) <= 4096): continue
+        if is_retired(body): continue   # long past due: the Mac would never show it, so don't bring it back after the Mac cleaned it up
         p = Path(vault) / "Reminders" / name
         if p.exists() and p.read_text(encoding="utf-8") == body: continue
         write_atomic(p, body); n += 1

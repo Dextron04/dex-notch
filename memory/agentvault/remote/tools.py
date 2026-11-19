@@ -1,8 +1,9 @@
 """The one write tool the remote connector adds: `remember`. Notes go through the same redacting, idempotent writer as the recorder."""
-import hashlib, json
+import hashlib, json, re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from ..model import SessionMeta, Turn
+from .. import seal
 from ..notes import add_turns, write_atomic
 from ..redact import redact
 
@@ -61,3 +62,24 @@ def remind(vault: Path, a: dict, now=None) -> str:
                  (("id", rid), ("due", due_s), ("text", redact(text)), ("source", SOURCES[source]), ("created", now.strftime("%Y-%m-%dT%H:%M:%SZ"))))
     write_atomic(Path(vault) / "Reminders" / ("%s.md" % rid), "---\n" + fm + "---\n")
     return "Reminder set for %s UTC. It will show at the user's notch." % due.strftime("%Y-%m-%d %H:%M")
+
+
+RETIRE_AFTER = timedelta(days=2)   # the Mac calls anything over a day late stale and never shows it; this is that plus a day's margin
+_DUE = re.compile(r'^due: "([^"]+)"', re.M)
+
+def is_retired(body: str, now=None) -> bool:
+    """True once a reminder is more than RETIRE_AFTER past its due time. A body with no readable due time is never retired."""
+    m = _DUE.search(body or "")
+    try: due = datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc) if m else None
+    except ValueError: due = None
+    return bool(due and due < (now or datetime.now(timezone.utc)) - RETIRE_AFTER)
+
+def retire_reminders(vault: Path, now=None) -> int:
+    """Deletes the vault's reminder files that are long past due, so the folder (and the pending cap) only holds reminders that can still matter.
+    A file that can't be read right now (locked vault, disk error) is left alone. Returns how many were removed."""
+    n = 0
+    for f in (Path(vault) / "Reminders").glob("*.md"):
+        try:
+            if is_retired(seal.read_text(f), now): f.unlink(); n += 1
+        except (OSError, seal.Locked): pass
+    return n

@@ -1,6 +1,6 @@
 """Hosted accounts: users, billing status, and the one place a user id becomes a directory.
 SQLite, one short-lived connection per call (the HTTP server is threaded). Billing is a placeholder: see `grant`."""
-import os, re, secrets, shutil, sqlite3, time
+import logging, os, re, secrets, shutil, sqlite3, sys, time
 from contextlib import closing
 from pathlib import Path
 from typing import Optional
@@ -31,7 +31,9 @@ CREATE TABLE IF NOT EXISTS nudges(user_id TEXT NOT NULL REFERENCES users(id), ki
 CREATE TABLE IF NOT EXISTS milestones(user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL, at REAL NOT NULL, PRIMARY KEY(user_id, kind));  -- first time each step of getting started happened
 CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), exp REAL NOT NULL);
 """
-STATUSES = {"pending", "active", "past_due", "canceled", "deleted"}
+STATUSES = {"pending", "active", "past_due", "canceled", "deleting", "deleted"}   # deleting: the account is closed but some notes are still on disk
+class DeleteIncomplete(Exception):
+    """The account is closed, but its files could not all be removed yet; `finish_deletions` retries."""
 FREE_QUOTA, PAID_QUOTA = 100 * 1024 * 1024, 500 * 1024 * 1024
 OWNER_PLAN = "owner"   # set by `grant --plan owner`: no storage limit
 USABLE = {"pending", "active", "past_due"}   # a free account (pending) can use memory, within the free quota; canceled and deleted accounts cannot
@@ -85,15 +87,32 @@ class Store:
 
     def delete_account(self, uid: str) -> None:
         """Erases a user: credentials, devices, sessions and every note. The users row stays as a tombstone (id, status) with the email freed, so the same
-        address can sign up again and late Stripe events have nothing to revive. Safe to run twice (a half-finished delete is finished by the second run)."""
+        address can sign up again and late Stripe events have nothing to revive. The row says 'deleted' only once the files are verifiably gone; until then it
+        says 'deleting' and raises DeleteIncomplete (`finish_deletions` completes it later). Safe to run twice."""
         if not USER_ID.fullmatch(uid or ""): raise ValueError("invalid user id")
         with self.conn() as c:
-            r = c.execute("SELECT email FROM users WHERE id=?", (uid,)).fetchone()
+            r = c.execute("SELECT email, status FROM users WHERE id=?", (uid,)).fetchone()
             if not r: raise KeyError(uid)
             for t in ("devices", "grants", "sessions", "links", "vault_keys", "passkeys", "nudges", "milestones"): c.execute("DELETE FROM %s WHERE user_id=?" % t, (uid,))
             for t in ("login_links", "waitlist", "invites"): c.execute("DELETE FROM %s WHERE email=?" % t, (r["email"],))   # the address itself goes too, not only the account
-            c.execute("UPDATE users SET status='deleted', status_at=?, email=? WHERE id=?", (time.time(), "deleted-%s@invalid" % uid, uid))
-        shutil.rmtree(self.root / "data" / uid, ignore_errors=True)
+            if r["status"] != "deleted": c.execute("UPDATE users SET status='deleting', status_at=?, email=? WHERE id=?", (time.time(), "deleted-%s@invalid" % uid, uid))
+        d = self.root / "data" / uid
+        for _ in range(2):
+            shutil.rmtree(d, ignore_errors=True)
+            if not d.exists(): break
+        else:
+            print("account %s: could not remove %s; left as 'deleting' for the next sweep" % (uid, d), file=sys.stderr, flush=True)
+            raise DeleteIncomplete(uid)
+        with self.conn() as c: c.execute("UPDATE users SET status='deleted' WHERE id=?", (uid,))
+
+    def finish_deletions(self) -> list:
+        """Retries every account stuck in 'deleting'. Returns the ids that are still not erased. Run at startup and by the `finish-deletes` command."""
+        with self.conn() as c: stuck = [r["id"] for r in c.execute("SELECT id FROM users WHERE status='deleting'")]
+        left = []
+        for u in stuck:
+            try: self.delete_account(u)
+            except DeleteIncomplete: left.append(u)
+        return left
 
     def canceled_before(self, ts: float) -> list:
         """Users whose subscription ended before `ts` (unix) and who never came back: candidates for the retention purge."""
@@ -137,7 +156,7 @@ class Store:
         with self.conn() as c: c.execute("DELETE FROM waitlist WHERE email=?", ((email or "").strip().lower(),))
 
     def user_count(self) -> int:
-        with self.conn() as c: return c.execute("SELECT COUNT(*) FROM users WHERE status!='deleted'").fetchone()[0]
+        with self.conn() as c: return c.execute("SELECT COUNT(*) FROM users WHERE status NOT IN ('deleted','deleting')").fetchone()[0]
 
     def stats(self) -> dict:
         with self.conn() as c:

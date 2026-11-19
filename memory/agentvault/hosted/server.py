@@ -6,13 +6,13 @@ from typing import Callable, Optional
 from urllib.parse import parse_qs, urlencode, urlparse
 from .. import mcp_server
 from ..remote.server import MAX_BODY, client_key
-from ..remote.tools import REMEMBER, REMIND
+from ..remote.tools import REMEMBER, REMIND, retire_reminders
 from ..index import session_files
 from .. import seal
 from . import billing, devices, keys, link, pages, story, tools, ui, webauthn
 from .ingest import MAX_BODY as INGEST_MAX, IngestError, ingest, vault_bytes
 from .oauth import SESSION_TTL, Auth, AuthError, is_loopback, redirect_ok
-from .store import EMAIL, Store
+from .store import EMAIL, DeleteIncomplete, Store
 
 CROSS_ORIGIN_OK = frozenset(("/mcp", "/register", "/token", "/v1/ingest", "/v1/link/start", "/v1/link/poll", "/hooks/stripe"))
 OAUTH_FIELDS = ("response_type", "client_id", "redirect_uri", "code_challenge", "code_challenge_method", "state")
@@ -608,7 +608,8 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if stripe and sub and store.entitled(uid):  # stop the billing first; if Stripe won't confirm, keep the account so nobody is charged for nothing
                 try: stripe.cancel(sub)
                 except billing.BillingError: return self.fail(502, "We couldn't cancel your subscription, so nothing was deleted. Cancel it from the billing page, then try again.")
-            store.delete_account(uid)
+            try: store.delete_account(uid)
+            except DeleteIncomplete: return self.fail(500, "We couldn't finish erasing your notes just now. Your account is closed and can't be used, and we'll complete the erasure shortly.")
             self.redirect("/goodbye", {"Set-Cookie": "%s=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0%s" % (COOKIE, secure)})
 
         def logout(self):
@@ -637,13 +638,15 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
         def reminders_wait(self, q):
             d = self.device()
             if not d: return
-            folder = store.user_vault(d[0]) / "Reminders"
+            vault = store.user_vault(d[0]); folder = vault / "Reminders"
+            with seal.unlocked(devices.key(store, self.bearer())): retire_reminders(vault)   # long-finished reminders are cleared whenever a Mac asks
             def snap():
                 fs = []
-                for f in sorted(folder.glob("*.md")) if folder.is_dir() else []:
-                    try: fs.append((f, f.stat().st_mtime_ns))
+                for f in folder.glob("*.md") if folder.is_dir() else []:
+                    try: fs.append((f.stat().st_mtime_ns, f))
                     except OSError: pass
-                return fs, "%d:%d" % (max((m for _, m in fs), default=0), len(fs))
+                fs.sort(key=lambda x: (x[0], x[1].name))
+                return fs, "%d:%d" % (max((m for m, _ in fs), default=0), len(fs))
             after = q.get("after", "")
             try: seen = int(after.split(":")[0])
             except ValueError: seen = -1
@@ -655,10 +658,15 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             files = []
             if token != after:
                 with seal.unlocked(devices.key(store, self.bearer())):
-                    for f, m in fs:
+                    for m, f in fs:
                         if m > seen:
                             try: files.append({"name": f.name, "content": seal.read_text(f)[:4096]})
-                            except (OSError, seal.Locked): pass
+                            except (OSError, seal.Locked) as e:
+                                # never move past a reminder we couldn't read: hand back what came before it, and let the next ask start again at it
+                                print("reminder %s unreadable (%s); will retry" % (f.name, type(e).__name__), file=sys.stderr, flush=True)
+                                token = "%d:-1" % (m - 1)
+                                if not files: time.sleep(min(wait_seconds, 2))   # ponytail: a short pause so a permanently unreadable file doesn't spin the Mac's loop
+                                break
             self.send(200, {"token": token, "files": files})
 
         # -- billing

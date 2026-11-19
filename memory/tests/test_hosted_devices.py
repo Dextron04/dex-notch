@@ -1,6 +1,9 @@
 import json, sys, tempfile, threading, time, unittest, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from datetime import datetime, timedelta, timezone
+from unittest import mock
+from agentvault import seal
 from agentvault.hosted import devices, ingest, store as store_mod, tools
 from agentvault.hosted.oauth import Auth
 from agentvault.hosted.server import make_server
@@ -148,5 +151,22 @@ class ServerTests(unittest.TestCase):
         self.assertEqual([f["name"][-3:] for f in res["r"]["files"]], [".md"]); self.assertIn("call mum", res["r"]["files"][0]["content"])
         other = self.sign_in("b@x.io"); self.store.grant(self.store.by_email("b@x.io")); tok2 = self.new_token(other)
         self.assertEqual(json.loads(call("GET", self.base + "/v1/reminders/wait?after=", headers={"Authorization": "Bearer " + tok2})[2])["files"], [])   # not their reminder
+
+    def test_an_unreadable_reminder_is_not_skipped_past(self):
+        ck = self.sign_in("a@x.io"); uid = self.store.by_email("a@x.io"); tok = self.new_token(ck); H = {"Authorization": "Bearer " + tok}
+        when = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+        for t in ("first", "second", "third"): tools.call(self.store, uid, "remind", {"text": t, "when": when, "source": "claude"}); time.sleep(0.01)
+        files = sorted((self.store.user_vault(uid) / "Reminders").glob("*.md"), key=lambda p: p.stat().st_mtime_ns); bad = files[1].name
+        real = seal.read_text
+        def flaky(p, *a, **k):
+            if Path(p).name == bad: raise OSError("disk hiccup")
+            return real(p, *a, **k)
+        with mock.patch("agentvault.hosted.server.seal.read_text", flaky):
+            d = json.loads(call("GET", self.base + "/v1/reminders/wait?after=", headers=H)[2])
+            self.assertEqual([f["name"] for f in d["files"]], [files[0].name])             # what came before it, and no more
+            d2 = json.loads(call("GET", self.base + "/v1/reminders/wait?after=" + urllib.parse.quote(d["token"]), headers=H)[2])
+            self.assertEqual(d2["files"], [])                                              # still blocked at it, nothing skipped past
+        d3 = json.loads(call("GET", self.base + "/v1/reminders/wait?after=" + urllib.parse.quote(d["token"]), headers=H)[2])
+        self.assertEqual([f["name"] for f in d3["files"]][:1], [bad]); self.assertEqual(len(d3["files"]), 2)   # once readable, it and the one after both arrive
 
 if __name__ == "__main__": unittest.main()

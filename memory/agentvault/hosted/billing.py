@@ -81,7 +81,7 @@ def apply_event(store: Store, ev: dict) -> str:
         if not uid: return "ignored"
         cur = c.execute("SELECT status FROM users WHERE id=?", (uid,)).fetchone()["status"]
         b = c.execute("SELECT event_ts FROM billing WHERE user_id=?", (uid,)).fetchone()
-        if cur == "deleted": return "ignored"                                     # a closed account is never revived by a late event
+        if cur in ("deleted", "deleting"): return "ignored"                                     # a closed account is never revived by a late event
         if b and b["event_ts"] and ts < b["event_ts"]: return "stale"             # events can arrive out of order: newest state wins
         if typ == "checkout.session.completed": new = "active" if obj.get("payment_status") in ("paid", "no_payment_required") else None
         elif typ == "customer.subscription.deleted": new = "canceled"

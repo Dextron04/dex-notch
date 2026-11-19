@@ -17,6 +17,7 @@ final class RecorderInstaller {
     private var vault: URL { home.appendingPathComponent("Vault", isDirectory: true) }
     private var marker: URL { memoryDir.appendingPathComponent(".app-version") }
     private var bundled: URL? { Bundle.main.resourceURL?.appendingPathComponent("recorder/agentvault") }
+    private var backfillLog: URL { memoryDir.deletingLastPathComponent().appendingPathComponent("backfill.log") }
     private var uid: String { String(getuid()) }
 
     func refresh() {
@@ -41,18 +42,17 @@ final class RecorderInstaller {
             do {
                 try fm.createDirectory(at: memoryDir, withIntermediateDirectories: true)
                 let dest = memoryDir.appendingPathComponent("agentvault")
-                try? fm.removeItem(at: dest)
-                try fm.copyItem(at: src, to: dest)
+                try RecorderLogic.swapIn(src, to: dest)       // the old recorder stays until the new copy is complete
                 try fm.createDirectory(at: vault.appendingPathComponent(".recorder"), withIntermediateDirectories: true)
                 try fm.createDirectory(at: plistURL.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try RecorderLogic.plist(python: py, memoryDir: memoryDir.path, vault: vault.path).write(to: plistURL, atomically: true, encoding: .utf8)
                 try AppUpdater.shared.version.write(to: marker, atomically: true, encoding: .utf8)
             } catch { note = "Couldn't set up the recorder: \(error.localizedDescription)"; return }
-            let plist = plistURL.path, id = uid, mem = memoryDir.path, vaultPath = vault.path
+            let plist = plistURL.path, id = uid, mem = memoryDir.path, vaultPath = vault.path, logURL = backfillLog
             await Task.detached {
                 _ = Probe.run("/bin/launchctl", ["bootout", "gui/\(id)/\(RecorderLogic.label)"], timeout: 15, mergeErrors: true)
                 _ = Probe.run("/bin/launchctl", ["bootstrap", "gui/\(id)", plist], timeout: 15, mergeErrors: true)
-                if backfill { Self.backfill(python: py, memoryDir: mem, vault: vaultPath) }     // your existing history, once
+                if backfill { Self.backfill(python: py, memoryDir: mem, vault: vaultPath, log: logURL) }     // your existing history, once
             }.value
             try? await Task.sleep(for: .seconds(2))
             let up = await Task.detached { Self.isRunning(uid: id) }.value
@@ -88,11 +88,17 @@ final class RecorderInstaller {
         return exe
     }
 
-    nonisolated static func backfill(python: String, memoryDir: String, vault: String) {
+    /// Backfill's output goes to a log (appended, owner-only) so a failed import can be looked at; /dev/null told no one anything.
+    nonisolated static func backfill(python: String, memoryDir: String, vault: String, log: URL) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: python); p.arguments = ["-m", "agentvault", "backfill", "--vault", vault]
         p.currentDirectoryURL = URL(fileURLWithPath: memoryDir); p.environment = AgentRunner.environment
-        p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: log.path) { fm.createFile(atPath: log.path, contents: nil, attributes: [.posixPermissions: 0o600]) }
+        if let h = try? FileHandle(forWritingTo: log) {
+            _ = try? h.seekToEnd(); h.write(Data("\n--- backfill \(Date()) ---\n".utf8))
+            p.standardOutput = h; p.standardError = h
+        } else { p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice }
         try? p.run()                                            // it finishes on its own; the recorder job is already watching for new turns
     }
 }

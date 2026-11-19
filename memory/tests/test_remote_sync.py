@@ -5,7 +5,7 @@ from agentvault import notes, remote_sync
 from agentvault.model import Turn, SessionMeta
 
 def note(vault, agent, sid, title):
-    notes.append_turns(vault, SessionMeta(agent, sid, "chats", "", "2026-11-14T10:00:00Z", title, "/s"), [Turn("assistant", "body " + title, "2026-11-14T10:00:00Z")])
+    notes.add_turns(vault, SessionMeta(agent, sid, "chats", "", "2026-11-14T10:00:00Z", title, "/s"), [Turn("assistant", "body " + title, "2026-11-14T10:00:00Z")])[0]
 
 @unittest.skipUnless(shutil.which("rsync"), "rsync needed")
 class RemoteSyncTests(unittest.TestCase):

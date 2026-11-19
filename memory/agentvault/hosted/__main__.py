@@ -39,6 +39,7 @@ def main() -> None:
     st = sub.add_parser("stats", help="users by status, devices, database size, and the biggest vaults"); st.add_argument("--root", required=True)
     pg = sub.add_parser("purge", help="erase accounts canceled more than N days ago (a dry run unless --yes)"); pg.add_argument("--root", required=True)
     pg.add_argument("--days", type=int, default=30); pg.add_argument("--yes", action="store_true")
+    fd = sub.add_parser("finish-deletes", help="finish erasing accounts whose deletion stopped part-way"); fd.add_argument("--root", required=True)
     rv = sub.add_parser("remind-vaults", help="email everyone whose vault is not locked yet (a dry run unless --yes; once a week per person at most)"); rv.add_argument("--root", required=True)
     rv.add_argument("--public-url", required=True); rv.add_argument("--days", type=int, default=7); rv.add_argument("--yes", action="store_true"); smtp_args(rv)
     g = sub.add_parser("grant", help="dev override: mark an account paid without Stripe"); g.add_argument("--root", required=True); g.add_argument("email"); g.add_argument("--plan", default="placeholder", help="use \"owner\" for an account with no storage limit")
@@ -71,6 +72,8 @@ def main() -> None:
             print("erased")
         elif old: print("dry run: add --yes to erase them")
         return
+    if a.cmd == "finish-deletes":
+        left = store.finish_deletions(); print("still not erased: %s" % left if left else "all deletions finished"); return
     if a.cmd == "remind-vaults":
         send = build_sender(a, vault=True)
         if a.yes and not send: raise SystemExit("give --smtp-host (and --mail-from) to send")
@@ -83,6 +86,7 @@ def main() -> None:
         uid = store.by_email(a.email)
         if not uid: raise SystemExit("no such account (sign in once first)")
         store.grant(uid, a.plan); print("granted", uid, a.plan); return
+    if store.finish_deletions(): print("some deleted accounts still have files on disk; run finish-deletes", file=sys.stderr, flush=True)   # a delete that stopped part-way is finished at startup
     send_mail = build_sender(a)
     if not send_mail:
         def send_mail(email, link):  # dev only: no SMTP configured, so the link goes to the log. Anyone who can read the log can sign in as that user.

@@ -1,5 +1,6 @@
 import Foundation
 import SQLite3
+import os
 
 // Add-ons watch a service on your behalf (Gmail first). The shape is always the same:
 //   fetch new items  →  cheap deterministic filter  →  one model call that judges what is worth an interruption  →  queue  →  show at the notch.
@@ -281,7 +282,19 @@ struct AddonState: Codable, Equatable {
     static func load(from url: URL) -> AddonState {
         guard let d = try? Data(contentsOf: url) else { return AddonState() }
         let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
-        return (try? dec.decode(AddonState.self, from: d)) ?? AddonState()
+        do { return try dec.decode(AddonState.self, from: d) } catch {
+            // a file we can't read is kept, not overwritten by the empty state's first save
+            let kept = quarantine(url)
+            Logger(subsystem: "in.dextron04.notch", category: "state").error("addons.json couldn't be read (\(error.localizedDescription, privacy: .public)); moved to \(kept?.lastPathComponent ?? "nowhere (move failed)", privacy: .public), starting fresh")
+            return AddonState()
+        }
+    }
+    /// Moves an unreadable state file to `addons.json.corrupt-<timestamp>` next to it. Returns where it went.
+    @discardableResult static func quarantine(_ url: URL, now: Date = Date()) -> URL? {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyyMMdd-HHmmss"
+        let dest = url.deletingLastPathComponent().appendingPathComponent(url.lastPathComponent + ".corrupt-" + f.string(from: now))
+        try? FileManager.default.removeItem(at: dest)
+        do { try FileManager.default.moveItem(at: url, to: dest); return dest } catch { return nil }
     }
     func save(to url: URL) {
         let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601

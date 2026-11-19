@@ -6,7 +6,7 @@ from agentvault.model import Turn, SessionMeta
 
 def add(vault, sid, text, agent="claude-code", project="notch", title="t", started="2026-11-14T10:00:00Z"):
     m = SessionMeta(agent, sid, project, "/x/" + project, started, title, "/src")
-    return notes.append_turns(vault, m, [Turn("user", text, started)])
+    return notes.add_turns(vault, m, [Turn("user", text, started)])[0]
 
 class SearchTests(unittest.TestCase):
     def setUp(self):

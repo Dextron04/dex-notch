@@ -14,7 +14,7 @@ class NotesTests(unittest.TestCase):
     def tearDown(self): self._t.cleanup()
 
     def test_creates_note_with_frontmatter(self):
-        p = notes.append_turns(self.vault, meta(), [Turn("user", "hi", "2026-11-14T10:00:01Z")])
+        p = notes.add_turns(self.vault, meta(), [Turn("user", "hi", "2026-11-14T10:00:01Z")])[0]
         self.assertTrue(p.is_relative_to(self.vault / "Sessions" / "claude-code" / "2026-11"))
         fm = notes.read_frontmatter(p)
         self.assertEqual(fm["agent"], "claude-code"); self.assertEqual(fm["project"], "notch")
@@ -24,9 +24,9 @@ class NotesTests(unittest.TestCase):
 
     def test_append_is_additive_and_updates_counts(self):
         m = meta()
-        p = notes.append_turns(self.vault, m, [Turn("user", "q1", "2026-11-14T10:00:01Z")])
-        p2 = notes.append_turns(self.vault, m, [Turn("assistant", "a1", "2026-11-14T10:00:09Z"),
-                                                Turn("tool", "ran: Bash ls", "2026-11-14T10:00:10Z")])
+        p = notes.add_turns(self.vault, m, [Turn("user", "q1", "2026-11-14T10:00:01Z")])[0]
+        p2 = notes.add_turns(self.vault, m, [Turn("assistant", "a1", "2026-11-14T10:00:09Z"),
+                                                Turn("tool", "ran: Bash ls", "2026-11-14T10:00:10Z")])[0]
         self.assertEqual(p, p2)
         fm = notes.read_frontmatter(p); body = p.read_text()
         self.assertEqual(fm["turns"], 3); self.assertEqual(fm["updated"], "2026-11-14T10:00:10Z")
@@ -34,11 +34,11 @@ class NotesTests(unittest.TestCase):
 
     def test_redacts_on_write(self):
         secret = "ghp_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"
-        p = notes.append_turns(self.vault, meta(title="key " + secret), [Turn("user", "my " + secret, "2026-11-14T10:00:01Z")])
+        p = notes.add_turns(self.vault, meta(title="key " + secret), [Turn("user", "my " + secret, "2026-11-14T10:00:01Z")])[0]
         self.assertNotIn(secret, p.read_text())
 
     def test_slug_safe_for_emoji_and_slashes(self):
-        p = notes.append_turns(self.vault, meta(project="my/proj 🚀 ünï"), [Turn("user", "x", "2026-11-14T10:00:01Z")])
+        p = notes.add_turns(self.vault, meta(project="my/proj 🚀 ünï"), [Turn("user", "x", "2026-11-14T10:00:01Z")])[0]
         self.assertTrue(p.exists()); self.assertEqual(p.parent, self.vault / "Sessions" / "claude-code" / "2026-11")
         self.assertRegex(p.name, r"^[a-z0-9\-\.]+\.md$")
 
@@ -55,7 +55,7 @@ class NotesTests(unittest.TestCase):
         self.assertNotEqual(a, b)
 
     def test_atomic_write_leaves_no_temp_files(self):
-        p = notes.append_turns(self.vault, meta(), [Turn("user", "x", "2026-11-14T10:00:01Z")])
+        p = notes.add_turns(self.vault, meta(), [Turn("user", "x", "2026-11-14T10:00:01Z")])[0]
         self.assertEqual([f.name for f in p.parent.iterdir()], [p.name])
 
     def test_appending_same_turns_again_adds_nothing(self):
@@ -66,14 +66,14 @@ class NotesTests(unittest.TestCase):
         self.assertEqual(p.read_text().count("q1"), 1)  # the repeated turn was not written twice
 
     def test_note_links_to_project_day_and_agent_hubs(self):
-        p = notes.append_turns(self.vault, meta(project="My Proj"), [Turn("user", "hi", "2026-11-14T10:00:01Z")])
+        p = notes.add_turns(self.vault, meta(project="My Proj"), [Turn("user", "hi", "2026-11-14T10:00:01Z")])[0]
         t = p.read_text()
         for link in ("[[Projects/my-proj|My Proj]]", "[[Days/2026-11-14]]", "[[Agents/claude-code]]"): self.assertIn(link, t)
         self.assertLess(t.index("# Fix hotkey"), t.index("[[Projects/"))
 
     def test_hub_notes_for_projects_and_days(self):
-        notes.append_turns(self.vault, meta(sid="aaaaaaaaaa1", title="First", started="2026-11-13T09:00:00Z"), [Turn("user", "x", "2026-11-13T09:00:01Z")])
-        p2 = notes.append_turns(self.vault, meta(sid="bbbbbbbbbb2", title="Second", started="2026-11-14T09:00:00Z"), [Turn("user", "x", "2026-11-14T09:00:01Z")])
+        notes.add_turns(self.vault, meta(sid="aaaaaaaaaa1", title="First", started="2026-11-13T09:00:00Z"), [Turn("user", "x", "2026-11-13T09:00:01Z")])[0]
+        p2 = notes.add_turns(self.vault, meta(sid="bbbbbbbbbb2", title="Second", started="2026-11-14T09:00:00Z"), [Turn("user", "x", "2026-11-14T09:00:01Z")])[0]
         (p2.parent / (p2.stem + ".sync-conflict-20261114-XYZ.md")).write_text(p2.read_text().replace("Second", "CONFLICT"))
         index.rebuild_indexes(self.vault)
         proj = (self.vault / "Projects" / "notch.md").read_text()
@@ -85,12 +85,12 @@ class NotesTests(unittest.TestCase):
         self.assertEqual((self.vault / "Days" / "2026-11-14.md").read_text(), day)
 
     def test_reset_note_deletes(self):
-        m = meta(); p = notes.append_turns(self.vault, m, [Turn("user", "x", "2026-11-14T10:00:01Z")])
+        m = meta(); p = notes.add_turns(self.vault, m, [Turn("user", "x", "2026-11-14T10:00:01Z")])[0]
         notes.reset_note(self.vault, m); self.assertFalse(p.exists())
 
     def test_indexes_list_newest_first_and_skip_conflicts(self):
-        notes.append_turns(self.vault, meta(sid="aaaaaaaa-1", title="Older"), [Turn("user", "x", "2026-11-14T10:00:01Z")])
-        notes.append_turns(self.vault, meta(sid="bbbbbbbb-2", title="Newer", agent="codex"), [Turn("user", "x", "2026-11-14T12:00:01Z")])
+        notes.add_turns(self.vault, meta(sid="aaaaaaaa-1", title="Older"), [Turn("user", "x", "2026-11-14T10:00:01Z")])[0]
+        notes.add_turns(self.vault, meta(sid="bbbbbbbb-2", title="Newer", agent="codex"), [Turn("user", "x", "2026-11-14T12:00:01Z")])[0]
         d = self.vault / "Sessions" / "codex" / "2026-11"
         (d / "2026-11-14-notch-bbbbbbbb.sync-conflict-20261114-abc.md").write_text("---\nagent: \"codex\"\nupdated: \"2027-01-01T00:00:00Z\"\ntitle: \"CONFLICT\"\n---\n")
         index.rebuild_indexes(self.vault)

@@ -6,7 +6,7 @@ from agentvault.model import Turn, SessionMeta
 
 def add(v, sid, turns, title="Auth fix", project="auth", agent="codex", started="2026-11-14T10:00:00Z"):
     m = SessionMeta(agent, sid, project, "/x/" + project, started, title, "/s")
-    return notes.append_turns(v, m, [Turn(r, t, "2026-11-14T10:%02d:00Z" % i) for i, (r, t) in enumerate(turns)])
+    return notes.add_turns(v, m, [Turn(r, t, "2026-11-14T10:%02d:00Z" % i) for i, (r, t) in enumerate(turns)])[0]
 
 class RagPushTests(unittest.TestCase):
     def setUp(self):
