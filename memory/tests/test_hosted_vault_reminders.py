@@ -61,18 +61,20 @@ class AdminAndBannerTests(unittest.TestCase):
         call("POST", self.base + "/login", {"email": email}, form=True); tok = self.mail[-1][1].split("t=")[1]
         _, h, _ = call("POST", self.base + "/login/verify", {"t": tok}, form=True); return {"Cookie": h["Set-Cookie"].split(";")[0]}
 
-    def test_the_account_page_nags_until_the_vault_is_locked(self):
-        ck = self.session("ada@x.io"); page = call("GET", self.base + "/account", headers=ck)[2]
-        self.assertIn("Lock your vault to keep your Mac and assistants working", page)
-        call("POST", self.base + "/account/vault", {"passphrase": "a long enough passphrase", "confirm": "a long enough passphrase", "next": "/account"}, ck, form=True)
-        self.assertNotIn("Lock your vault to keep your Mac", call("GET", self.base + "/account", headers=ck)[2])
+    def lock(self, ck): call("POST", self.base + "/account/vault", {"passphrase": "a long enough passphrase", "confirm": "a long enough passphrase", "next": "/account"}, ck, form=True)
+
+    def test_an_unlocked_account_sees_the_setup_page_not_a_banner(self):
+        ck = self.session("ada@x.io"); st, h, _ = call("GET", self.base + "/account", headers=ck); self.assertEqual((st, h["Location"].split("?")[0]), (302, "/account/setup"))
+        self.lock(ck); page = call("GET", self.base + "/account", headers=ck)[2]
+        self.assertNotIn("Lock your vault to keep your Mac", page); self.assertIn("1 of 5 done", page)
 
     def test_the_operator_can_send_the_reminders_and_nobody_else_can(self):
-        self.session("ada@x.io"); boss, other = self.session("boss@x.io"), self.session("eve@x.io")
+        # only an operator who has locked their own vault can reach the page; the reminders are for legacy accounts that are not locked yet
+        self.session("ada@x.io"); boss, other = self.session("boss@x.io"), self.session("eve@x.io"); self.lock(boss); self.lock(other)
         self.assertEqual(call("POST", self.base + "/admin/vault-reminders", {}, other, form=True)[0], 404); self.assertEqual(self.sent, [])
-        self.assertIn("Vaults not locked yet (3)", call("GET", self.base + "/admin", headers=boss)[2])
+        self.assertIn("Vaults not locked yet (1)", call("GET", self.base + "/admin", headers=boss)[2])
         self.assertEqual(call("POST", self.base + "/admin/vault-reminders", {}, boss, form=True)[0], 302)
-        self.assertEqual(sorted(e for e, _ in self.sent), ["ada@x.io", "boss@x.io", "eve@x.io"])
-        call("POST", self.base + "/admin/vault-reminders", {}, boss, form=True); self.assertEqual(len(self.sent), 3)      # a second press sends nothing more
+        self.assertEqual(sorted(e for e, _ in self.sent), ["ada@x.io"])
+        call("POST", self.base + "/admin/vault-reminders", {}, boss, form=True); self.assertEqual(len(self.sent), 1)      # a second press sends nothing more
 
 if __name__ == "__main__": unittest.main()

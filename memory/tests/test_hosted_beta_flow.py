@@ -46,17 +46,19 @@ class BetaFlowTests(unittest.TestCase):
         self.assertEqual([w["email"] for w in self.store.waitlist()], ["ada@example.com"])
         # 2. you invite them from the operator page; the email says what to do, in order
         self.store.create_user("boss@x.io"); boss = self.session("boss@x.io")
+        self.form("/account/vault", {"passphrase": PASS, "confirm": PASS, "next": "/account"}, boss)          # the operator has to lock their own vault first, like anyone
         self.assertEqual(self.form("/admin/invite", {"email": "ada@example.com"}, boss)[0], 302)
         (to, _), = self.invites
         self.assertEqual(to, "ada@example.com")
         # 3. they sign in by emailed link; the account exists and the welcome email goes out
         ada = self.session("ada@example.com"); uid = self.store.by_email("ada@example.com")
         self.assertEqual([e for e, _ in self.welcomes], ["ada@example.com"])
-        # 4. the account page starts at zero, with the vault banner
-        page = call("GET", self.base + "/account", headers=ada)[2]
-        self.assertIn("0 of 5 done", page); self.assertIn("Lock your vault to keep your Mac and assistants working", page)
+        # 4. nothing opens before the vault is locked: the account page sends them to the setup page
+        st, h, _ = call("GET", self.base + "/account", headers=ada); self.assertEqual((st, h["Location"].split("?")[0]), (302, "/account/setup"))
+        self.assertIn("Create a passkey", call("GET", self.base + "/account/setup?next=/account", headers=ada)[2])
         # 5. they lock the vault and are handed a recovery code
         self.assertIn("recovery-code", self.form("/account/vault", {"passphrase": PASS, "confirm": PASS, "next": "/account"}, ada)[2])
+        self.assertIn("1 of 5 done", call("GET", self.base + "/account", headers=ada)[2])
         # 6. Dex Notch asks to link this Mac; the browser approves with the passphrase
         s = json.loads(call("POST", self.base + "/v1/link/start", {"name": "Ada's MacBook"})[2]); code = s["code"].replace("-", "")
         page = call("GET", self.base + "/link?code=" + code, headers=ada)[2]

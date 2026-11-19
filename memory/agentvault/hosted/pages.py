@@ -147,7 +147,7 @@ def home(user: Optional[str] = None, beta: bool = False) -> str:
 def login(*, beta: bool = False, client_name: Optional[str] = None, fields: Optional[dict] = None, email: str = "", error: str = "", user: Optional[str] = None, link_name: Optional[str] = None) -> str:
     heading = ("Let %s use your memory" % esc(client_name) if client_name else "Add <em>%s</em> to Dex Notch" % esc(link_name) if link_name else "Sign in. <em>No password.</em>")
     lede = ("Sign in to connect it. New here? This creates your account." if client_name or link_name
-            else "Use a passkey (Touch ID), or enter your email and we'll send a one-time link. New here? The link creates your account.")
+            else "Use a passkey (Touch ID), or enter your email and we'll send a one-time link. New here? The link creates your account, and your first step is locking it with a passkey.")
     err = '<p class="form-error" role="alert">%s</p>' % esc(error) if error else ""
     body = f"""
 <div class="wrap auth">
@@ -202,7 +202,7 @@ def verify(token: str, user: Optional[str] = None) -> str:
 # ---------------------------------------------------------------- OAuth consent
 
 
-def _passkey(kind: str, label: str, *, creds=(), fields=None, nxt: str = "", submit: str = "") -> str:
+def _passkey(kind: str, label: str, *, creds=(), fields=None, nxt: str = "", submit: str = "", primary: bool = False) -> str:
     """A passkey button. It stays hidden until the page's script finds this browser can do passkeys; without script nothing here shows."""
     data = {"data-passkey": kind}
     if creds: data["data-creds"] = json.dumps(list(creds))
@@ -210,7 +210,7 @@ def _passkey(kind: str, label: str, *, creds=(), fields=None, nxt: str = "", sub
     if nxt: data["data-next"] = nxt
     if submit: data["data-submit"] = submit
     attrs = " ".join('%s="%s"' % (k, esc(v)) for k, v in data.items())
-    return '<button class="btn btn-ghost" type="button" hidden %s>%s</button><p class="form-error" role="alert" data-passkey-msg hidden></p>' % (attrs, esc(label))
+    return '<button class="btn%s" type="button" hidden %s>%s</button><p class="form-error" role="alert" data-passkey-msg hidden></p>' % ("" if primary else " btn-ghost", attrs, esc(label))
 
 def _pass_field(error: str = "", creds=(), submit: str = "", has_pass: bool = True) -> str:
     """How someone opens their vault on a page that needs it. A vault made with a passkey has no passphrase, so there is nothing to type: just the touch.
@@ -223,29 +223,32 @@ def _pass_field(error: str = "", creds=(), submit: str = "", has_pass: bool = Tr
             '<input type="password" id="passphrase" name="passphrase"%s autocomplete="current-password" spellcheck="false" autocapitalize="none">'
             '<p class="hint">It unlocks your notes. Dex Notch never sees it after this page.</p></div>' % ("Or your vault passphrase" if creds else "Your vault passphrase", "" if creds else " required"))
 
-def vault_setup(email: str, nxt: str, error: str = "", available_for: str = "") -> str:
+def vault_setup(email: str, nxt: str, error: str = "") -> str:
     err = '<p class="form-error" role="alert">%s</p>' % esc(error) if error else ""
     body = f"""
 <div class="wrap auth">
 <div class="auth-aside">
-<span class="eyebrow">Before anything is saved</span>
+<span class="eyebrow">One step before anything else</span>
 <h1>Lock your <em>vault.</em></h1>
-<p class="lede">Your notes are encrypted with a key that only you can open, with a passphrase or a touch of your finger. The server keeps the notes and a wrapped copy of the key, never your passphrase, so a copy of the disk or a backup is unreadable.</p>
+<p class="lede">Your notes are encrypted with a key that only you can open, with a passkey (Touch ID, your phone or a security key) or a passphrase. The server keeps the notes and a wrapped copy of the key, never your passphrase, so a copy of the disk or a backup is unreadable.</p>
 <p class="dim">While a Mac or an assistant you approved is using your memory, the service opens your notes for that request, as it has to in order to search them. The <a href="{PRIVACY}">privacy notes</a> say exactly what that means.</p>
 </div>
 <div class="card auth-card">
-<h2>Choose a passphrase</h2>
-<p class="sub">Signed in as <b class="mono">{esc(email)}</b>. Next you'll get a recovery code. Keep both: without them, nobody can recover your notes.</p>
+<h2>Create a passkey</h2>
+<p class="sub">Signed in as <b class="mono">{esc(email)}</b>. A passkey is the quickest way: one touch locks the vault. Next you'll get a recovery code. Keep it: without it and your passkey, nobody can recover your notes.</p>
 {err}
-{_passkey("setup", "Use Touch ID or a passkey instead", nxt=nxt)}
+{_passkey("setup", "Create a passkey", nxt=nxt, primary=True)}
+<noscript><p class="hint">Passkeys need JavaScript. Use a passphrase below.</p></noscript>
+<h2>Use a passphrase instead</h2>
+<p class="sub">If your device can't make a passkey that works for this, a passphrase does the same job.</p>
 <form method="post" action="/account/vault" data-once>
 {hidden({"next": nxt})}
 <div class="field"><label for="p1">Passphrase</label>
-<input type="password" id="p1" name="passphrase" required minlength="10" autocomplete="new-password" spellcheck="false" autocapitalize="none" autofocus>
+<input type="password" id="p1" name="passphrase" required minlength="10" autocomplete="new-password" spellcheck="false" autocapitalize="none">
 <p class="hint">At least 10 characters. Three or four unrelated words work well.</p></div>
 <div class="field"><label for="p2">Again</label>
 <input type="password" id="p2" name="confirm" required minlength="10" autocomplete="new-password" spellcheck="false" autocapitalize="none"></div>
-<button class="btn" type="submit">Lock my vault</button>
+<button class="btn btn-ghost" type="submit">Lock my vault with a passphrase</button>
 </form>
 </div>
 </div>
@@ -372,14 +375,13 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
 <div class="who"><span class="mono">{esc(email)}</span><span class="chip" data-tone="{tone}"><i></i>{esc(label)}</span>{bill}</div>
 <p class="dim">{intro}</p>
 </header>
-{('<div class="notice" role="status"><span><b>Lock your vault to keep your Mac and assistants working.</b> Until you do, they are paused and your saved notes are not encrypted. <a href="#vault-title">Lock it now</a>.</span></div>') if can_encrypt and not encrypted else ""}
 <div class="stack">
 <section class="card" aria-labelledby="setup-title">
 <div class="card-head"><h2 id="setup-title">Get set up</h2><p>{done_n} of {len(steps)} done</p></div>
 <ol class="checklist">
-<li {"data-done" if devices else ""}><span class="dot" aria-hidden="true"></span><h3>Install Dex Notch and sign in</h3>
+{('<li data-done><span class="dot" aria-hidden="true"></span><h3>Lock your vault</h3><div class="body"><p>Done when you signed up: a passkey or a passphrase, and a recovery code. Your notes are encrypted with a key only you can open.</p></div></li>') if can_encrypt else ""}
+<li {"data-done" if devices else ""}><span class="dot" aria-hidden="true"></span><h3>Link your Mac</h3>
 <div class="body"><p>Version 0.9 or later, on macOS 14 or newer. Open it, press <b>Continue in browser</b>, and check that the code on the page matches the one on your Mac. <a href="{INSTALL}">Install guide</a></p><div class="row-actions"><a class="btn btn-ghost btn-sm" href="{RELEASES}">Download for Mac</a></div></div></li>
-{('<li %s><span class="dot" aria-hidden="true"></span><h3>Lock your vault</h3><div class="body"><p>Choose Touch ID or a passphrase, and keep the recovery code. Your notes are encrypted with a key only you can open.%s</p></div></li>' % ("data-done" if encrypted else "", "" if encrypted else ' <a href="#vault-title">Lock it now</a>')) if can_encrypt else ""}
 <li {"data-done" if "uploaded" in progress else ""}><span class="dot" aria-hidden="true"></span><h3>Record your conversations</h3>
 <div class="body"><p>Dex Notch starts a small helper after you sign in that saves your Claude Code, Codex and Gemini conversations and uploads them. This step is done when the first ones arrive. If it isn't, open <b>Settings → Memory</b> in Dex Notch and press <b>Start recording</b>.</p></div></li>
 <li {"data-done" if connected else ""}><span class="dot" aria-hidden="true"></span><h3>Connect Claude or ChatGPT{' <span class="chip" data-tone="ok"><i></i>Connected</span>' if connected else ''}</h3>
@@ -398,7 +400,7 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
 
 <section class="card" aria-labelledby="macs-title">
 <div class="card-head"><h2 id="macs-title">Your Macs</h2><p>Each one uploads with its own key.</p></div>
-{('<ul class="devices plain" role="list">' + rows + '</ul>') if rows else '<p class="empty">No Macs yet. Add one in step 2 above.</p>'}
+{('<ul class="devices plain" role="list">' + rows + '</ul>') if rows else '<p class="empty">No Macs yet. Add one in the checklist above.</p>'}
 </section>
 
 <section class="card" aria-labelledby="storage-title">
@@ -415,14 +417,7 @@ def account(*, email: str, status: str, entitled: bool, stripe: bool, devices: L
   '<div class="field"><label for="cur">Current passphrase</label><input type="password" id="cur" name="passphrase" autocomplete="current-password" spellcheck="false"></div>'
   '<div class="field"><label for="rec">or recovery code</label><input type="text" id="rec" name="recovery" autocomplete="off" spellcheck="false" autocapitalize="characters"></div></div>'
   '<div class="field"><label for="new">New passphrase</label><input type="password" id="new" name="new" required minlength="10" autocomplete="new-password" spellcheck="false"></div>'
-  '<button class="btn btn-ghost btn-sm" type="submit">Change passphrase</button></form></section>') if encrypted else
- ('<section class="card" aria-labelledby="vault-title"><div class="card-head"><h2 id="vault-title">Vault encryption</h2><p><span class="chip" data-tone="warn"><i></i>Off</span></p></div>'
-  '<p class="dim">Encrypt your notes with a key that only your passphrase opens. Your Macs and assistants will need to sign in again afterwards.</p>'
-  + ('<p class="form-error" role="alert">%s</p>' % esc(flash) if flash else '') +
-  '<form method="post" action="/account/vault" data-once>' + _passkey("setup", "Use Touch ID or a passkey instead", nxt="/account") + hidden({"next": "/account"}) +
-  '<div class="field"><label for="p1">Passphrase</label><input type="password" id="p1" name="passphrase" required minlength="10" autocomplete="new-password" spellcheck="false"></div>'
-  '<div class="field"><label for="p2">Again</label><input type="password" id="p2" name="confirm" required minlength="10" autocomplete="new-password" spellcheck="false"></div>'
-  '<button class="btn btn-sm" type="submit">Lock my vault</button></form></section>' if can_encrypt else '')}
+  '<button class="btn btn-ghost btn-sm" type="submit">Change passphrase</button></form></section>') if encrypted else ''}
 {pk_card}
 
 <section class="card" aria-labelledby="data-title">
@@ -531,7 +526,7 @@ def connect(mcp_url: str, user: Optional[str] = None, assistants: Optional[dict]
 <header class="page-head">
 <span class="eyebrow">Cross-context memory</span>
 <h1>Connect your <em>assistants</em></h1>
-<p class="dim">New here? The <a href="{INSTALL}">install guide</a> goes from invitation to your first conversation. One memory, every assistant. Connect each one once, and Claude, ChatGPT and your coding agents can all search what the others learned: decide something in a terminal, ask about it from your phone. They all use the same address.</p>
+<p class="dim">New here? The <a href="{INSTALL}">install guide</a> goes from invitation to your first conversation, in this order: sign up, lock your vault with a passkey, link your Mac, then connect your assistants. One memory, every assistant. Connect each one once, and Claude, ChatGPT and your coding agents can all search what the others learned: decide something in a terminal, ask about it from your phone. They all use the same address.</p>
 </header>
 <div class="stack">
 <section class="card" aria-labelledby="url-title">

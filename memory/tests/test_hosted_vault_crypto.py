@@ -89,9 +89,9 @@ class EncryptedVaultTests(unittest.TestCase):
 
     def test_a_new_account_has_to_lock_its_vault_before_linking_a_mac(self):
         ck = self.session(); s = self.start_link(); code = s["code"].replace("-", "")
-        page = call("GET", self.base + "/link?code=" + code, headers=ck)[2]
-        self.assertIn("Choose a passphrase", page); self.assertNotIn("Add this Mac</button>", page)
-        self.assertEqual(self.post("/link", {"code": code, "decision": "allow"}, ck)[0], 400)
+        st, h, _ = call("GET", self.base + "/link?code=" + code, headers=ck)
+        self.assertEqual(st, 302); self.assertTrue(h["Location"].startswith("/account/setup"))
+        self.assertEqual(self.post("/link", {"code": code, "decision": "allow"}, ck)[0], 302)       # the gate answers first; the "Lock your vault first" stop behind it never shows
 
     def test_notes_are_sealed_on_disk_and_open_for_the_mac_and_the_assistant(self):
         ck = self.session(); rec = self.lock(ck, nxt="/account")

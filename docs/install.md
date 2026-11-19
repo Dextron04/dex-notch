@@ -27,10 +27,10 @@ This is the whole path for a closed-beta tester, from invitation to your first c
 
 ## 3. Lock your vault
 
-Before your Mac can be added, the page asks you to lock your vault. This encrypts your saved conversations with a key only you can open.
+Right after you sign in for the first time, a page asks you to lock your vault. Nothing else on your account works until you do, so no one ends up with an unlocked vault. This encrypts your saved conversations with a key only you can open.
 
-- **Touch ID or a passkey (easiest):** press **Use Touch ID or a passkey instead**. A touch signs you in and opens your vault from then on.
-- **Passphrase:** choose one of at least 10 characters (three or four unrelated words is easy to remember).
+- **Passkey (Touch ID, your phone or a security key) is the main way:** press **Create a passkey**. One touch locks the vault, and a touch opens it from then on.
+- **Passphrase, if your device can't do it:** some devices can make a passkey that only signs in. The page says so and offers the passphrase on the same page. Choose one of at least 10 characters (three or four unrelated words is easy to remember).
 
 You are then shown a **recovery code once**. Put it in your password manager or print it. It is the only way back in if you lose your passkey or passphrase, and nobody, including the person who runs the service, can recover your notes without it.
 
@@ -38,7 +38,7 @@ You are then shown a **recovery code once**. Put it in your password manager or 
 
 ## 4. Add this Mac
 
-Back on the approval page, press **Add this Mac** (it asks for your passphrase or a touch if you haven't signed in with a passkey). Go back to Dex Notch: it finishes by itself and shows **You're in**.
+Then you land back on the approval page. Press **Add this Mac** (it asks for your passphrase or a touch if you haven't signed in with a passkey). Go back to Dex Notch: it finishes by itself and shows **You're in**.
 
 Within a few seconds Dex Notch starts a small helper in the background that watches for new Claude Code, Codex and Gemini conversations, saves them to `~/Vault` as plain markdown notes (with passwords and API keys removed), and uploads them to your account. It also imports your existing history once.
 

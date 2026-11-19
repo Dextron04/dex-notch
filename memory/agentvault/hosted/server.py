@@ -35,6 +35,11 @@ STATIC_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; char
 CSP = ("default-src 'none'; style-src 'self'; script-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; "
        "form-action 'self' https: http://127.0.0.1:* http://localhost:* http://[::1]:*; base-uri 'none'; frame-ancestors 'none'")   # a form may end by sending the person back to an https app, or to a tool on this Mac (Codex, Claude Code)  # nothing inline, nothing from anywhere else
 
+GATE_OPEN = {"/", "/account/setup", "/account/vault", "/account/vault/passphrase", "/account/vault/recovery", "/webauthn/register/options", "/webauthn/register/finish", "/webauthn/login/options", "/webauthn/login/finish",
+             "/logout", "/account/delete", "/account/export", "/privacy", "/terms", "/about", "/login", "/login/verify", "/login/done", "/goodbye", "/waitlist", "/healthz", "/register", "/token", "/mcp", "/hooks/stripe",
+             "/v1/me", "/v1/ingest", "/v1/link/start", "/v1/link/poll", "/v1/reminders/wait"}
+GATE_OPEN_PREFIX = ("/static/", "/.well-known/")
+
 def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[str, str], None],
                 stripe: Optional[billing.Stripe] = None, stripe_webhook_secret: bytes = b"", port: int = 8766, host: str = "127.0.0.1",
                 now=time.time, wait_seconds: float = 25, send_invite: Optional[Callable[[str, str], None]] = None, admins=(), send_welcome: Optional[Callable[[str, str], None]] = None, send_vault: Optional[Callable[[str, str], None]] = None, encrypt: bool = False) -> ThreadingHTTPServer:
@@ -172,10 +177,24 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             self.send(200, p.read_bytes(), STATIC_TYPES[p.suffix], {"Cache-Control": cache})
         def redirect(self, url, extra=None): self.send(302, b"", "text/plain", dict({"Location": url}, **(extra or {})))
 
+        def gate(self, path, q):
+            """True (after redirecting) when a signed-in person has not locked their vault yet: they go to the setup page and nowhere else.
+            Open without a lock: setup itself, the passkey and passphrase routes that do the locking, sign-out, deleting the account, export (their data, and it re-checks them),
+            the public pages, and the routes that carry no browser session (assistants, Macs, Stripe)."""
+            if not encrypt or path in GATE_OPEN or path.startswith(GATE_OPEN_PREFIX): return False
+            uid = self.user()
+            if not uid or store.encrypted(uid): return False
+            if path == "/authorize": nxt = self.next_for(q) or "/account"                  # rebuilt here, never copied from the request
+            elif path == "/link": nxt = self.next_for({"link": q.get("code", "")}) or "/account"
+            else: nxt = "/account"
+            self.redirect("/account/setup?" + urlencode({"next": nxt})); return True
+
         # -- routes
         def do_GET(self):
             if self.plain_http(): return
             u = urlparse(self.path); q = {k: v[0] for k, v in parse_qs(u.query).items()}
+            if self.gate(u.path, q): return
+            if u.path == "/account/setup": return self.setup_page(q)
             if u.path.startswith("/.well-known/oauth-protected-resource"):
                 return self.send(200, {"resource": public + "/mcp", "authorization_servers": [public], "bearer_methods_supported": ["header"]})
             if u.path.startswith("/.well-known/oauth-authorization-server"):
@@ -217,6 +236,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
         def do_POST(self):
             if self.plain_http(): return
             path = urlparse(self.path).path
+            if self.gate(path, {}): return
             # Login CSRF: a page on another site must not be able to post to the cookie-backed forms (sign the visitor into
             # someone else's account, approve a Mac, ...). Browsers always send Origin on POST; tools that send none (curl,
             # the Mac app) don't carry the cookie anyway. Assistants (claude.ai, chatgpt.com) call only the paths in CROSS_ORIGIN_OK.
@@ -241,7 +261,6 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             uid = self.user()
             if not uid: return self.html(200, pages.login(beta=auth.invite_only, client_name=c["name"], fields=fields))
             if not store.may_use(uid): return self.html(402, pages.need_plan(store.email(uid), public + "/billing/checkout" if stripe else None))
-            if encrypt and not store.encrypted(uid): return self.html(200, pages.vault_setup(store.email(uid), "/authorize?" + urlencode(fields)))
             self.html(200, pages.consent(self.who(c, q["redirect_uri"]), "this Mac" if is_loopback(q["redirect_uri"]) else urlparse(q["redirect_uri"]).hostname or "", store.email(uid), fields, ask=store.encrypted(uid) and not self.session_key(), creds=self.creds(uid), has_pass=self.has_pass(uid)))
 
         def login(self):
@@ -349,7 +368,6 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if not name: return self.fail(400, "This link has expired. Go back to Dex Notch and start again.")
             uid, code = self.user(), link.normalize(q["code"])
             if not uid: return self.html(200, pages.login(beta=auth.invite_only, link_name=name, fields={"link": code}))
-            if encrypt and not store.encrypted(uid): return self.html(200, pages.vault_setup(store.email(uid), "/link?" + urlencode({"code": code})))
             self.html(200, pages.link_confirm(store.email(uid), name, code, ask=store.encrypted(uid) and not self.session_key(), creds=self.creds(uid), has_pass=self.has_pass(uid)))
 
         def link_approve(self):
@@ -407,8 +425,8 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
                     if prf and not key: return self.send(400, {"error": "Enter your vault passphrase to add this passkey."})
                     store.add_passkey(uid, cid, name, pub, count, keys.wrap_for_passkey(key, prf) if (prf and key) else None)
                     return self.send(200, {"next": "/account"})
-                if d.get("setup"):
-                    if not prf: return self.send(400, {"error": "This passkey can't unlock notes on this device. Use a passphrase instead."})
+                if d.get("setup") or encrypt:     # on this server a passkey that only signs in, with the vault still open, is never kept
+                    if not prf: return self.send(400, {"error": "This passkey can't lock your notes on this device, so it wasn't saved. Use a passphrase instead."})
                     code, key, wrapped = keys.setup_passkey(store, uid, prf)
                     store.add_passkey(uid, cid, name, pub, count, wrapped)
                     auth.unlock_session(self.cookie(), key)             # this browser is signed in and unlocked from now on
@@ -464,15 +482,20 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             self.html(200, pages.vault_recovery(store.email(uid), code, nxt))      # shown once: reloading this page goes to the account
 
         # -- the vault passphrase
+        def setup_page(self, q):
+            uid = self.user()
+            if not uid: return self.redirect("/login")
+            nxt = self.next_path(q)
+            if store.encrypted(uid): return self.redirect(nxt)           # already locked: nothing to set up
+            self.html(200, pages.vault_setup(store.email(uid), nxt))
+
         def vault_setup(self):
             f = self.form()
             if f is None: return
             uid = self.user()
             if not uid: return self.fail(401)
             nxt, email = self.next_path(f), store.email(uid)
-            def again(why):
-                if nxt == "/account": return self.account(flash=why)
-                self.html(200, pages.vault_setup(email, nxt, error=why))
+            def again(why): self.html(200, pages.vault_setup(email, nxt, error=why))
             if f.get("passphrase") != f.get("confirm"): return again("The two passphrases don't match.")
             try: code, key = keys.setup_with_key(store, uid, f.get("passphrase", ""))
             except keys.KeyError_ as e: return again(str(e))

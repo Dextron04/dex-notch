@@ -16,10 +16,10 @@ Setting up takes about five minutes:
 
 1. Download the app and drag it to Applications: {download}
    macOS says it can't verify the app (it isn't notarized yet). The install guide shows the two clicks that allow it.
-2. Open it and press Continue in browser, or sign in here: {link}
+2. Sign up here: {link}
    Use this email address ({email}): the invitation is for it.
-3. Lock your notes with Touch ID or a passphrase, and save the recovery code you're shown.
-4. Connect Claude or ChatGPT from your account page.
+3. Lock your vault with a passkey (Touch ID, your phone or a security key), or a passphrase if your device can't do passkeys, and save the recovery code you're shown. This comes first: nothing else works until you do.
+4. Open Dex Notch and press Continue in browser to link your Mac, then connect Claude or ChatGPT from your account page.
 5. Say hello: ask your AI to remember something, then ask another one to find it. Your account page has the exact words.
 
 Install guide: {guide}
@@ -33,10 +33,11 @@ WELCOME_BODY = """Your Dex Notch account is ready ({email}).
 
 Where you are, and what's left:
 
-1. Install Dex Notch if you haven't: {download}
-2. Open it and press Continue in browser. Check that the code matches and tap Add this Mac.
-3. Lock your notes with Touch ID or a passphrase, and keep the recovery code.
-4. Connect Claude or ChatGPT: {account}
+1. Lock your vault with a passkey (Touch ID, your phone or a security key), or a passphrase if your device can't do passkeys, and keep the recovery code. Sign in to see the page: {account}
+   Nothing else works until this is done.
+2. Install Dex Notch if you haven't: {download}
+3. Open it and press Continue in browser. Check that the code matches and tap Add this Mac.
+4. Connect Claude or ChatGPT from your account page.
 5. Have your first conversation: your account page has two lines to paste, one to save something and one to find it again.
 
 The account page also lets you download everything or delete your account at any time. Install guide: {guide}
@@ -44,12 +45,12 @@ The account page also lets you download everything or delete your account at any
 It is a closed beta, so expect rough edges. In Dex Notch, Settings → Memory → "Copy diagnostics" and "Report a problem" are there for when something breaks.
 """
 
-VAULT_BODY = """Dex Notch now encrypts the conversations you've saved, with a key only you can open. Until you lock your vault, your Mac and your Claude or ChatGPT connection are paused, and your saved notes are not encrypted yet.
+VAULT_BODY = """Dex Notch now encrypts the conversations you've saved, with a key only you can open. Until you lock your vault, your Mac and your Claude or ChatGPT connection are paused, and your saved notes are not encrypted yet. Signing in takes you straight to the page that locks it.
 
 It takes about a minute:
 
 1. Sign in: {account}
-2. Choose Touch ID (a passkey) or a passphrase, and save the recovery code it shows you once.
+2. Create a passkey (Touch ID, your phone or a security key), or choose a passphrase, and save the recovery code it shows you once.
 3. Your Mac signs in again by itself the next time Dex Notch opens, and your assistants ask you to approve them once more.
 
 Your notes are kept. If you'd rather not continue, you can download everything or delete your account from the same page.

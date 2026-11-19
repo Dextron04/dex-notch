@@ -68,7 +68,9 @@ class AttackTests(unittest.TestCase):
         evil = '<script>alert(1)</script><img src=x onerror=alert(1)>'
         self.assertEqual(call("POST", self.base + "/waitlist", {"email": "z@x.io", "note": evil}, form=True)[0], 200)
         self.store.create_user("boss@x.io"); self.form("/login", {"email": "boss@x.io"}); tok = self.mail[-1][1].split("t=")[1]
-        _, h, _ = self.form("/login/verify", {"t": tok}); page = call("GET", self.base + "/admin", headers={"Cookie": h["Set-Cookie"].split(";")[0]})[2]
+        _, h, _ = self.form("/login/verify", {"t": tok}); bk = {"Cookie": h["Set-Cookie"].split(";")[0]}
+        self.form("/account/vault", {"passphrase": "a long enough passphrase", "confirm": "a long enough passphrase", "next": "/account"}, bk)
+        page = call("GET", self.base + "/admin", headers=bk)[2]
         self.assertNotIn("<script>alert", page); self.assertIn("&lt;script&gt;", page)
         for q in ("/login?x=%22%3E%3Cscript%3E", "/link?code=%22%3E%3Cscript%3E", "/authorize?client_id=%22%3E%3Cscript%3E"):
             self.assertNotIn("<script>alert", call("GET", self.base + q)[2])
