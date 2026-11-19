@@ -9,7 +9,7 @@ from agentvault.model import Turn, SessionMeta
 class McpToolTests(unittest.TestCase):
     def test_every_listed_tool_can_be_called_over_stdio(self):
         with tempfile.TemporaryDirectory() as d:
-            notes.append_turns(Path(d), SessionMeta("claude-code", "bbbbbbbbbb2", "app", "/x/app", "2026-11-14T10:00:00Z", "Pear tart recipe", "/s"),
+            notes.add_turns(Path(d), SessionMeta("claude-code", "bbbbbbbbbb2", "app", "/x/app", "2026-11-14T10:00:00Z", "Pear tart recipe", "/s"),
                                [Turn("user", "how long do pears bake", "2026-11-14T10:00:00Z")])
             def rpc(reqs):
                 p = subprocess.run([sys.executable, "-m", "agentvault.mcp_server", "--vault", d], cwd=MEM, timeout=20, capture_output=True, text=True,
