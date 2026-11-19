@@ -57,23 +57,6 @@ hdiutil create -volname "Dex Notch $VERSION" -srcfolder "$STAGE" -ov -format UDZ
 ditto -c -k --keepParent "$APP" "$DIST/dex-notch-$VERSION.zip"
 hdiutil verify "$DIST/dex-notch-$VERSION.dmg" >/dev/null
 
-# The update feed. The app only installs an update whose zip is signed with the private key that matches the public key inside it.
-#   CI: SPARKLE_PRIVATE_KEY is a secret. Locally, SPARKLE_USE_KEYCHAIN=1 signs with the key `generate_keys` put in your Keychain.
-#   SPARKLE_DOWNLOAD_BASE points the feed at another host (testing an update from a local server). With no key there is no feed, and this build is never offered as an update.
-SIGN="$DD/SourcePackages/artifacts/sparkle/Sparkle/bin/sign_update"
-if [ -n "${SPARKLE_PRIVATE_KEY:-}" ] || [ -n "${SPARKLE_USE_KEYCHAIN:-}" ]; then
-  [ -x "$SIGN" ] || { echo "sign_update not found at $SIGN" >&2; exit 1; }
-  if [ -n "${SPARKLE_PRIVATE_KEY:-}" ]; then
-    KEYF="$(mktemp)"; chmod 600 "$KEYF"; printf %s "$SPARKLE_PRIVATE_KEY" > "$KEYF"
-    SIGATTRS="$("$SIGN" --ed-key-file "$KEYF" "$DIST/dex-notch-$VERSION.zip")"; rm -f "$KEYF"
-  else
-    SIGATTRS="$("$SIGN" "$DIST/dex-notch-$VERSION.zip")"
-  fi
-  case "$SIGATTRS" in *edSignature=*) ;; *) echo "signing the update failed" >&2; exit 1 ;; esac
-  scripts/appcast.sh "$VERSION" "$NUM" "${GITHUB_RUN_NUMBER:-1}" "$SIGATTRS" ${SPARKLE_DOWNLOAD_BASE:+"$SPARKLE_DOWNLOAD_BASE"} > "$DIST/appcast.xml"
-else
-  echo "no SPARKLE_PRIVATE_KEY: not writing appcast.xml, so this build will not be offered as an update" >&2
-fi
-( cd "$DIST" && shasum -a 256 dex-notch-"$VERSION".* > SHA256SUMS.txt )
-
-echo "built:"; ls -lh "$DIST" | awk 'NR>1{print "  " $9, $5}'
+# Signing the update (appcast.xml) and the checksums live in scripts/sign-update.sh, so CI can give the Sparkle private key to that step alone.
+# CI sets SKIP_UPDATE_SIGNING=1 here and runs it as a separate step; everywhere else it just follows.
+[ -n "${SKIP_UPDATE_SIGNING:-}" ] || exec scripts/sign-update.sh "$VERSION"

@@ -100,8 +100,20 @@ def unwrap(kek: bytes, blob: bytes):
     try: return unseal(kek, blob)
     except Locked: return None
 
+SCRYPT_LOG_N = 17         # new wraps: N = 2^17 (128 MiB of memory per guess)
+LEGACY_LOG_N = 15         # wraps made before that carry a bare 16-byte salt and were made with N = 2^15
+
+def new_salt() -> bytes:
+    """16 random bytes plus one byte saying which N the key was made with, so the cost can be raised later without locking anyone out."""
+    return secrets.token_bytes(16) + bytes([SCRYPT_LOG_N])
+
+def salt_is_current(salt: bytes) -> bool:
+    return len(salt) == 17 and salt[16] == SCRYPT_LOG_N
+
 def kek_from_passphrase(passphrase: str, salt: bytes) -> bytes:
-    return hashlib.scrypt(passphrase.encode("utf-8"), salt=salt, n=2 ** 15, r=8, p=1, maxmem=64 * 1024 * 1024, dklen=32)
+    log_n = salt[16] if len(salt) == 17 else LEGACY_LOG_N
+    if not 10 <= log_n <= 20: raise ValueError("unsupported key cost")
+    return hashlib.scrypt(passphrase.encode("utf-8"), salt=salt[:16] if len(salt) == 17 else salt, n=2 ** log_n, r=8, p=1, maxmem=(2 ** log_n) * 8 * 128 + 8 * 1024 * 1024, dklen=32)
 
 def kek_from_secret(secret: str, purpose: bytes) -> bytes:
     """For long random secrets (a token, a recovery code), where a fast hash is enough. `purpose` keeps one use from standing in for another."""

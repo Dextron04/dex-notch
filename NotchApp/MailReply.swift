@@ -67,11 +67,44 @@ enum MailReply {
         s.replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
     }
 
-    /// Who the reply goes to: the sender's Reply-To if they set one, otherwise the sender. nil if there is no usable address.
-    static func recipient(_ c: MailContext) -> String? {
-        let r = headerSafe(c.replyTo.isEmpty ? c.from : c.replyTo)
-        return Triage.address(r).contains("@") ? r : nil
+    /// One mailbox out of a From/Reply-To value, or nil. A value with a comma or semicolon outside quotes, or more than one `@` outside quotes,
+    /// is a list (or a trick): mail could go to someone the screen never showed, so none of it is used.
+    /// Returns the display name and the bare address.
+    static func mailbox(_ header: String) -> (name: String, address: String)? {
+        let h = headerSafe(header)
+        var quoted = false, escaped = false, ats = 0, angles = 0
+        for ch in h {
+            if escaped { escaped = false; continue }
+            if quoted { if ch == "\\" { escaped = true } else if ch == "\"" { quoted = false }; continue }
+            switch ch {
+            case "\"": quoted = true
+            case ",", ";": return nil
+            case "@": ats += 1
+            case "<": angles += 1
+            default: break
+            }
+        }
+        guard !quoted, ats == 1, angles <= 1 else { return nil }
+        let addr = Triage.address(h)
+        let bad = CharacterSet(charactersIn: "<>\"(),;:\\ \t").union(.controlCharacters)
+        let parts = addr.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty, parts[1].contains("."), addr.rangeOfCharacter(from: bad) == nil else { return nil }
+        let name = h.contains("<") ? Triage.displayName(h) : ""
+        return (Triage.clean(name, max: 80).replacingOccurrences(of: "<", with: "").replacingOccurrences(of: ">", with: ""), addr)
     }
+
+    /// Who the reply goes to, as one mailbox: the sender's Reply-To if it is a single usable address, otherwise the sender. nil if neither is.
+    static func replyMailbox(_ c: MailContext) -> (name: String, address: String)? {
+        (c.replyTo.isEmpty ? nil : mailbox(c.replyTo)) ?? mailbox(c.from)
+    }
+
+    /// The same, as it is shown: "Priya Nair <p@corp.example>" or the bare address.
+    static func recipient(_ c: MailContext) -> String? {
+        replyMailbox(c).map { $0.name.isEmpty ? $0.address : "\($0.name) <\($0.address)>" }
+    }
+
+    /// Why there is nobody to reply to, in words for the screen.
+    static let noRecipient = "This email names several senders or none, so Dex Notch won't guess who to reply to."
 
     static func replySubject(_ s: String) -> String {
         let t = headerSafe(s)
@@ -95,7 +128,7 @@ enum MailReply {
     /// The finished message, base64url, the way Gmail's `messages.send` and `drafts.create` want it. The recipient and subject come from
     /// the original email and nowhere else; the body is whatever you approved.
     static func raw(_ c: MailContext, body: String, includeQuote: Bool = true) -> String? {
-        guard let to = recipient(c) else { return nil }
+        guard let to = replyMailbox(c)?.address else { return nil }      // exactly one bare address: no list, no display name to hide a second one in
         let refs = headerSafe(([c.references, c.messageID].filter { !$0.isEmpty }).joined(separator: " "))
         var headers = ["From: " + headerSafe(c.account), "To: " + to, "Subject: " + encodedWord(replySubject(c.subject))]
         if !c.messageID.isEmpty { headers.append("In-Reply-To: " + headerSafe(c.messageID)) }

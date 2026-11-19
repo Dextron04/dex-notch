@@ -27,6 +27,7 @@
 		338383E9953684F2000B1A66 /* Reminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E728D5AB400774BF5A65DF /* Reminders.swift */; };
 		33A991DD0C8D532FDD7C271B /* VaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1699F9A9CD5771ED2F953B05 /* VaultReader.swift */; };
 		359D34323BEAC44A4AC0AF5C /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */; };
+		36E06C405D9DE3811D0D8107 /* SecurityHardeningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3A0540F48DFF4F8A00E753 /* SecurityHardeningTests.swift */; };
 		3DAB1EE2139C1FD0BE520C84 /* JournalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 930E261BCB82A59819B0A2A3 /* JournalTests.swift */; };
 		41396688D0553BBE1B3ED41A /* Changelog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE2273ED4887AF61DC376B5 /* Changelog.swift */; };
 		4589E5F5759E858CC57E6466 /* Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582019F4D21E660A42477FFC /* Journal.swift */; };
@@ -118,6 +119,7 @@
 		A408D4D4233E5DC1C8E2622A /* SVGPathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGPathTests.swift; sourceTree = "<group>"; };
 		A4CBB2E551130DD2CE010BFF /* NotchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchView.swift; sourceTree = "<group>"; };
 		A5CADAB3DBF5CC60D578B0C3 /* AgentStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStream.swift; sourceTree = "<group>"; };
+		AA3A0540F48DFF4F8A00E753 /* SecurityHardeningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityHardeningTests.swift; sourceTree = "<group>"; };
 		B4CBD5204758A52DD991B3D4 /* NotchApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NotchApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA22C6E41EAD33D9E8DD129E /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
 		C2D6FACDD9417F0189139076 /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
@@ -213,6 +215,7 @@
 				930E261BCB82A59819B0A2A3 /* JournalTests.swift */,
 				E3FDC75598EA2E996BF9FAE8 /* KeychainStoreTests.swift */,
 				98C88C7DB8676E86C4F91CB1 /* RecorderTests.swift */,
+				AA3A0540F48DFF4F8A00E753 /* SecurityHardeningTests.swift */,
 				BA22C6E41EAD33D9E8DD129E /* SettingsTests.swift */,
 				A408D4D4233E5DC1C8E2622A /* SVGPathTests.swift */,
 				11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */,
@@ -374,6 +377,7 @@
 				338383E9953684F2000B1A66 /* Reminders.swift in Sources */,
 				50C799904FBE799B42C449D1 /* SVGPath.swift in Sources */,
 				AB5858CF9C6BCC0882589DB0 /* SVGPathTests.swift in Sources */,
+				36E06C405D9DE3811D0D8107 /* SecurityHardeningTests.swift in Sources */,
 				654D8443649142B3C79DDA2D /* Settings.swift in Sources */,
 				2F9D4C587D08A0A859566F25 /* SettingsTests.swift in Sources */,
 				5F04FF700FAE3FFA7F233D2E /* VaultReader.swift in Sources */,

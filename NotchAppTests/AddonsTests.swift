@@ -283,6 +283,7 @@ final class AddonsTests: XCTestCase {
         XCTAssertFalse(c.contains("--allowedTools"))
         let x = AgentStream.lockedCodexArgs(prompt: "p")
         XCTAssertTrue(x.contains("--ephemeral")); XCTAssertEqual(x.firstIndex(of: "--sandbox").map { x[$0 + 1] }, "read-only")
+        XCTAssertEqual(Array(x.suffix(2)), ["--", "p"])
     }
 
     // MARK: replying
@@ -327,7 +328,7 @@ final class AddonsTests: XCTestCase {
         let message = unb64(raw)
         let parts = message.components(separatedBy: "\r\n\r\n")
         let head = parts[0]
-        XCTAssertTrue(head.contains("From: me@home.com")); XCTAssertTrue(head.contains("To: Priya Nair <priya@acme.com>")); XCTAssertTrue(head.contains("Subject: Re: Interview Thursday"))
+        XCTAssertTrue(head.contains("From: me@home.com")); XCTAssertTrue(head.contains("\r\nTo: priya@acme.com\r\n")); XCTAssertTrue(head.contains("Subject: Re: Interview Thursday"))
         XCTAssertTrue(head.contains("In-Reply-To: <abc@acme.com>")); XCTAssertTrue(head.contains("References: <old@acme.com> <abc@acme.com>"))
         XCTAssertTrue(head.contains("Content-Transfer-Encoding: base64"))
         let body = String(decoding: Data(base64Encoded: parts[1].replacingOccurrences(of: "\r\n", with: "")) ?? Data(), as: UTF8.self)
@@ -336,7 +337,8 @@ final class AddonsTests: XCTestCase {
         XCTAssertNil(MailReply.raw(ctx(from: "nobody"), body: "x"))
     }
     func testAHostileSenderCannotAddHeadersOrRecipients() throws {
-        let evil = ctx(from: "Eve <eve@x.com>\r\nBcc: boss@corp.com", subject: "Hi\r\nBcc: victim@x.com")
+        XCTAssertNil(MailReply.raw(ctx(from: "Eve <eve@x.com>\r\nBcc: boss@corp.com"), body: "ok"))      // a second address smuggled into the sender is refused outright
+        let evil = ctx(from: "Eve <eve@x.com>", subject: "Hi\r\nBcc: victim@x.com")
         let head = unb64(try XCTUnwrap(MailReply.raw(evil, body: "ok"))).components(separatedBy: "\r\n\r\n")[0]
         XCTAssertFalse(head.contains("\r\nBcc:"))                                  // the injected line did not become a header
         XCTAssertEqual(head.components(separatedBy: "\r\n").filter { $0.lowercased().hasPrefix("bcc:") }.count, 0)

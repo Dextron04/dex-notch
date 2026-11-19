@@ -22,9 +22,9 @@ def is_loopback(uri: str) -> bool:
     except ValueError: return False
     return p.scheme == "http" and (p.hostname or "") in ("127.0.0.1", "localhost", "::1") and p.username is None and p.password is None and not p.fragment
 
-def redirect_ok(registered: List[str], uri: str) -> bool:
+def redirect_ok(registered: List[str], uri: str, allowed=ALLOWED_REDIRECT_HOSTS) -> bool:
     """The address a client asks to be sent back to must be one it registered. For a loopback address the port may differ: the tool picks a free one each time."""
-    if uri in registered: return plain_url(uri)   # also refuses a client registered before register() checked this
+    if uri in registered: return is_loopback(uri) or https_redirect_ok(uri, allowed)   # also refuses a client registered before register() checked host and path
     if not is_loopback(uri): return False
     u = urlparse(uri)
     for r in registered:

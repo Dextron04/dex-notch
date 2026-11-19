@@ -124,7 +124,7 @@ class ServerOpsTests(unittest.TestCase):
         self.assertEqual(call("POST", self.base + "/account/delete", {"confirm": "a@x.io"}, ck, form=True)[0], 302); self.assertEqual(self.cancelled, [])
 
     def test_mcp_rate_limit(self):
-        uid, _ = self.user("a@x.io"); cid = self.auth.register(["https://claude.ai/cb"], "c")
+        uid, _ = self.user("a@x.io"); cid = self.auth.register(["https://claude.ai/api/mcp/auth_callback"], "c")
         with self.store.conn() as c: tok = self.auth._tokens(c, uid, cid)["access_token"]
         codes = [call("POST", self.base + "/mcp", {"jsonrpc": "2.0", "id": 1, "method": "ping"}, {"Authorization": "Bearer " + tok, "Content-Type": "application/json"})[0] for _ in range(125)]
         self.assertEqual((codes.count(200), codes.count(429)), (120, 5))

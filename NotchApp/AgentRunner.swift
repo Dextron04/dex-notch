@@ -45,13 +45,26 @@ enum AgentRunner {
                 guard let exe = find(name) else { cont.finish(throwing: Missing(name: name)); return }
                 let p = Process(), out = Pipe()
                 p.executableURL = URL(fileURLWithPath: exe)
+                // Locked (mail) runs get a brand-new empty folder; the shared scratch folder is wiped of planted settings before every other run.
+                var cwd = scratch, temp: [URL] = [], codexHome: URL?, env = ProcessInfo.processInfo.environment
+                let realCodex = env["CODEX_HOME"].map { URL(fileURLWithPath: $0) } ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
+                defer {
+                    if let h = codexHome { RunSpace.keepRefreshedAuth(from: h, to: realCodex) }
+                    temp.forEach { try? FileManager.default.removeItem(at: $0) }
+                }
+                do {
+                    if route.locked {
+                        cwd = try RunSpace.freshRunDir(); temp.append(cwd)
+                        if route.backend == .codex { let h = try RunSpace.codexTriageHome(realHome: realCodex); temp.append(h); codexHome = h; env["CODEX_HOME"] = h.path }
+                    } else { RunSpace.scrub(scratch) }
+                } catch { cont.finish(throwing: error); return }
+                let mcp = AgentStream.agentvaultMCPConfig(claudeJSON: FileManager.default.contents(atPath: NSHomeDirectory() + "/.claude.json"))
                 p.arguments = route.locked
                     ? (route.backend == .claude ? AgentStream.lockedClaudeArgs(prompt: route.prompt) : AgentStream.lockedCodexArgs(prompt: route.prompt))
                     : route.backend == .claude
-                    ? AgentStream.claudeArgs(prompt: route.prompt, session: session, work: route.work, folder: route.folder)
+                    ? AgentStream.claudeArgs(prompt: route.prompt, session: session, work: route.work, folder: route.folder, scratch: scratch.standardizedFileURL.path, mcpConfig: mcp)
                     : AgentStream.codexArgs(prompt: route.prompt, session: session, work: route.work, folder: route.folder)
-                p.currentDirectoryURL = scratch
-                var env = ProcessInfo.processInfo.environment
+                p.currentDirectoryURL = cwd
                 env["PATH"] = loginPATH
                 p.environment = env
                 p.standardInput = FileHandle.nullDevice // codex otherwise waits on stdin

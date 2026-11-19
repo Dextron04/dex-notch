@@ -50,7 +50,7 @@ struct AnswerBody: View {
             a[run.range].font = .system(size: 14.5, design: .monospaced)
             a[run.range].foregroundColor = Ink.ember
         }
-        return a
+        return RunSpace.safeLinks(a)     // only http(s) links stay clickable, with the real host shown after the label
     }
 }
 

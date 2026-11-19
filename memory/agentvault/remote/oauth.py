@@ -1,12 +1,15 @@
 """Single-owner OAuth 2.1 store for the remote connector: dynamic client registration, PKCE (S256), rotating refresh tokens.
 Codes and tokens are persisted only as SHA-256 hashes (state file mode 0600)."""
-import base64, hashlib, hmac, json, os, secrets, tempfile, time
+import base64, hashlib, hmac, json, os, re, secrets, tempfile, time
 from pathlib import Path
 from typing import Callable, List
 from urllib.parse import urlparse
 
 CODE_TTL, ACCESS_TTL, REFRESH_TTL = 300, 3600, 30 * 86400
 ALLOWED_REDIRECT_HOSTS = ("chatgpt.com", "claude.ai", "claude.com")
+# The exact return paths these assistants use. A host alone is not enough: other pages on it could receive the sign-in code.
+ALLOWED_REDIRECT_PATHS = {"claude.ai": ("/api/mcp/auth_callback",), "claude.com": ("/api/mcp/auth_callback",), "chatgpt.com": ("/connector_platform_oauth_redirect",)}
+CHATGPT_CONNECTOR_PATH = re.compile(r"/connector/oauth/[A-Za-z0-9_-]{1,64}")
 
 class OAuthError(Exception):
     pass
@@ -21,10 +24,13 @@ def plain_url(uri) -> bool:
     return p.username is None and p.password is None
 
 def https_redirect_ok(uri, allowed) -> bool:
-    """An https address on one of the allowed hosts, written plainly: the host and nothing else (no port, no user@) between // and the path."""
+    """An https address on one of the allowed hosts, written plainly (the host and nothing else between // and the path), at exactly the
+    path that host's assistant returns to, with no query, parameters or fragment."""
     if not plain_url(uri): return False
     p = urlparse(str(uri))
-    return p.scheme == "https" and bool(p.hostname) and p.netloc == p.hostname and p.hostname in allowed
+    if not (p.scheme == "https" and bool(p.hostname) and p.netloc == p.hostname and p.hostname in allowed): return False
+    if p.query or p.params or p.fragment or "?" in str(uri) or "#" in str(uri): return False
+    return p.path in ALLOWED_REDIRECT_PATHS.get(p.hostname, ()) or (p.hostname == "chatgpt.com" and CHATGPT_CONNECTOR_PATH.fullmatch(p.path) is not None)
 
 def _h(v: str) -> str:
     return hashlib.sha256(v.encode()).hexdigest()
@@ -61,7 +67,7 @@ class OAuthStore:
         return c
 
     def issue_code(self, cid: str, redirect_uri: str, challenge: str) -> str:
-        if redirect_uri not in self.client(cid)["redirect_uris"] or not plain_url(redirect_uri): raise OAuthError("redirect_uri mismatch")  # plain_url: a client registered before that check can't be used
+        if redirect_uri not in self.client(cid)["redirect_uris"] or not https_redirect_ok(redirect_uri, self.allowed): raise OAuthError("redirect_uri mismatch")  # a client registered before the host/path checks can't be used
         if not challenge: raise OAuthError("code_challenge required")
         self._gc(); code = secrets.token_urlsafe(32)
         self.s["codes"][_h(code)] = {"cid": cid, "redir": redirect_uri, "ch": challenge, "exp": self.now() + CODE_TTL}

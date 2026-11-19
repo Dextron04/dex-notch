@@ -117,19 +117,47 @@ enum AgentStream {
     /// no network, and no way back to an unsandboxed shell.
     private static func claudeSandbox(folder: String?) -> String {
         var sb: [String: Any] = ["enabled": true, "autoAllowBashIfSandboxed": true, "allowUnsandboxedCommands": false]
-        if let folder { sb["filesystem"] = ["allowWrite": [folder]] }
+        var fs: [String: Any] = ["denyRead": secretPaths]      // a shell must not read your keys either
+        if let folder { fs["allowWrite"] = [folder] }
+        sb["filesystem"] = fs
         let d = try? JSONSerialization.data(withJSONObject: ["sandbox": sb], options: [.withoutEscapingSlashes])
         return d.map { String(decoding: $0, as: UTF8.self) } ?? "{}"
     }
 
-    static func claudeArgs(prompt: String, session: String?, work: Bool, folder: String? = nil) -> [String] {
+    /// Where casual questions run (and the only place Ask mode may read). The runner passes the real per-run folder.
+    static var defaultScratch: String { NSHomeDirectory() + "/Library/Application Support/NotchApp/scratch" }
+
+    /// Places a prompt-injected model must never read, whatever else is allowed. Claude Code path rules: `~/` is the home folder.
+    static let secretPaths = ["~/.ssh", "~/.aws", "~/.config", "~/.gnupg", "~/Library/Keychains", "~/.netrc", "~/.claude.json", "~/.claude/.credentials.json", "~/.codex/auth.json"]
+
+    /// `Read(~/.ssh)` and `Read(~/.ssh/**)` for every secret place (the first covers a single file, the second a folder).
+    static var secretDenyRules: [String] { secretPaths.flatMap { ["Read(\($0))", "Read(\($0)/**)"] } }
+
+    /// Claude Code path rule for an absolute folder: the leading `//` means "from the filesystem root", `/**` everything below it.
+    static func pathRule(_ tool: String, _ folder: String) -> String { "\(tool)(/\(folder.hasSuffix("/") ? String(folder.dropLast()) : folder)/**)" }
+
+    /// `--mcp-config` JSON holding only the agentvault server, copied from the user's own Claude config (`~/.claude.json`); nil if not set up.
+    static func agentvaultMCPConfig(claudeJSON: Data?) -> String? {
+        guard let d = claudeJSON, let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let srv = (j["mcpServers"] as? [String: Any])?["agentvault"] else { return nil }
+        let out = try? JSONSerialization.data(withJSONObject: ["mcpServers": ["agentvault": srv]], options: [.withoutEscapingSlashes])
+        return out.map { String(decoding: $0, as: UTF8.self) }
+    }
+
+    static func claudeArgs(prompt: String, session: String?, work: Bool, folder: String? = nil,
+                           scratch: String = AgentStream.defaultScratch, mcpConfig: String? = nil) -> [String] {
         var a = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--append-system-prompt",
                  work ? brief + " You may edit files and run shell commands; commands run in a sandbox: they can only write inside the current folder and have no network." : brief]
         if let session { a += ["--resume", session] }
-        // Ask: look things up only. Work (`+`): may also edit files and run commands, but only inside the sandbox above.
-        a += ["--allowedTools", "Read", "Grep", "Glob", "WebSearch", "WebFetch", "mcp__agentvault"] + (work ? ["Edit", "Write", "Bash"] : [])
-        if work { a += ["--permission-mode", "acceptEdits", "--settings", claudeSandbox(folder: folder)] }
-        else { a += ["--disallowedTools", "Bash", "Edit", "Write", "NotebookEdit"] }
+        // Your other settings, hooks and auto-allowed MCP tools (a mail sender, say) must not be reachable from a question:
+        // project settings only, and only the agentvault MCP server, if you have one.
+        a += ["--setting-sources", "project", "--strict-mcp-config"]
+        if let mcpConfig { a += ["--mcp-config", mcpConfig] }
+        // Ask: look things up only, reading only the scratch folder. Work (`+`): may also edit and run commands (inside the sandbox above), in the scratch and chosen folders.
+        let roots = [scratch] + (work ? folder.map { [$0] } ?? [] : [])
+        a += ["--allowedTools"] + roots.map { pathRule("Read", $0) } + ["WebSearch", "WebFetch"] + (mcpConfig == nil ? [] : ["mcp__agentvault"])
+        if work { a += roots.map { pathRule("Edit", $0) } + ["Bash", "--permission-mode", "acceptEdits", "--settings", claudeSandbox(folder: folder)] }
+        a += ["--disallowedTools"] + secretDenyRules + (work ? [] : ["Bash", "Edit", "Write", "NotebookEdit"])
         return a + ["--", prompt] // `--`: variadic flags above must not swallow the prompt, and a leading "-" must not parse as an option
     }
 
@@ -138,15 +166,19 @@ enum AgentStream {
         ["-p", "--output-format", "stream-json", "--verbose", "--tools", "", "--strict-mcp-config", "--no-session-persistence",
          "--setting-sources", "project", "--", prompt]      // project only: your personal hooks and plugins must not colour what is written about your mail
     }
+    /// Run it with a throwaway CODEX_HOME (`AgentRunner.codexTriageHome`): otherwise the CLI loads every MCP server in your own config.
     static func lockedCodexArgs(prompt: String) -> [String] {
-        ["exec", "--json", "--skip-git-repo-check", "--ephemeral", "--sandbox", "read-only", prompt]
+        ["exec", "--json", "--skip-git-repo-check", "--ephemeral", "--sandbox", "read-only", "--", prompt]
     }
+
+    /// The only config a triage run sees: no MCP servers, no hooks, nothing from your own `config.toml`.
+    static let codexTriageConfig = "# Dex Notch triage: deliberately empty. No MCP servers.\n"
 
     static func codexArgs(prompt: String, session: String?, work: Bool, folder: String? = nil) -> [String] {
         // sandbox flags go before `resume`: the subcommand doesn't take them
         ["exec", "--json", "--skip-git-repo-check", "--sandbox", work ? "workspace-write" : "read-only"]
             + (work ? folder.map { ["--add-dir", $0] } ?? [] : [])
-            + (session.map { ["resume", $0] } ?? []) + [prompt]
+            + (session.map { ["resume", $0] } ?? []) + ["--", prompt]   // `--`: a prompt starting with "-" is not an option
     }
 
     // MARK: stream parsing (one JSON object per line)
@@ -264,5 +296,68 @@ enum AgentStream {
     private static func object(_ line: String) -> [String: Any]? {
         guard let d = line.data(using: .utf8) else { return nil }
         return try? JSONSerialization.jsonObject(with: d) as? [String: Any]
+    }
+}
+
+/// Where a CLI run happens and what it can see: scratch folders, the throwaway Codex home, and the links in an answer.
+enum RunSpace {
+    /// Files a model could plant in the scratch folder to change how the next run behaves (settings, MCP servers, instructions).
+    static let plantable = [".claude", ".mcp.json", "CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", ".codex"]
+
+    /// Wipes whatever a previous run could have left to steer this one. Returns what it removed.
+    @discardableResult
+    static func scrub(_ dir: URL) -> [String] {
+        plantable.filter { name in
+            let path = dir.appendingPathComponent(name).path
+            // attributesOfItem sees a dangling symlink too; fileExists would not
+            guard (try? FileManager.default.attributesOfItem(atPath: path)) != nil else { return false }
+            return (try? FileManager.default.removeItem(atPath: path)) != nil
+        }
+    }
+
+    /// A new empty working folder for one locked (tool-free) run; the caller deletes it afterwards.
+    static func freshRunDir() throws -> URL {
+        let u = FileManager.default.temporaryDirectory.appendingPathComponent("DexNotch-run-" + UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: u, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        return u
+    }
+
+    struct CodexTriageHome: LocalizedError { var errorDescription: String? }
+    /// A throwaway CODEX_HOME with an empty config (so none of your MCP servers load) and a link to your sign-in. A Codex login kept in
+    /// the Keychain can't be carried over; triage then fails here and the next model in your order answers instead.
+    static func codexTriageHome(realHome: URL) throws -> URL {
+        let auth = realHome.appendingPathComponent("auth.json")
+        guard FileManager.default.fileExists(atPath: auth.path) else {
+            throw CodexTriageHome(errorDescription: "Codex keeps its sign-in in the Keychain, so mail triage uses another model.")
+        }
+        let h = try freshRunDir()
+        try AgentStream.codexTriageConfig.write(to: h.appendingPathComponent("config.toml"), atomically: true, encoding: .utf8)
+        try FileManager.default.createSymbolicLink(at: h.appendingPathComponent("auth.json"), withDestinationURL: auth)
+        return h
+    }
+
+    /// Codex may refresh its token during the run and replace the link with a real file; keep that refresh, or the next run would sign in again.
+    static func keepRefreshedAuth(from home: URL, to realHome: URL) {
+        let a = home.appendingPathComponent("auth.json")
+        guard (try? FileManager.default.destinationOfSymbolicLink(atPath: a.path)) == nil, let d = try? Data(contentsOf: a), !d.isEmpty else { return }
+        let dst = realHome.appendingPathComponent("auth.json")
+        try? d.write(to: dst, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: dst.path)
+    }
+
+    /// A link in a model's answer may have been written by a web page it read: only http(s) with a host stays clickable, and the real host is
+    /// always shown after the label, so "Sign in" can't hide where it goes. Anything else (file:, javascript:, app schemes) is plain text.
+    static func safeLinks(_ a: AttributedString) -> AttributedString {
+        var out = AttributedString()
+        for run in a.runs {
+            var piece = AttributedString(a[run.range])
+            if let url = run.link {
+                if let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https", let host = url.host, !host.isEmpty {
+                    if String(piece.characters).lowercased() != host.lowercased() { piece.append(AttributedString(" (\(host))")) }   // a label that is the host needs no repeat
+                } else { piece.link = nil }
+            }
+            out.append(piece)
+        }
+        return out
     }
 }

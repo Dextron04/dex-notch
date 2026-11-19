@@ -37,10 +37,10 @@ final class AgentStreamTests: XCTestCase {
         XCTAssertFalse(a.contains("acceptEdits"))
     }
     func testClaudeWorkModeAllowsEditsAndCommands() {
-        let a = AgentStream.claudeArgs(prompt: "x", session: nil, work: true)
+        let a = AgentStream.claudeArgs(prompt: "x", session: nil, work: true, scratch: "/Users/me/scratch")
         XCTAssertTrue(a.contains("acceptEdits"))
         let allowed = a[(a.firstIndex(of: "--allowedTools")! + 1)...].prefix { !$0.hasPrefix("--") }
-        XCTAssertTrue(Set(["Edit", "Write", "Bash", "Read"]).isSubset(of: allowed))
+        XCTAssertTrue(Set(["Edit(//Users/me/scratch/**)", "Bash", "Read(//Users/me/scratch/**)"]).isSubset(of: allowed))
         XCTAssertFalse(a.contains("--disallowedTools") && a[(a.firstIndex(of: "--disallowedTools")! + 1)...].prefix { !$0.hasPrefix("--") }.contains("Bash"))
     }
     func testClaudeWorkModeRunsCommandsOnlyInsideTheOSSandbox() throws {
@@ -71,7 +71,7 @@ final class AgentStreamTests: XCTestCase {
     func testCodexResumeKeepsSandboxBeforeSubcommand() {
         let a = AgentStream.codexArgs(prompt: "x", session: "sid", work: false)
         XCTAssertLessThan(a.firstIndex(of: "--sandbox")!, a.firstIndex(of: "resume")!)
-        XCTAssertEqual(Array(a.suffix(3)), ["resume", "sid", "x"])
+        XCTAssertEqual(Array(a.suffix(4)), ["resume", "sid", "--", "x"])
     }
     func testCodexFreshEndsWithPrompt() {
         XCTAssertEqual(AgentStream.codexArgs(prompt: "x", session: nil, work: false).last, "x")
@@ -263,7 +263,7 @@ final class WorkFolderTests: XCTestCase {
     }
     func testClaudeWorkWithoutFolderHasNoExtraWriteAccess() throws {
         let sb = try XCTUnwrap(try settings(AgentStream.claudeArgs(prompt: "x", session: nil, work: true))["sandbox"] as? [String: Any])
-        XCTAssertNil(sb["filesystem"])
+        XCTAssertNil((sb["filesystem"] as? [String: Any])?["allowWrite"])
     }
     func testFolderPathWithQuotesStillProducesValidJSON() throws {
         let sb = try XCTUnwrap(try settings(AgentStream.claudeArgs(prompt: "x", session: nil, work: true, folder: "/Users/me/My \"odd\" dir"))["sandbox"] as? [String: Any])
