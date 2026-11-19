@@ -52,6 +52,10 @@ An optional Dex account keeps your recorded AI conversations on a server so Clau
 
 Once a day Dex Notch asks `github.com` for the list of releases (a small file named `appcast.xml`) to see whether a newer version exists. That is an ordinary HTTPS request, so GitHub sees your IP address and the app's version like it would for any download. Nothing else is sent: no system profile, no account, no mail, no chats. A new version is only installed if it carries a signature that matches the key built into the app, and it only restarts the app after you say so. You can turn automatic checks off in Settings → Updates.
 
+## A model on your own server (optional)
+
+If you set up a local-model server (Settings → Models), the recorder also sends your vault notes to that server, which is yours, so it can build a search index (RAG) for semantic search. The notes are the same text the recorder wrote on your Mac, with passwords and keys already removed. They go to the host you entered and nowhere else, and the token for it stays in your Keychain. Without a local-model server, nothing is sent.
+
 ## Everything else
 
 Your questions go to the model you pick, through its own app or your own server. The shared memory (the recorder) is a folder of notes on your Mac; it is only reachable from outside if you set up the optional remote connector yourself, or connect the hosted memory service above.

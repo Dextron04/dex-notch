@@ -71,5 +71,5 @@ targets:
         SPARKLE_FEED_URL: https://github.com/Dextron04/dex-notch/releases/latest/download/appcast.xml
         SPARKLE_PUBLIC_KEY: "vDz5+exfnVj8RSEdxNhw+TcSbtMdef+GMs8x1lVXt3s="      # public half; the private half is the SPARKLE_PRIVATE_KEY CI secret
         ENABLE_USER_SCRIPT_SANDBOXING: NO   # the build step above reads the recorder from the repository
-        ENABLE_APP_SANDBOX: false # ponytail: unsandboxed for easy dev; sandbox before shipping
+        ENABLE_APP_SANDBOX: false # ships unsandboxed on purpose: the app runs the claude and codex tools, reads other apps' logs and Notification Center, and installs a launchd job, none of which a sandbox allows
         CODE_SIGN_STYLE: Automatic

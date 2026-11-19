@@ -42,7 +42,7 @@ struct AddonAlert: Codable, Equatable, Identifiable, Sendable {
 struct GmailConfig: Equatable { var clientID: String; var clientSecret: String }
 
 /// The "addons" section of settings.json:
-///   { "addons": { "order": ["claude","codex","gemma"], "interval_hours": 4, "importance": "…", "gmail": { "client_id": "…", "client_secret": "…" } } }
+///   { "addons": { "order": ["claude","codex","gemma"], "check_minutes": 5, "importance": "…", "gmail": { "client_id": "…", "client_secret": "…" } } }
 struct AddonSettings: Equatable {
     var gmail: GmailConfig?             // yours from settings.json if given, otherwise the one this build shipped with
     var gmailIsOwn = false              // true when settings.json supplied it

@@ -17,3 +17,15 @@ jobs:
       - name: Python tests (recorder, MCP server, connector)
         working-directory: memory
         run: python3 -m unittest discover -s tests
+  # The recorder inside the app promises Python 3.9 or later. Everything except the hosted server (which is not bundled) must pass on 3.9.
+  python39:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.9' }
+      - name: Recorder tests on Python 3.9
+        working-directory: memory
+        run: |
+          MODS=$( (ls tests/test_*.py | grep -v test_hosted; echo tests/test_hosted_client.py) | sed 's|/|.|; s|\.py$||')
+          python -m unittest $MODS

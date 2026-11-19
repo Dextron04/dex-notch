@@ -69,7 +69,7 @@ enum ConnectionLogic {
 
     static func stepText(_ s: Step?) -> (title: String, detail: String, button: String) {
         switch s {
-        case .vault?: return ("Lock your vault", "Choose Touch ID or a passphrase. Your notes are encrypted with a key only you can open.", "Lock my vault")
+        case .vault?: return ("Lock your vault", "Create a passkey, or use a passphrase. Your notes are encrypted with a key only you can open.", "Lock my vault")
         case .record?: return ("Start recording", "Dex Notch saves your Claude Code, Codex and Gemini conversations and uploads them to your account.", "Start recording")
         case .connect?: return ("Connect Claude or ChatGPT", "So they can search what you've saved, and save to it.", "Add in Claude")
         case .firstChat?: return ("Have your first conversation", "Paste this into Claude or ChatGPT, then ask the other one to find it.", "Copy the first line")
