@@ -7,7 +7,7 @@ from agentvault.model import Turn, SessionMeta
 
 def add(v, sid, agent, project, title, day):
     ts = "2026-11-%02dT10:00:00Z" % day
-    notes.append_turns(v, SessionMeta(agent, sid, project, "/x/" + project, ts, title, "/s"), [Turn("user", "x", ts)])
+    notes.add_turns(v, SessionMeta(agent, sid, project, "/x/" + project, ts, title, "/s"), [Turn("user", "x", ts)])[0]
 
 class DigestTests(unittest.TestCase):
     def setUp(self):

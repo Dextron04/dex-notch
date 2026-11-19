@@ -9,8 +9,8 @@ class McpTests(unittest.TestCase):
     def test_mcp_initialize_list_call_roundtrip(self):
         with tempfile.TemporaryDirectory() as d:
             v = Path(d)
-            notes.append_turns(v, SessionMeta("codex", "aaaaaaaaaa1", "auth", "/x/auth", "2026-11-14T10:00:00Z", "Auth lock fix", "/s"),
-                               [Turn("user", "why does the keychain prompt appear", "2026-11-14T10:00:00Z")])
+            notes.add_turns(v, SessionMeta("codex", "aaaaaaaaaa1", "auth", "/x/auth", "2026-11-14T10:00:00Z", "Auth lock fix", "/s"),
+                               [Turn("user", "why does the keychain prompt appear", "2026-11-14T10:00:00Z")])[0]
             reqs = [
                 {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}},
                 {"jsonrpc": "2.0", "method": "notifications/initialized"},

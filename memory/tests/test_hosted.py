@@ -7,7 +7,7 @@ from agentvault.hosted.store import Store
 from agentvault.hosted import tools
 
 def save(vault, sid, text):
-    notes.append_turns(vault, SessionMeta("codex", sid, "p", "/x", "2026-11-14T10:00:00Z", "t " + sid, "/s"), [Turn("user", text, "2026-11-14T10:00:00Z")])
+    notes.add_turns(vault, SessionMeta("codex", sid, "p", "/x", "2026-11-14T10:00:00Z", "t " + sid, "/s"), [Turn("user", text, "2026-11-14T10:00:00Z")])[0]
 
 class HostedTests(unittest.TestCase):
     def setUp(self):

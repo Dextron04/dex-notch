@@ -30,8 +30,8 @@ class RemoteTests(unittest.TestCase):
     def setUp(self):
         self.d = tempfile.TemporaryDirectory(); self.addCleanup(self.d.cleanup)
         root = Path(self.d.name); self.vault = root / "Vault"
-        notes.append_turns(self.vault, SessionMeta("codex", "aaaaaaaaaa1", "auth", "/x", "2026-11-14T10:00:00Z", "Auth lock fix", "/s"),
-                           [Turn("user", "why does the keychain prompt appear", "2026-11-14T10:00:00Z")])
+        notes.add_turns(self.vault, SessionMeta("codex", "aaaaaaaaaa1", "auth", "/x", "2026-11-14T10:00:00Z", "Auth lock fix", "/s"),
+                           [Turn("user", "why does the keychain prompt appear", "2026-11-14T10:00:00Z")])[0]
         self.store = OAuthStore(root / "oauth.json")
         self.t = [10_000.0]
         self.srv = make_server(self.vault, self.store, "correct horse", PUB, port=0, now=lambda: self.t[0])

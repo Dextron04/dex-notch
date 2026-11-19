@@ -561,6 +561,55 @@ final class AddonsTests: XCTestCase {
         XCTAssertEqual(Reminders.due(all, done: [], snoozed: ["a": four.addingTimeInterval(600)], now: four).count, 0)   // snoozed
         XCTAssertEqual(Reminders.due(all, done: [], snoozed: ["a": four.addingTimeInterval(600)], now: four.addingTimeInterval(601)).map(\.id), ["a"])   // snooze over; "b" is still hours away
     }
+
+    func testFinishedRemindersAreCleanedUpButTheirIdsStayAndNothingOnScreenIsTouched() throws {
+        let vault = FileManager.default.temporaryDirectory.appendingPathComponent("rem2-\(UUID().uuidString)")
+        let dir = vault.appendingPathComponent("Reminders"); try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: vault) }
+        for id in ["done", "snoozed", "showing", "waiting"] {
+            try "---\nid: \"\(id)\"\ndue: \"2026-11-16T15:00:00Z\"\ntext: \"t\"\nsource: \"claude-web\"\n---\n".write(to: dir.appendingPathComponent("\(id).md"), atomically: true, encoding: .utf8)
+        }
+        let now = Date()
+        let all = Reminders.load(vault: vault)
+        let gone = Reminders.finished(all, done: ["done", "snoozed", "showing"], snoozed: ["snoozed": now.addingTimeInterval(600)], onScreen: ["showing"])
+        XCTAssertEqual(gone.map(\.id), ["done"])                                   // snoozed will come back, on-screen is still up, "waiting" was never shown
+        Reminders.remove(gone)
+        XCTAssertEqual(Reminders.load(vault: vault).map(\.id).sorted(), ["showing", "snoozed", "waiting"])
+        XCTAssertFalse(Reminders.due(all, done: ["done"], snoozed: [:], now: Date.distantFuture).map(\.id).contains("done"))   // and a copy that returns is still not shown
+    }
+    func testTrimmingTheDoneListNeverForgetsAReminderWhoseFileIsStillThere() {
+        let ids = (0..<10).map { "r\($0)" }
+        XCTAssertEqual(Reminders.trimmed(ids, present: [], limit: 20), ids)
+        XCTAssertEqual(Reminders.trimmed(ids, present: [], limit: 7), Array(ids.suffix(7)))          // oldest go first
+        XCTAssertEqual(Reminders.trimmed(ids, present: ["r0", "r1"], limit: 7), ["r0", "r1", "r5", "r6", "r7", "r8", "r9"])   // r0, r1 stay: they would be shown again
+        XCTAssertEqual(Reminders.trimmed(ids, present: Set(ids), limit: 3), ids)                      // nothing can be dropped safely, so nothing is
+    }
+    func testACorruptStateFileIsMovedAsideNotOverwritten() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("st-\(UUID().uuidString)"); try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("addons.json")
+        try "{ this is not json".write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertEqual(AddonState.load(from: url), AddonState())
+        AddonState().save(to: url)                                                                   // the first save after loading must not destroy it
+        let kept = try FileManager.default.contentsOfDirectory(atPath: dir.path).filter { $0.hasPrefix("addons.json.corrupt-") }
+        XCTAssertEqual(kept.count, 1); XCTAssertEqual(try String(contentsOf: dir.appendingPathComponent(kept[0])), "{ this is not json")
+        try "{}".write(to: url, atomically: true, encoding: .utf8)                                   // missing keys still load, and are not "corrupt"
+        XCTAssertEqual(AddonState.load(from: url), AddonState())
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path).filter { $0.contains("corrupt") }.count, 1)
+    }
+    func testTheMacBufferSurvivesARestartDropsOldItemsAndIsCapped() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("buf-\(UUID().uuidString)/mac-buffer.json")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let now = Date()
+        func item(_ i: Int, age: TimeInterval) -> MailItem { MailItem(id: "n\(i)", threadId: "", from: "App", subject: "s", snippet: "b", date: now.addingTimeInterval(-age), labels: [], bulk: false) }
+        var items = (0..<40).map { item($0, age: 60) }; items.insert(item(99, age: 7200), at: 0)
+        MacBuffer.save(items, to: url, now: now)
+        let back = MacBuffer.load(from: url, now: now)
+        XCTAssertEqual(back.count, Triage.batch); XCTAssertEqual(back.last?.id, "n39"); XCTAssertFalse(back.contains { $0.id == "n99" })
+        XCTAssertTrue(MacBuffer.load(from: url, now: now.addingTimeInterval(3601)).isEmpty)          // an hour later they are all too old
+        MacBuffer.save([], to: url, now: now); XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertTrue(MacBuffer.load(from: url, now: now).isEmpty)
+    }
 }
 
 private actor Counter { var n = 0; func bump() { n += 1 } }

@@ -84,9 +84,6 @@ def add_turns(vault: Path, meta: SessionMeta, turns: List[Turn]) -> Tuple[Path, 
     write_atomic(p, _dump_fm(fm) + body + "".join(_render(t, k) for t, k in fresh))
     return p, len(fresh)
 
-def append_turns(vault: Path, meta: SessionMeta, turns: List[Turn]) -> Path:
-    return add_turns(vault, meta, turns)[0]
-
 def reset_note(vault: Path, meta: SessionMeta) -> None:
     p = note_path(vault, meta)
     if p.exists(): p.unlink()

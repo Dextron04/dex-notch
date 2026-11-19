@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 from .. import mcp_server
 from .oauth import OAuthError, OAuthStore
-from .tools import REMEMBER, REMIND, remember, remind
+from .tools import REMEMBER, REMIND, remember, remind, retire_reminders
 
 MAX_BODY = 1024 * 1024
 MAX_FAILS, LOCK_SECONDS, MAX_TRACKED = 5, 600, 10_000
@@ -87,6 +87,7 @@ def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str
             if not reminder_key: return self.send(404, {"error": "not_found"})
             if not hmac.compare_digest(self.headers.get("Authorization") or "", "Bearer " + reminder_key.decode()): return self.send(401, {"error": "unauthorized"})
             folder = vault / "Reminders"
+            retire_reminders(vault)
             def snap():
                 fs = []
                 for f in sorted(folder.glob("*.md")) if folder.is_dir() else []:

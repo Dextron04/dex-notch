@@ -59,4 +59,14 @@ enum RecorderLogic {
 
     /// Whether the copy the app carries is newer than the one running (the app was updated).
     static func needsUpdate(installed: String?, app: String) -> Bool { installed != app }
+
+    /// Puts a fresh copy of the recorder at `dest` without ever leaving it empty: copy beside it, then swap. If the copy fails, the old one is untouched.
+    nonisolated static func swapIn(_ src: URL, to dest: URL) throws {
+        let fm = FileManager.default
+        let tmp = dest.deletingLastPathComponent().appendingPathComponent(".\(dest.lastPathComponent).new-\(UUID().uuidString)")
+        do {
+            try fm.copyItem(at: src, to: tmp)
+            if fm.fileExists(atPath: dest.path) { _ = try fm.replaceItemAt(dest, withItemAt: tmp) } else { try fm.moveItem(at: tmp, to: dest) }
+        } catch { try? fm.removeItem(at: tmp); throw error }
+    }
 }
