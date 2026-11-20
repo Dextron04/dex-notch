@@ -28,7 +28,7 @@ final class Assistant {
     }
     private static let system = "You answer inside a tiny overlay beside the Mac's notch. Be brief and direct: plain sentences, no headings, no preamble. Use short lists only when asked. Put any code in fenced blocks with a language tag."
 
-    struct Turn { var role: String; var text: String }
+    struct Turn { var role: String; var text: String; var verdict: String? = nil }
 
     enum Mode { case prompt, recall }
     enum RecallPage: Int, CaseIterable {
@@ -52,6 +52,7 @@ final class Assistant {
     var work = false                // claude/codex may edit files and run commands — the "+" on the dial
     var folder: String?             // absolute path of the extra folder those runs may write to (nil = the scratch sandbox only)
     var recalled: [String] = []     // titles of the vault notes Gemma was handed for the last answer
+    var dualStage: DualStage?       // which step of a Both run is going (nil outside one)
     var toolNote: String?           // what claude/codex is doing right now ("Read", "shell", …)
     private var sessions: [Backend: String] = [:] // CLI session ids so follow-ups resume the same conversation
 
@@ -130,7 +131,7 @@ final class Assistant {
     // MARK: persistence — the open conversation survives quitting the app
 
     func persist() {
-        let c = SavedConversation(id: convID, turns: turns.map { SavedTurn(role: $0.role, text: $0.text) }, backend: backend, work: work, folder: folder,
+        let c = SavedConversation(id: convID, turns: turns.map { SavedTurn(role: $0.role, text: $0.text, verdict: $0.verdict) }, backend: backend, work: work, folder: folder,
                                   sessions: Dictionary(uniqueKeysWithValues: sessions.map { ($0.key.rawValue, $0.value) }),
                                   draft: draft, recalled: recalled, closedAt: closedAt ?? Date())
         try? ConversationStore.save(c, to: storeURL) // best effort: a full disk must never break the notch
@@ -138,7 +139,7 @@ final class Assistant {
 
     private func restore() {
         guard let c = ConversationStore.load(from: storeURL) else { return }
-        turns = c.turns.map { Turn(role: $0.role, text: $0.text) }
+        turns = c.turns.map { Turn(role: $0.role, text: $0.text, verdict: $0.verdict) }
         backend = c.backend; work = c.work; recalled = c.recalled
         folder = c.folder.map { $0.hasPrefix("/") ? $0 : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent($0).path }  // older saves stored just "Desktop"
         sessions = Dictionary(uniqueKeysWithValues: c.sessions.compactMap { k, v in Backend(rawValue: k).map { ($0, v) } })
@@ -197,7 +198,7 @@ final class Assistant {
     /// ⌘N / the new-chat button: drop the conversation (and stop a running answer) on purpose.
     func newConversation() { task?.cancel(); reset() }
 
-    private func reset() { turns = []; draft = ""; error = nil; backend = AgentStream.defaultBackend(choices: choices, preferred: preferred) ?? .claude; work = false; folder = workspaceDefault; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; journaled = 0; persist() }
+    private func reset() { turns = []; draft = ""; error = nil; backend = AgentStream.defaultBackend(choices: choices, preferred: preferred) ?? .claude; work = false; folder = workspaceDefault; sessions = [:]; toolNote = nil; dualStage = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; journaled = 0; persist() }
 
     // MARK: ask
 
@@ -237,6 +238,8 @@ final class Assistant {
                         waiting = false; streaming = true
                         turns[turns.count - 1].text += t
                     }
+                } else if b == .both {
+                    try await runDual(r.prompt)
                 } else {
                     try await runAgent(r)
                 }
@@ -323,9 +326,41 @@ final class Assistant {
         } catch let m as AgentRunner.Missing { throw Failure("`\(m.name)` not found. Install it and log in.") }
     }
 
+    /// Both: claude and codex answer, one judges, the loser drafts, the winner reviews. Read-only; never touches `sessions`.
+    private func runDual(_ question: String) async throws {
+        let history = DualJudge.historyText(turns.dropLast(2).map { (role: $0.role, text: $0.text) })
+        let ask: DualAsk = { backend, prompt, onText in
+            var got = "", final = ""
+            do {
+                for try await e in AgentRunner.run(Route(backend: backend, work: false, prompt: prompt), session: nil) {
+                    switch e {
+                    case .text(let t): got += t; onText(t)
+                    case .final(let t): final = t
+                    case .error(let m): throw Failure(m)
+                    default: break
+                    }
+                }
+            } catch let m as AgentRunner.Missing { throw Failure("`\(m.name)` not found. Install it and log in.") }
+            return got.isEmpty ? final : got
+        }
+        let out = try await DualJudge.run(question: question, history: history, ask: ask,
+            onStage: { s in await MainActor.run {
+                self.dualStage = s; self.toolNote = nil
+                if s == .answering || s == .judging { self.waiting = true; self.streaming = false }
+            } },
+            onDraft: { d in await MainActor.run {
+                guard !self.turns.isEmpty else { return }
+                self.waiting = false; self.streaming = true
+                self.turns[self.turns.count - 1].text = d
+            } })
+        guard !turns.isEmpty else { return } // ⌘N during the run
+        turns[turns.count - 1].text = out.answer
+        turns[turns.count - 1].verdict = out.verdict
+    }
+
     private func finish() {
         defer { persist() }
-        waiting = false; streaming = false; toolNote = nil
+        waiting = false; streaming = false; toolNote = nil; dualStage = nil
         if turns.last?.role == "assistant", turns.last?.text.isEmpty == true, error != nil { turns.removeLast() }
         journalGemmaExchange()
     }

@@ -1,6 +1,6 @@
 import Foundation
 
-struct SavedTurn: Codable, Equatable { var role: String; var text: String }
+struct SavedTurn: Codable, Equatable { var role: String; var text: String; var verdict: String? = nil } // verdict: Both-mode judge note; optional so old saves decode
 
 struct SavedConversation: Codable, Equatable {
     var version = 1

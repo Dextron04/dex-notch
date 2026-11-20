@@ -57,4 +57,15 @@ final class ConversationStoreTests: XCTestCase {
         try ConversationStore.save(SavedConversation(), to: url)
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
+
+    func testOldSavedTurnWithoutVerdictDecodes() throws {
+        let t = try JSONDecoder().decode(SavedTurn.self, from: Data(#"{"role":"assistant","text":"hi"}"#.utf8))
+        XCTAssertNil(t.verdict)
+    }
+
+    func testVerdictRoundTrips() throws {
+        let c = SavedConversation(turns: [SavedTurn(role: "user", text: "q"), SavedTurn(role: "assistant", text: "a", verdict: "Claude won")], backend: .both)
+        try ConversationStore.save(c, to: url)
+        XCTAssertEqual(ConversationStore.load(from: url, now: now)?.turns.last?.verdict, "Claude won")
+    }
 }
