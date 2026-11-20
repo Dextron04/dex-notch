@@ -169,7 +169,7 @@ enum AgentStream {
 
     /// Background triage over untrusted mail: no tools at all, nothing written to the CLI's session log (so mail never reaches the shared vault).
     static func lockedClaudeArgs(prompt: String) -> [String] {
-        ["-p", "--output-format", "stream-json", "--verbose", "--tools", "", "--strict-mcp-config", "--no-session-persistence",
+        ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--tools", "", "--strict-mcp-config", "--no-session-persistence",
          "--setting-sources", "project", "--", prompt]      // project only: your personal hooks and plugins must not colour what is written about your mail
     }
     /// Run it with a throwaway CODEX_HOME (`AgentRunner.codexTriageHome`): otherwise the CLI loads every MCP server in your own config.

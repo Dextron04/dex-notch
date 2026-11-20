@@ -188,4 +188,10 @@ final class DualJudgeTests: XCTestCase {
         XCTAssertTrue(seen.prompts(.draft)[0].contains("B-MARK"))
         XCTAssertTrue(r.verdict.hasPrefix("No verdict"))
     }
+    func testDraftShownEvenWithoutStreaming() async throws {
+        let st = Stages()
+        let ask: DualAsk = { b, p, _, _ in Self.agree(b, Self.kind(p))! } // never calls onText
+        _ = try await go(ask, st)
+        XCTAssertEqual(st.drafts.first, "the draft")
+    }
 }

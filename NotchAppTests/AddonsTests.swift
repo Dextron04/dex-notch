@@ -287,6 +287,7 @@ final class AddonsTests: XCTestCase {
         XCTAssertTrue(c.contains("--no-session-persistence")); XCTAssertTrue(c.contains("--strict-mcp-config")); XCTAssertEqual(c.last, "p")
         XCTAssertEqual(c.firstIndex(of: "--setting-sources").map { c[$0 + 1] }, "project")          // not your personal hooks and plugins
         XCTAssertFalse(c.contains("--allowedTools"))
+        XCTAssertTrue(c.contains("--include-partial-messages")) // Both streams its locked draft
         let x = AgentStream.lockedCodexArgs(prompt: "p")
         XCTAssertTrue(x.contains("--ephemeral")); XCTAssertEqual(x.firstIndex(of: "--sandbox").map { x[$0 + 1] }, "read-only")
         XCTAssertEqual(Array(x.suffix(2)), ["--", "p"])

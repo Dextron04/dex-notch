@@ -5,8 +5,8 @@ from agentvault import recorder
 from agentvault.adapters import default_adapters
 from agentvault.adapters.notch import NotchAdapter
 
-def line(role, text, ts, conv="c1"):
-    return json.dumps({"v": 1, "conv": conv, "role": role, "text": text, "ts": ts, "model": "gemma"}) + "\n"
+def line(role, text, ts, conv="c1", model="gemma"):
+    return json.dumps({"v": 1, "conv": conv, "role": role, "text": text, "ts": ts, "model": model}) + "\n"
 
 class NotchAdapterTests(unittest.TestCase):
     def setUp(self):
@@ -22,6 +22,10 @@ class NotchAdapterTests(unittest.TestCase):
         self.assertEqual((meta.agent, meta.project, meta.session_id, meta.started), ("gemma", "notch", "11111111-aaaa", "2026-11-14T10:00:00Z"))
         self.assertEqual(meta.title, "how do I rebase onto main?")
         self.assertEqual(off, self.f.stat().st_size)
+
+    def test_model_field_names_the_agent(self):
+        self.f.write_text(line("user", "q", "2026-11-14T10:00:00Z", model="both") + line("assistant", "a", "2026-11-14T10:00:05Z", model="both"))
+        self.assertEqual(self.ad.parse(self.f, 0)[0].agent, "both")
 
     def test_partial_last_line_waits_for_next_tick(self):
         whole = line("user", "q", "2026-11-14T10:00:00Z")

@@ -152,6 +152,7 @@ enum DualJudge {
         }
         cont.finish(); await pump.value
         try Task.checkCancellation()
+        await onDraft(draft) // locked runs may deliver only the final text
 
         await onStage(.reviewing(by: other))
         var final = draft, revised = false
