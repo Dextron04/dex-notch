@@ -56,12 +56,18 @@ final class DualJudgeTests: XCTestCase {
         XCTAssertEqual(DualJudge.writer([.claude: c, .codex: c]), .codex)
         XCTAssertEqual(DualJudge.writer([.claude: c, .codex: l]), .claude)
         XCTAssertEqual(DualJudge.writer([:]), .claude)
+        XCTAssertEqual(DualJudge.writer([.codex: c]), .codex)
+        XCTAssertEqual(DualJudge.verdictLine(votes: [.codex: c], writer: .codex, revised: false), "One judge preferred Codex's answer; Claude's points folded in. Reviewed by Claude.")
+        XCTAssertEqual(DualJudge.verdictLine(votes: [:], writer: .claude, revised: true), "No verdict; Claude merged both. Revised by Codex.")
     }
     func testParseReviewApprovedAndRevised() {
         XCTAssertNil(DualJudge.parseReview("APPROVED"))
         XCTAssertNil(DualJudge.parseReview("  approved \n"))
         XCTAssertEqual(DualJudge.parseReview("REVISED:\nBetter text"), "Better text")
         XCTAssertNil(DualJudge.parseReview("looks fine"))
+        XCTAssertEqual(DualJudge.parseReview("**REVISED:**\nA"), "A")
+        XCTAssertEqual(DualJudge.parseReview("## REVISED:\nB"), "B")
+        XCTAssertEqual(DualJudge.parseReview("Sure.\nREVISED:\nC"), "C")
     }
     func testHappyPathRunsFourStagesInOrder() async throws {
         let st = Stages()
@@ -94,8 +100,16 @@ final class DualJudgeTests: XCTestCase {
     }
     func testUnparseableVerdictIsNoVote() async throws {
         let r = try await go(Self.fake { b, k in k == .judge ? "shrug" : Self.agree(b, k) })
-        XCTAssertEqual(r.verdict, "Split vote; Claude merged both. Reviewed by Codex.")
+        XCTAssertEqual(r.verdict, "No verdict; Claude merged both. Reviewed by Codex.")
         XCTAssertEqual(r.answer, "the draft")
+    }
+    func testDraftFailureKeepsBetterAnswer() async throws {
+        let st = Stages()
+        let r = try await go(Self.fake { b, k in k == .draft ? nil : Self.agree(b, k) }, st)
+        XCTAssertEqual(r.answer, "claude answer")
+        XCTAssertEqual(r.verdict, "Claude couldn't merge — showing Claude's answer.")
+        XCTAssertEqual(st.v, [.answering, .judging, .drafting(by: .claude)])
+        XCTAssertEqual(st.drafts.last, "claude answer")
     }
     func testReviewFailureKeepsDraft() async throws {
         let r = try await go(Self.fake { b, k in k == .review ? nil : Self.agree(b, k) })
@@ -111,7 +125,7 @@ final class DualJudgeTests: XCTestCase {
     func testDraftPromptContainsBothAnswersAndStrengths() {
         let j = Judgement(better: .claude, claudeStrengths: "CS-MARK", codexStrengths: "XS-MARK")
         let p = DualJudge.draftPrompt(question: "Q", claude: "ANS-C", codex: "ANS-X", judgements: [.claude: j, .codex: j])
-        for s in ["ANS-C", "ANS-X", "CS-MARK", "XS-MARK", "Start from the better answer", "every strength"] { XCTAssertTrue(p.contains(s), s) }
+        for s in ["ANS-C", "ANS-X", "XS-MARK", "Both judges preferred the Claude answer; start from it.", "every strength"] { XCTAssertTrue(p.contains(s), s) }
         let r = DualJudge.reviewPrompt(question: "Q", claude: "ANS-C", codex: "ANS-X", draft: "DR")
         XCTAssertTrue(r.contains("nothing good from either original was dropped"))
     }

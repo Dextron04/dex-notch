@@ -34,12 +34,14 @@ enum DualJudge {
         """
     }
     static func draftPrompt(question: String, claude: String, codex: String, judgements: [Backend: Judgement]) -> String {
-        let js = [Backend.claude, .codex].compactMap { judgements[$0] }
-        func list(_ f: (Judgement) -> String) -> String {
-            let l = js.map(f).filter { !$0.isEmpty }.joined(separator: "\n"); return l.isEmpty ? "(none listed)" : l
-        }
+        let w = writer(judgements), o: Backend = w == .claude ? .codex : .claude
+        let n = judgements.values.filter { $0.better != nil }.count
+        let pick = n == 2 && judgements[.claude]?.better == judgements[.codex]?.better ? "Both judges preferred the \(w.displayName) answer; start from it."
+            : n == 1 ? "One judge preferred the \(w.displayName) answer; start from it."
+            : "No verdict; start from the \(w.displayName) answer."
+        let fold = [Backend.claude, .codex].compactMap { judgements[$0] }.map { o == .claude ? $0.claudeStrengths : $0.codexStrengths }.filter { !$0.isEmpty }.joined(separator: "\n")
         return """
-        You are writing the final answer from two candidate answers. Start from the better answer and fold in every strength the judges listed for the other answer, so the result keeps the best of both. \
+        You are writing the final answer from two candidate answers. \(pick) Fold in every strength the judges listed for the \(o.displayName) answer, so the result keeps the best of both. \
         Output only the final answer. You answer inside a tiny overlay beside the Mac's notch. \(style)
 
         Question: \(question)
@@ -50,11 +52,8 @@ enum DualJudge {
         CODEX ANSWER:
         \(codex)
 
-        Judges' notes, what the Claude answer has that the Codex one lacks:
-        \(list { $0.claudeStrengths })
-
-        Judges' notes, what the Codex answer has that the Claude one lacks:
-        \(list { $0.codexStrengths })
+        Strengths of the \(o.displayName) answer to fold in:
+        \(fold.isEmpty ? "(none listed)" : fold)
         """
     }
     static func reviewPrompt(question: String, claude: String, codex: String, draft: String) -> String {
@@ -90,20 +89,21 @@ enum DualJudge {
         return Judgement(better: better, claudeStrengths: section(cm, xm), codexStrengths: section(xm, cm))
     }
     static func writer(_ votes: [Backend: Judgement]) -> Backend {
-        if let a = votes[.claude]?.better, a == votes[.codex]?.better { return a }
-        return .claude
+        let v = Set(votes.values.compactMap(\.better))
+        return v.count == 1 ? v.first! : .claude // agree or a single vote decides; split or none -> Claude
     }
     static func parseReview(_ reply: String) -> String? {
-        let t = reply.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard t.range(of: "revised:", options: [.caseInsensitive, .anchored]) != nil else { return nil }
-        let body = t.dropFirst("revised:".count).trimmingCharacters(in: .whitespacesAndNewlines)
+        let t = reply.replacingOccurrences(of: "*", with: "").replacingOccurrences(of: "#", with: "")
+        guard let m = t.range(of: #"(?m)^[ \t]*revised:"#, options: [.regularExpression, .caseInsensitive]) else { return nil }
+        let body = t[m.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
         return body.isEmpty ? nil : body
     }
     static func verdictLine(votes: [Backend: Judgement], writer: Backend, revised: Bool) -> String {
         let other: Backend = writer == .claude ? .codex : .claude
-        let agreed = votes[.claude]?.better != nil && votes[.claude]?.better == votes[.codex]?.better
-        let head = agreed ? "Both preferred \(writer.displayName)'s answer; \(other.displayName)'s points folded in."
-                          : "Split vote; \(writer.displayName) merged both."
+        let n = votes.values.filter { $0.better != nil }.count
+        let head = n == 2 && votes[.claude]?.better == votes[.codex]?.better ? "Both preferred \(writer.displayName)'s answer; \(other.displayName)'s points folded in."
+            : n == 1 ? "One judge preferred \(writer.displayName)'s answer; \(other.displayName)'s points folded in."
+            : n == 2 ? "Split vote; \(writer.displayName) merged both." : "No verdict; \(writer.displayName) merged both."
         return head + (revised ? " Revised by \(other.displayName)." : " Reviewed by \(other.displayName).")
     }
 
@@ -139,7 +139,13 @@ enum DualJudge {
         let pump = Task { for await s in stream { await onDraft(s) } }
         let acc = Accumulator()
         let draft: String
-        do { draft = try await ask(w, dp) { cont.yield(acc.append($0)) } } catch { cont.finish(); await pump.value; throw error }
+        do { draft = try await ask(w, dp) { cont.yield(acc.append($0)) } } catch {
+            cont.finish(); await pump.value
+            try Task.checkCancellation()
+            let own = w == .claude ? claude : codex
+            await onDraft(own) // replaces any partial text
+            return (own, "\(w.displayName) couldn't merge — showing \(w.displayName)'s answer.")
+        }
         cont.finish(); await pump.value
         try Task.checkCancellation()
 
