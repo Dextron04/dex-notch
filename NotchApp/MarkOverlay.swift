@@ -6,7 +6,7 @@ import Observation
 
 extension Backend {
     /// The answering model's colour on the screen: Claude's orange, Codex's white, the local model's ember.
-    var accent: Color { switch self { case .claude: Color(red: 0.851, green: 0.467, blue: 0.341); case .codex: .white; case .gemma: Ink.ember } }
+    var accent: Color { switch self { case .claude: Color(red: 0.851, green: 0.467, blue: 0.341); case .codex: .white; case .gemma, .both: Ink.ember } }
 }
 
 @Observable @MainActor

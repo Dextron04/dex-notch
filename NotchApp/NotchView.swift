@@ -117,6 +117,15 @@ struct NotchView: View {
         if a.mode == .recall { return a.snapshot.recorderOK ? "recorder · running" : "recorder · not running" }
         if let p = a.screenProblem { return p }
         if a.needsSetup { return "setup needed" }
+        if a.backend == .both {
+            guard a.busy else { return "both · judge mode" }
+            return switch a.dualStage {
+            case .judging: "both · judging"
+            case .drafting(let b): "both · drafting (\(b.displayName))"
+            case .reviewing(let b): "both · reviewing (\(b.displayName))"
+            default: "both · answering"
+            }
+        }
         if a.backend != .gemma {
             return a.busy ? (a.toolNote.map { "\(a.backend.rawValue) · " + ($0.hasPrefix("looked") ? $0 : "using \($0)") } ?? "\(a.backend.rawValue) · thinking")
                           : (a.work ? "\(a.backend.rawValue)+ · \(AgentStream.folderLabel(a.folder))" : "\(a.backend.rawValue) · subscription")
@@ -146,10 +155,14 @@ struct NotchView: View {
                     if let q = a.question {
                         Text(q).font(.system(size: 13)).foregroundStyle(Ink.dim).lineLimit(2)
                     }
+                    if let st = a.dualStage, a.busy {
+                        DualStageView(stage: st).transition(.opacity.combined(with: .offset(y: -4)))
+                    }
                     if let e = a.error {
                         Text(e).font(.system(size: 15)).foregroundStyle(Ink.emberDeep)
                     } else if !a.answer.isEmpty {
                         AnswerBody(text: a.answer, accent: a.backend.accent)
+                        if !a.busy, let v = a.turns.last?.verdict { DualVerdictLine(verdict: v, winner: a.turns.last?.winner) }
                         if !a.recalled.isEmpty && !a.busy {
                             Text("from your vault · " + a.recalled.prefix(3).joined(separator: " · "))
                                 .font(.system(size: 11)).foregroundStyle(Ink.dim).lineLimit(2)
@@ -160,6 +173,7 @@ struct NotchView: View {
                 .padding(.horizontal, 30)
                 .padding(.vertical, 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .animation(reduce ? nil : .smooth(duration: 0.25), value: a.dualStage != nil && a.busy)
                 .background(GeometryReader { Color.clear.preference(key: HeightKey.self, value: $0.size.height) })
             }
             .scrollIndicators(.never)

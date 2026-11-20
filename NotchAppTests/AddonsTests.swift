@@ -77,7 +77,7 @@ final class AddonsTests: XCTestCase {
         struct Limit: Error {}
         var tried: [Backend] = []
         let out = await Triage.run(items: items, importance: "", order: [.claude, .codex, .gemma]) { b, _, _ in
-            switch b { case .claude: throw Limit(); case .codex: return "no idea"; case .gemma: return good }
+            switch b { case .claude: throw Limit(); case .codex: return "no idea"; case .gemma: return good; case .both: return "" }
         }
         tried = [out?.backend].compactMap { $0 }
         XCTAssertEqual(tried, [.gemma]); XCTAssertEqual(out?.alerts.count, 1)
@@ -154,6 +154,12 @@ final class AddonsTests: XCTestCase {
         XCTAssertEqual(AddonSettings.load(from: url).gmail?.clientID, "new")
         XCTAssertEqual(AddonSettings.load(from: url).order, [.gemma, .claude])                       // untouched
         XCTAssertEqual((try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])?["default"] as? String, "claude")
+    }
+    func testTriageOrderDropsBoth() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("s-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data(#"{"addons":{"order":["claude","both","codex"]}}"#.utf8).write(to: url)
+        XCTAssertEqual(AddonSettings.load(from: url).order, [.claude, .codex])
     }
     func testBundledClientIsUsedUnlessYouSupplyYourOwn() throws {
         XCTAssertEqual(AddonSettings.bundled(["GoogleClientID": "id", "GoogleClientSecret": "sec"]), GmailConfig(clientID: "id", clientSecret: "sec"))
@@ -281,6 +287,7 @@ final class AddonsTests: XCTestCase {
         XCTAssertTrue(c.contains("--no-session-persistence")); XCTAssertTrue(c.contains("--strict-mcp-config")); XCTAssertEqual(c.last, "p")
         XCTAssertEqual(c.firstIndex(of: "--setting-sources").map { c[$0 + 1] }, "project")          // not your personal hooks and plugins
         XCTAssertFalse(c.contains("--allowedTools"))
+        XCTAssertTrue(c.contains("--include-partial-messages")) // Both streams its locked draft
         let x = AgentStream.lockedCodexArgs(prompt: "p")
         XCTAssertTrue(x.contains("--ephemeral")); XCTAssertEqual(x.firstIndex(of: "--sandbox").map { x[$0 + 1] }, "read-only")
         XCTAssertEqual(Array(x.suffix(2)), ["--", "p"])

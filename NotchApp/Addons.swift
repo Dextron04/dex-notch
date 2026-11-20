@@ -79,7 +79,7 @@ struct AddonSettings: Equatable {
         var s = base
         if let o = a["order"] as? [String] {
             var seen = Set<Backend>()
-            let list = o.compactMap { Backend(rawValue: $0) }.filter { seen.insert($0).inserted }
+            let list = o.compactMap { Backend(rawValue: $0) }.filter { $0 != .both }.filter { seen.insert($0).inserted }
             if !list.isEmpty { s.order = list }
         }
         if let h = a["interval_hours"] as? Double { s.checkMinutes = min(max(h * 60, 2), 1440) }        // older files

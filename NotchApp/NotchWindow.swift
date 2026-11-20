@@ -69,7 +69,7 @@ final class NotchWindow {
                 if assistant.mode == .prompt, code == 45, flags.contains(.command), flags.intersection([.option, .control]).isEmpty {
                     assistant.newConversation(); return true     // ⌘N
                 }
-                if assistant.mode == .prompt {   // model dial: ⇥ / ⇧⇥ cycle, ⌘1 ⌘2 ⌘3 jump, ⌘E toggles edit rights
+                if assistant.mode == .prompt {   // model dial: ⇥ / ⇧⇥ cycle, ⌘1–⌘4 jump, ⌘E toggles edit rights
                     guard !assistant.busy else { return false }
                     let cmd = flags.contains(.command) && flags.intersection([.option, .control]).isEmpty
                     switch code {
@@ -77,6 +77,7 @@ final class NotchWindow {
                     case 18 where cmd: assistant.setBackendAt(0)
                     case 19 where cmd: assistant.setBackendAt(1)
                     case 20 where cmd: assistant.setBackendAt(2)
+                    case 21 where cmd: assistant.setBackendAt(3)
                     case 14 where cmd: assistant.toggleWork()
                     case 3 where cmd: assistant.cycleFolder()     // ⌘F
                     default: return false

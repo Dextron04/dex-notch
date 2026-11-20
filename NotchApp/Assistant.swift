@@ -18,7 +18,7 @@ final class Assistant {
     private(set) var detected = false            // false until the first look for them has finished
 
     /// The models on the dial: installed CLIs, plus Gemma when configured.
-    var choices: [Backend] { AgentStream.order.filter { $0 == .gemma ? gemma != nil : cliFound.contains($0) } }
+    var choices: [Backend] { AgentStream.dialChoices(cliFound: cliFound, hasGemma: gemma != nil) }
     var needsSetup: Bool { detected && choices.isEmpty }
     var configProblem: String? { settingsProblem ?? gemmaProblem ?? workspaceProblems.first }
     /// What ⌘F cycles through: configured folders that exist.
@@ -28,7 +28,7 @@ final class Assistant {
     }
     private static let system = "You answer inside a tiny overlay beside the Mac's notch. Be brief and direct: plain sentences, no headings, no preamble. Use short lists only when asked. Put any code in fenced blocks with a language tag."
 
-    struct Turn { var role: String; var text: String }
+    struct Turn { var role: String; var text: String; var verdict: String? = nil; var winner: Backend? = nil }
 
     enum Mode { case prompt, recall }
     enum RecallPage: Int, CaseIterable {
@@ -52,6 +52,7 @@ final class Assistant {
     var work = false                // claude/codex may edit files and run commands — the "+" on the dial
     var folder: String?             // absolute path of the extra folder those runs may write to (nil = the scratch sandbox only)
     var recalled: [String] = []     // titles of the vault notes Gemma was handed for the last answer
+    var dualStage: DualStage?       // which step of a Both run is going (nil outside one)
     var toolNote: String?           // what claude/codex is doing right now ("Read", "shell", …)
     var seeScreen = false           // the eye: the next questions go with a screenshot of the display the notch lives on
     private(set) var shot: Shot?       // the eye's shot: kept while the eye is on
@@ -123,14 +124,14 @@ final class Assistant {
             let first = !detected
             cliFound = found; detected = true
             let next = AgentStream.backendAfterDetection(current: backend, firstDetection: first, hasConversation: !turns.isEmpty, choices: choices, preferred: preferred)
-            if next != backend { backend = next; if next == .gemma { work = false } }
+            if next != backend { backend = next; if next == .gemma || next == .both { work = false } }
         }
     }
 
     /// If the selected model isn't available (uninstalled, or Gemma was removed from settings), move to one that is.
     private func settleBackend() {
         guard !choices.isEmpty, !choices.contains(backend), let d = AgentStream.defaultBackend(choices: choices, preferred: preferred) else { return }
-        backend = d; if d == .gemma { work = false }
+        backend = d; if d == .gemma || d == .both { work = false }
     }
 
     /// Menu: "Set up Gemma…" — opens settings.json in the default text editor (creating a blank one first).
@@ -142,7 +143,7 @@ final class Assistant {
     // MARK: persistence — the open conversation survives quitting the app
 
     func persist() {
-        let c = SavedConversation(id: convID, turns: turns.map { SavedTurn(role: $0.role, text: $0.text) }, backend: backend, work: work, folder: folder,
+        let c = SavedConversation(id: convID, turns: turns.map { SavedTurn(role: $0.role, text: $0.text, verdict: $0.verdict, winner: $0.winner) }, backend: backend, work: work, folder: folder,
                                   sessions: Dictionary(uniqueKeysWithValues: sessions.map { ($0.key.rawValue, $0.value) }),
                                   draft: draft, recalled: recalled, closedAt: closedAt ?? Date())
         try? ConversationStore.save(c, to: storeURL) // best effort: a full disk must never break the notch
@@ -150,7 +151,7 @@ final class Assistant {
 
     private func restore() {
         guard let c = ConversationStore.load(from: storeURL) else { return }
-        turns = c.turns.map { Turn(role: $0.role, text: $0.text) }
+        turns = c.turns.map { Turn(role: $0.role, text: $0.text, verdict: $0.verdict, winner: $0.winner) }
         backend = c.backend; work = c.work; recalled = c.recalled
         folder = c.folder.map { $0.hasPrefix("/") ? $0 : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent($0).path }  // older saves stored just "Desktop"
         sessions = Dictionary(uniqueKeysWithValues: c.sessions.compactMap { k, v in Backend(rawValue: k).map { ($0, v) } })
@@ -171,13 +172,13 @@ final class Assistant {
 
     // MARK: model dial
 
-    func setBackend(_ b: Backend) { guard !busy, choices.contains(b) else { return }; backend = b; if b == .gemma { work = false; warmLocalModel() } }
+    func setBackend(_ b: Backend) { guard !busy, choices.contains(b) else { return }; backend = b; if b == .gemma || b == .both { work = false }; if b == .gemma { warmLocalModel() } }
     func cycleBackend(_ d: Int) { setBackend(AgentStream.cycle(backend, by: d, among: choices)) }
     /// ⌘1 ⌘2 ⌘3 pick the 1st, 2nd, 3rd model that is actually on the dial.
     func setBackendAt(_ i: Int) { if choices.indices.contains(i) { setBackend(choices[i]) } }
     /// ⌘F: sandbox → Desktop → Downloads → Documents → Projects → sandbox. Picking a folder implies edit rights.
-    func cycleFolder() { guard !busy, backend != .gemma else { return }; folder = AgentStream.nextFolder(folder, in: folderList); if folder != nil { work = true } }
-    func toggleWork() { guard !busy, backend != .gemma else { return }; work.toggle() }
+    func cycleFolder() { guard !busy, backend != .gemma, backend != .both else { return }; folder = AgentStream.nextFolder(folder, in: folderList); if folder != nil { work = true } }
+    func toggleWork() { guard !busy, backend != .gemma, backend != .both else { return }; work.toggle() }
 
     // MARK: screen help
 
@@ -256,7 +257,7 @@ final class Assistant {
     /// ⌘N / the new-chat button: drop the conversation (and stop a running answer) on purpose.
     func newConversation() { task?.cancel(); reset() }
 
-    private func reset() { dropShot(); screenProblem = nil; turns = []; draft = ""; error = nil; backend = AgentStream.defaultBackend(choices: choices, preferred: preferred) ?? .claude; work = false; folder = workspaceDefault; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; journaled = 0; persist() }
+    private func reset() { dropShot(); screenProblem = nil; turns = []; draft = ""; error = nil; backend = AgentStream.defaultBackend(choices: choices, preferred: preferred) ?? .claude; work = false; folder = workspaceDefault; sessions = [:]; toolNote = nil; dualStage = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; journaled = 0; persist() }
 
     // MARK: ask
 
@@ -265,7 +266,7 @@ final class Assistant {
         if q.isEmpty, seeScreen, backend != .gemma { q = ScreenMarks.defaultQuestion }   // eye on, nothing typed: just help
         guard !q.isEmpty, !busy else { return }
         var r = AgentStream.route(q)
-        if r.prompt == q { r.backend = backend; r.work = work && backend != .gemma } // no prefix: use the dial
+        if r.prompt == q { r.backend = backend; r.work = work && backend != .gemma && backend != .both } // no prefix: use the dial
         else { backend = r.backend; work = r.work }                                  // pasted "@claude …" switches the dial
         guard !r.prompt.isEmpty else { draft = ""; return } // bare "@claude": just switch
         if r.work, let f = folder {                         // `+` run with a chosen folder: grant write access to exactly that one, re-checked now
@@ -306,15 +307,15 @@ final class Assistant {
                     }
                     if let s = seeScreen ? shot : once ? temp : nil {
                         r.image = s.url.path
-                        r.prompt = ScreenMarks.prompt(r.prompt, path: s.url.path, size: s.pixelSize, claude: b == .claude)
+                        if b != .both { r.prompt = ScreenMarks.prompt(r.prompt, path: s.url.path, size: s.pixelSize, claude: b == .claude) }   // Both wraps it per model (DualJudge.route)
                     }
                     if ScreenTool.offered(b, setting: Settings.modelsMayLook(at: settingsURL)), let exe = Bundle.main.executablePath {
                         let token = UUID().uuidString
                         runToken = token; limiter = .init()
                         r.look = ScreenTool.Launch(exe: exe, socket: ScreenBridge.socketPath, token: token)
-                        if r.image == nil { r.prompt += "\n\n" + ScreenTool.hint }
+                        if r.image == nil, b != .both { r.prompt += "\n\n" + ScreenTool.hint }
                     }
-                    try await runAgent(r)
+                    if b == .both { try await runDual(r, size: (seeScreen ? shot : once ? temp : nil)?.pixelSize ?? .zero) } else { try await runAgent(r) }
                 }
                 finish()
             } catch is CancellationError {
@@ -409,24 +410,63 @@ final class Assistant {
         }
     }
 
+    /// Both: claude and codex both answer, both judge, the preferred one drafts a hybrid, the other reviews it. Read-only; never touches `sessions`.
+    /// With a screenshot or the look tool, only the two answer runs get them (one token, so the three looks are shared); the marks come from the final answer alone.
+    private func runDual(_ r: Route, size: CGSize) async throws {
+        let question = r.prompt
+        let screen = r.image != nil || r.look != nil ? DualScreen(image: r.image, size: size, look: r.look) : nil
+        let history = DualJudge.historyText(turns.dropLast(2).suffix(20).map { (role: $0.role, text: $0.text) })
+        let ask: DualAsk = { backend, prompt, isInternal, onText in
+            var got = "", final = ""
+            do {
+                for try await e in AgentRunner.run(DualJudge.route(backend, prompt: prompt, isInternal: isInternal, screen: screen), session: nil) {
+                    switch e {
+                    case .text(let t): got += t; onText(t)
+                    case .final(let t): final = t
+                    case .error(let m): throw Failure(m)
+                    default: break
+                    }
+                }
+            } catch let m as AgentRunner.Missing { throw Failure("`\(m.name)` not found. Install it and log in.") }
+            return got.isEmpty ? final : got
+        }
+        let out = try await DualJudge.run(question: question, history: history, marks: screen != nil, ask: ask,
+            onStage: { s in await MainActor.run {
+                self.dualStage = s; self.toolNote = nil
+                if s == .answering || s == .judging { self.waiting = true; self.streaming = false }
+            } },
+            onDraft: { d in await MainActor.run {
+                guard !self.turns.isEmpty else { return }
+                self.waiting = false; self.streaming = true
+                self.turns[self.turns.count - 1].text = screen == nil ? d : ScreenMarks.parse(d, imageSize: size, streaming: true, badges: true).clean   // the overlay waits for the final answer
+            } })
+        guard !turns.isEmpty else { return } // ⌘N during the run
+        if screen != nil {      // the chosen or revised answer, once: its marks and its badges
+            let p = ScreenMarks.parse(out.answer, imageSize: latest?.pixelSize ?? size, badges: true)
+            turns[turns.count - 1].text = p.clean
+            if let s = latest, p.marks != marks { showMarks(p.marks, s) }
+        } else { turns[turns.count - 1].text = out.answer }
+        turns[turns.count - 1].verdict = out.verdict; turns[turns.count - 1].winner = out.winner
+    }
+
     private func finish() {
         defer { persist() }
         runToken = nil
-        ScreenCapture.remove(temp); temp = nil
-        waiting = false; streaming = false; toolNote = nil
+        ScreenCapture.remove(temp); temp = nil   // after every stage of a Both run, not after the first model
+        waiting = false; streaming = false; toolNote = nil; dualStage = nil
         if turns.last?.role == "assistant", turns.last?.text.isEmpty == true, error != nil { turns.removeLast() }
         journalGemmaExchange()
     }
 
-    /// Gemma has no session log of its own, so each finished exchange goes to the vault journal (claude/codex runs are already
+    /// Gemma has no session log of its own, and Both runs its internal stages unrecorded, so each finished exchange goes to the vault journal (claude/codex runs are already
     /// recorded from their own logs). Skipped on errors and cancels: only a complete question + answer is worth remembering.
     private func journalGemmaExchange() {
         defer { journaled = turns.count }
-        guard exchange.backend == .gemma, error == nil, turns.count > journaled, turns.count >= 2,
+        guard exchange.backend == .gemma || exchange.backend == .both, error == nil, turns.count > journaled, turns.count >= 2,
               turns[turns.count - 1].role == "assistant", !turns[turns.count - 1].text.isEmpty, turns[turns.count - 2].role == "user" else { return }
         try? Journal.append([JournalEntry(role: "user", text: turns[turns.count - 2].text, ts: exchange.askedAt),
                              JournalEntry(role: "assistant", text: turns[turns.count - 1].text, ts: Date())],
-                            conv: convID, model: "gemma", to: Journal.defaultDir) // best effort: never block the notch on disk trouble
+                            conv: convID, model: exchange.backend == .both ? "both" : "gemma", to: Journal.defaultDir) // best effort: never block the notch on disk trouble
     }
 
     struct Failure: Error { let msg: String; init(_ m: String) { msg = m } }

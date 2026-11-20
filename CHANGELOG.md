@@ -6,11 +6,13 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
-## v0.9.5: Ask about what's on your screen
+## v0.9.5: Ask about your screen, and get both models' best answer
 
 *Not released yet*
 
-You can now show Claude or Codex your screen and ask about it. Answers can point at the exact spot with numbered boxes drawn over the real screen.
+Two things. You can show Claude or Codex your screen and ask about it, and you can ask both models at once and get one answer that keeps the best of each.
+
+**Ask about your screen.** Answers can point at the exact spot with numbered boxes drawn over the real screen.
 
 - **Show your screen with one key.** Press `⌥⌘S`, or click the eye in the prompt bar. A small thumbnail shows what the model will see. Only the screen the notch is on is captured, and Dex Notch's own window is left out.
 - **Or just ask.** Plain words like "what's on my screen?" take a single screenshot for that one question. The eye flashes and turns itself off again.
@@ -28,6 +30,13 @@ You can now show Claude or Codex your screen and ask about it. Answers can point
   <p align="center">
     <img src="docs/assets/gif-screen-help.gif" alt="Press the hotkey, ask where the Wi-Fi icon is, and a numbered box draws itself over it." width="560"><br>
     <a href="docs/assets/gif-screen-help.mp4">Watch it as a video</a>
+  </p>
+
+**Ask Claude and Codex together.** Press Tab to **Both** (or start with `@both`) when both CLIs are installed. Each model answers, each judges the other's answer, the preferred model writes a hybrid that keeps the best of both, and the other model reviews it. A stage track shows the progress and a verdict line says who won. It takes about 20 seconds and six CLI runs per question, and it is always read-only. With a screenshot (the eye, `⌥⌘S` or "my screen"), both models get it. The boxes on your screen come only from the final answer, and the three looks per question are shared between them.
+
+  <p align="center">
+    <img src="docs/assets/gif-dual-judgement.gif" alt="Pressing Tab to Both, asking a question, and watching the stage track move through Answering, Judging, Drafting and Reviewing until a verdict line names the winner." width="560"><br>
+    <a href="docs/assets/gif-dual-judgement.mp4">Watch it as a video</a>
   </p>
 
 ## v0.9.4: Tighter limits on what Claude can reach
