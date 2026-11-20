@@ -34,11 +34,11 @@ struct ModelMark: View {
             switch backend {
             case .claude: GridShape(path: Self.claude).fill(Self.claudeOrange).opacity(active ? 1 : 0.5)
             case .codex: GridShape(path: Self.codex).fill(Color.white, style: FillStyle(eoFill: true)).opacity(active ? 1 : 0.5)
-            case .both: // placeholder: Task 4 polishes
+            case .both: // Claude and Codex overlapping (~30%); they drift apart when active
                 ZStack {
-                    GridShape(path: Self.claude).fill(Self.claudeOrange).frame(width: size * 0.7, height: size * 0.7).offset(x: -size * 0.15, y: -size * 0.15)
-                    GridShape(path: Self.codex).fill(Color.white, style: FillStyle(eoFill: true)).frame(width: size * 0.7, height: size * 0.7).offset(x: size * 0.15, y: size * 0.15)
-                }.opacity(active ? 1 : 0.5)
+                    ModelMark(backend: .claude, size: size * 0.72, active: true).offset(x: -size * (active ? 0.17 : 0.14))
+                    ModelMark(backend: .codex, size: size * 0.72, active: true).offset(x: size * (active ? 0.17 : 0.14))
+                }.opacity(active ? 1 : 0.5).animation(.spring(duration: 0.4, bounce: 0.3), value: active)
             case .gemma:
                 LocalMark().stroke(active ? Ink.ember : Ink.dim, style: StrokeStyle(lineWidth: size * 0.11, lineCap: .round, lineJoin: .round))
             }
