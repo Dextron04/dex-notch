@@ -104,7 +104,7 @@ class ServerAssetTests(unittest.TestCase):
     def test_security_headers_on_pages(self):
         for path in ("/", "/login", "/login/verify?t=x", "/nope"):
             _, h, _ = self.get(path) if path != "/nope" else (0, self.get(path)[1], 0)
-            self.assertEqual(h["content-security-policy"], CSP, path); self.assertEqual(h["referrer-policy"], "no-referrer", path); self.assertEqual(h["x-content-type-options"], "nosniff", path)
+            self.assertEqual(h["content-security-policy"], CSP, path); self.assertEqual(h["referrer-policy"], "same-origin", path); self.assertEqual(h["x-content-type-options"], "nosniff", path)
             self.assertEqual(h["cache-control"], "no-store", path)
         self.assertNotIn("'unsafe-inline'", CSP); self.assertIn("frame-ancestors 'none'", CSP)
 

@@ -80,7 +80,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             self.send_response(status)
             self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(body)))
             if "Cache-Control" not in (extra or {}): self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "no-referrer")  # a sign-in link in the address bar must never travel as a referrer
+            self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Referrer-Policy", "same-origin")  # a sign-in link must never travel to another site; not no-referrer, which makes Chrome send Origin: null on our own forms and the Origin check then refuses them
             if ctype.startswith("text/html"): self.send_header("Content-Security-Policy", CSP)
             if secure: self.send_header("Strict-Transport-Security", "max-age=31536000")
             for k, v in (extra or {}).items(): self.send_header(k, v)

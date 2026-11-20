@@ -6,6 +6,41 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.9.4: Tighter limits on what Claude can reach
+
+*20 November 2026*
+
+This release is mostly about safety. It closes off places where an AI helper, or a hostile email, could have reached further than you meant. It does not make the AI risk-free: [SECURITY.md](SECURITY.md) says exactly what is covered and what is not.
+
+**In the Mac app (this update)**
+
+- **Ask mode can only read its own scratch folder.** Claude can no longer read your files from Ask mode. Folders that hold secrets are blocked: `~/.ssh`, `~/.aws`, Keychains, tokens, npm and git credentials, shell history, Messages, Mail and browser profiles. Of your connected tools, only Dex Memory is reachable; your other MCP tools are not.
+- **Work mode (`@claude+`) has no web tools.** Shell commands still run in the sandbox, with the same blocked folders.
+- **Gmail replies go to exactly one address, shown in full**, as "Name <address>". If an email has several recipients, or hidden ones, Dex Notch refuses to reply and tells you why.
+
+- **Judging mail with Codex runs with no tools and no MCP servers.** Prompts are passed after `--`. Claude's scratch folder is cleaned before every run, so links and planted settings files are removed.
+- **Links in answers are safer.** Only http and https links can be clicked, and the host is shown, so you can see where a link goes.
+- **Reminders tidy up after themselves.** Done and expired reminders are removed, so the folder no longer grows forever.
+- **Fewer ways to lose things.** A damaged `addons.json` is set aside instead of wiped. Mac notifications waiting for the AI survive a restart. The recorder updates atomically and logs its first import to `backfill.log`.
+- **Clearer wording.** "Lock your vault" now says "Create a passkey, or use a passphrase".
+
+**On the website and server (already live, no update needed)**
+
+- **Locking your vault is part of sign-up.** You create a passkey, or use a passphrase, before anything else.
+
+  <p align="center">
+    <img src="docs/assets/shot-vault-lock-required.png" alt="The Lock your vault page: Create a passkey, with Use a passphrase instead below it." width="720">
+  </p>
+  <p align="center">
+    <img src="docs/assets/gif-vault-lock.gif" alt="The Lock your vault page during sign-up." width="560"><br>
+    <a href="docs/assets/gif-vault-lock.mp4">Watch it as a video</a>
+  </p>
+
+- **Stronger passphrase protection.** A passphrase is now turned into a key with a slower, memory-hungry method, which makes guessing it much more expensive.
+- **Sign-in hardening.** The OAuth sign-in for Claude and ChatGPT accepts only exact return addresses, forms refuse to be sent from other sites, and responses can no longer be tampered with through injected headers.
+- **Automatic, tested deploys with rollback.** New server versions are tested before they go live, and roll back by themselves if the health check fails.
+- **Sign-in forms work in Chrome again.** A tightening this week made Chrome send a blank origin from our own pages, so the check refused them. The page policy is now "same-origin".
+
 ## v0.9.3: A fresher, clearer Settings window
 
 *18 November 2026*
