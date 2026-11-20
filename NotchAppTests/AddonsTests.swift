@@ -413,6 +413,12 @@ final class AddonsTests: XCTestCase {
         XCTAssertTrue(b.contains(.video(URL(string: "https://example.com/repo/v0.6.0/docs/assets/a.mp4")!, title: "Watch it as a video")))
     }
 
+    func testUnreleasedSectionStaysHiddenUntilItsVersionShips() {
+        let md = "## v0.9.5: Next\n*Not released yet*\n- new\n\n## v0.9.4: Now\n- now\n"
+        XCTAssertEqual(Changelog.missed(md, installed: "0.9.3", upTo: "0.9.4").map(\.version), ["0.9.4"])
+        XCTAssertTrue(Changelog.blocks(Changelog.sections(md), base: URL(string: "https://example.com/")!).contains(.date("Not released yet")))
+    }
+
     func testMacCandidatesAndJudging() {
         let on: (String) -> Bool = { _ in true }
         XCTAssertTrue(PhoneNotes.isMacCandidate("com.tinyspeck.slackmacgap", installed: on, own: "x"))

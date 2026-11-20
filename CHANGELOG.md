@@ -6,6 +6,30 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.9.5: Ask about what's on your screen
+
+*Not released yet*
+
+You can now show Claude or Codex your screen and ask about it. Answers can point at the exact spot with numbered boxes drawn over the real screen.
+
+- **Show your screen with one key.** Press `⌥⌘S`, or click the eye in the prompt bar. A small thumbnail shows what the model will see. Only the screen the notch is on is captured, and Dex Notch's own window is left out.
+- **Or just ask.** Plain words like "what's on my screen?" take a single screenshot for that one question. The eye flashes and turns itself off again.
+- **Boxes drawn on your screen.** Ask "where is the Wi-Fi icon?" and a numbered box appears over it, with a line from the notch. The matching number is next to the answer. Boxes are click-through, so you can keep using whatever is under them. They go away when you press Esc, ask something new, or after a minute.
+- **Models can look on their own.** When it helps, Claude and Codex can take a screenshot while they answer, up to three per question. The status line says "looked at your screen" each time. Turn it off in Settings → Models with "Let models look at the screen on their own".
+- **Screenshots do not pile up.** A screenshot lives in the run's private scratch folder, readable only by you. A one-question screenshot is deleted when the answer ends, the eye's screenshot when you turn the eye off or start a new chat, and any left over are removed when Dex Notch starts or quits. Nothing is kept or uploaded by Dex Notch itself.
+- **Needs Screen Recording.** The first time you use it, macOS asks you to allow Dex Notch under System Settings → Privacy & Security → Screen Recording. Nothing is captured until you allow it. The local model (Gemma) can't see the screen, so the eye is dimmed for it.
+
+  <p align="center">
+    <img src="docs/assets/shot-screen-marks.png" alt="A numbered box drawn over the Wi-Fi icon in the menu bar, with the answer and a matching number in the notch." width="720">
+  </p>
+  <p align="center">
+    <img src="docs/assets/shot-screen-eye.png" alt="The prompt bar with the eye turned on and a small thumbnail of the screen next to it." width="720">
+  </p>
+  <p align="center">
+    <img src="docs/assets/gif-screen-help.gif" alt="Press the hotkey, ask where the Wi-Fi icon is, and a numbered box draws itself over it." width="560"><br>
+    <a href="docs/assets/gif-screen-help.mp4">Watch it as a video</a>
+  </p>
+
 ## v0.9.4: Tighter limits on what Claude can reach
 
 *20 November 2026*
