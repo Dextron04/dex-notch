@@ -244,7 +244,7 @@ top=$(head -n1 "$WORK/list.txt"); top=${top%%/*}
 { re "$top" '^[A-Za-z0-9._-]+$' && [[ $top == *"$s7"* ]]; } || reject_tarball "top dir '$top' does not carry the sha"
 mkdir "$WORK/pristine"
 # the whole tree, minus heavy assets tests never read: tests reach scripts/, PRIVACY.md and docs/ through REPO_ROOT (the release still gets only SRC_SUBDIR)
-tar -xzf "$WORK/src.tgz" -C "$WORK/pristine" --exclude="$top/docs/assets" --exclude="$top/katana-assets" --exclude='*.xcodeproj' --exclude='*.mp4' --exclude='*.gif' --exclude='*.png' --exclude='*.zip' 2>>"$LOG" || reject_tarball "tarball cannot be unpacked"
+tar -xzf "$WORK/src.tgz" -C "$WORK/pristine" --exclude="$top/docs/assets" --exclude="$top/katana-assets" --exclude='*.xcodeproj' --exclude='*.mp4' --exclude='*.zip' 2>>"$LOG" || reject_tarball "tarball cannot be unpacked"
 PRIS=$WORK/pristine/$top
 [ -d "$PRIS/$TEST_DIR" ] || reject_tarball "no $TEST_DIR in tarball"
 { [ -d "$PRIS/$SRC_SUBDIR" ] && has_files "$PRIS/$SRC_SUBDIR"; } || reject_tarball "no $SRC_SUBDIR in tarball"
