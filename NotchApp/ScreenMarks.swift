@@ -8,10 +8,9 @@ enum ScreenMarks {
     /// Sent when the eye is on and nothing was typed.
     static let defaultQuestion = "Look at my screen, work out what I'm doing and what I probably need help with, and help. Point at the relevant spots."
 
-    /// Plain-words trigger: asking about the screen in so many words is the same as turning the eye on. Short and conservative on purpose.
+    /// Plain-words trigger: saying "my screen" in so many words is a request to look. Explicit phrases only, so ordinary questions never capture.
     static func wantsScreen(_ prompt: String) -> Bool {
-        let t = prompt.lowercased()
-        return ["my screen", "on screen", "on-screen", "look at this", "look at my", "what am i looking at", "this window", "this page", "this error"].contains { t.contains($0) }
+        prompt.range(of: #"\b(?:on|see|look at|what'?s on) my screen\b|\bmy screen\b|\bon screen\b|\bwhat am i looking at\b"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     /// What the model is told. Claude reads the PNG with its Read tool; Codex gets it with `-i`, so only the first line differs.
@@ -23,28 +22,37 @@ enum ScreenMarks {
 
     private static let element = try! NSRegularExpression(pattern: #"<mark\b([^>]*)>(.*?)</mark\s*>"#, options: [.dotMatchesLineSeparators, .caseInsensitive])
     private static let attr = try! NSRegularExpression(pattern: #"\b([a-z]+)\s*=\s*["']?\s*(-?[0-9]*\.?[0-9]+)"#, options: [.caseInsensitive])
-    private static let stray = try! NSRegularExpression(pattern: #"</?mark\b[^>]*>"#, options: [.caseInsensitive])
+    private static let closer = try! NSRegularExpression(pattern: #"[ \t]*</mark\s*>"#, options: [.caseInsensitive])
+    private static let openTag = try! NSRegularExpression(pattern: #"<mark(?:\s|$)"#, options: [.caseInsensitive])
 
-    /// The text without any mark tags (also while it is still streaming), and the well-formed marks clamped to `imageSize` (zero = no clamp).
-    static func parse(_ text: String, imageSize: CGSize = .zero) -> (clean: String, marks: [Mark]) {
+    /// The text without mark tags, and the well-formed marks clamped to `imageSize` (zero = no clamp). Text with no `<mark` comes back untouched.
+    /// While `streaming`, an unfinished tag at the end is hidden so it never flashes in the notch; final text is never truncated.
+    static func parse(_ text: String, imageSize: CGSize = .zero, streaming: Bool = false) -> (clean: String, marks: [Mark]) {
+        var text = text
+        if streaming {
+            if let m = openTag.matches(in: text, range: NSRange(location: 0, length: (text as NSString).length)).last, let r = Range(m.range, in: text),
+               text.range(of: "</mark", options: .caseInsensitive, range: r.upperBound..<text.endIndex) == nil { text = String(text[..<r.lowerBound]) }   // opened, not closed yet
+            else if let lt = text.lastIndex(of: "<"), "<mark".hasPrefix(text[lt...].lowercased()) { text = String(text[..<lt]) }                          // "<", "<ma", …
+        }
+        guard text.range(of: "<mark", options: .caseInsensitive) != nil || text.range(of: "</mark", options: .caseInsensitive) != nil else {
+            return (streaming ? text.replacingOccurrences(of: #"\s+\z"#, with: "", options: .regularExpression) : text, [])
+        }
         var marks: [Mark] = []
         let ns = text as NSString
-        var out = "", last = 0
+        var out = "", last = 0, seam = false
+        func append(_ chunk: String) {
+            var c = Substring(chunk)
+            if seam, out.isEmpty || out.last == " " || out.last == "\t" || out.last == "\n" { c = c.drop { $0 == " " || $0 == "\t" } }   // tidy only where a tag was removed
+            out += c; seam = false
+        }
         for m in element.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
-            out += ns.substring(with: NSRange(location: last, length: m.range.location - last)); last = m.range.location + m.range.length
+            append(ns.substring(with: NSRange(location: last, length: m.range.location - last))); last = m.range.location + m.range.length; seam = true
             guard marks.count < maxMarks, let r = rect(ns.substring(with: m.range(at: 1)), clamp: imageSize) else { continue }   // malformed or over the cap: stripped anyway
             marks.append(Mark(rect: r, label: ns.substring(with: m.range(at: 2)).trimmingCharacters(in: .whitespacesAndNewlines)))
         }
-        out += ns.substring(from: last)
-        if let open = out.range(of: "<mark", options: [.caseInsensitive, .backwards]), out.range(of: "</mark", options: .caseInsensitive, range: open.upperBound..<out.endIndex) == nil {
-            out = String(out[..<open.lowerBound])     // opened, not closed yet: hide the label as it streams in
-        }
-        out = stray.stringByReplacingMatches(in: out, range: NSRange(location: 0, length: (out as NSString).length), withTemplate: "")
-        if let lt = out.lastIndex(of: "<") {
-            let tail = out[lt...].lowercased()
-            if tail.hasPrefix("<mark") || "<mark".hasPrefix(tail) { out = String(out[..<lt]) }   // an unfinished tag at the end of the stream: never let it flash in the notch
-        }
-        return (out.replacingOccurrences(of: #"[ \t]{2,}"#, with: " ", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines), marks)
+        append(ns.substring(from: last))
+        out = closer.stringByReplacingMatches(in: out, range: NSRange(location: 0, length: (out as NSString).length), withTemplate: "")
+        return (out.replacingOccurrences(of: #"\A\n+|\s+\z"#, with: "", options: .regularExpression), marks)
     }
 
     private static func rect(_ attrs: String, clamp size: CGSize) -> CGRect? {

@@ -44,6 +44,7 @@ final class ScreenToolTests: XCTestCase {
         XCTAssertTrue(Settings.modelsMayLook(at: u))
         try Settings.setModelsMayLook(at: u, false); XCTAssertFalse(Settings.modelsMayLook(at: u))
         try Settings.setModelsMayLook(at: u, true); XCTAssertTrue(Settings.modelsMayLook(at: u))
+        try Data("{ not json".utf8).write(to: u); XCTAssertFalse(Settings.modelsMayLook(at: u))      // unreadable: no consent assumed
     }
     func testClaudeGetsAConfigAndAllowRuleOnlyWhenOffered() {
         let a = AgentStream.claudeArgs(prompt: "q", session: nil, work: false, look: l)

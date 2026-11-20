@@ -25,9 +25,21 @@ final class ScreenMarksTests: XCTestCase {
     }
     func testPartialTagAtEndOfStreamIsHidden() {
         for tail in ["<", "<m", "<mark", #"<mark x="1" y="2"#, #"<mark x="1" y="2" w="3" h="4">lab"#, "<MARK x"] {
-            XCTAssertEqual(ScreenMarks.parse("See this " + tail, imageSize: size).clean, "See this", tail)
+            XCTAssertEqual(ScreenMarks.parse("See this " + tail, imageSize: size, streaming: true).clean, "See this", tail)
         }
-        XCTAssertEqual(ScreenMarks.parse("1 < 2 and x <y", imageSize: size).clean, "1 < 2 and x <y")   // ordinary angle brackets stay
+        XCTAssertEqual(ScreenMarks.parse("1 < 2 and x <y", imageSize: size, streaming: true).clean, "1 < 2 and x <y")   // ordinary angle brackets stay
+        XCTAssertEqual(ScreenMarks.parse("a <markdown", imageSize: size, streaming: true).clean, "a <markdown")           // not our tag
+    }
+    func testFinalTextIsNeverTruncated() {
+        for t in ["Use the <mark> tag. More text after.", "a <markdown> doc and tail text", "a <marker> here", "ends with <mark", #"open <mark x="1" y="2" w="3" h="4">never closed"#] {
+            XCTAssertEqual(ScreenMarks.parse(t, imageSize: size).clean, t, t)
+        }
+    }
+    func testCodeIndentationSurvives() {
+        let code = "```python\ndef f(x):\n    if x:\n        return  1\n```"
+        XCTAssertEqual(ScreenMarks.parse(code, imageSize: size).clean, code)
+        XCTAssertEqual(ScreenMarks.parse(code + #" <mark x="1" y="1" w="5" h="5">a</mark>"#, imageSize: size).clean, code)       // and with a mark elsewhere in the answer
+        XCTAssertEqual(ScreenMarks.parse("x\n    indented <mark x=\"1\" y=\"1\" w=\"5\" h=\"5\">a</mark> tail", imageSize: size).clean, "x\n    indented tail")
     }
     func testToScreenMapsScaleOriginAndFlip() {
         // 1000x500 px image of a 500x250 pt display at (0,0)
@@ -43,10 +55,10 @@ final class ScreenMarksTests: XCTestCase {
         XCTAssertFalse(ScreenMarks.prompt("q", path: "/p/screen.png", size: size, claude: false).contains("/p/screen.png"))
     }
     func testWantsScreenHitsAndMisses() {
-        for q in ["Look at my screen and help", "what's on my screen", "WHAT AM I LOOKING AT", "fix this error on screen", "help with this page", "look at this"] {
+        for q in ["Look at my screen and help", "what's on my screen", "WHAT AM I LOOKING AT", "fix this error on screen", "can you see my screen"] {
             XCTAssertTrue(ScreenMarks.wantsScreen(q), q)
         }
-        for q in ["write a screenplay outline", "how do I set screen time limits", "explain monads", "what is a window function"] {
+        for q in ["write a screenplay outline", "how do I set screen time limits", "explain monads", "what is a window function", "help with this page", "look at this", "why this error", "fix this window", "my screenshot tool"] {
             XCTAssertFalse(ScreenMarks.wantsScreen(q), q)
         }
     }

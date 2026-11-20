@@ -105,7 +105,8 @@ enum Settings {
 
     /// "Let models look at the screen on their own": {"screen": {"models_may_look": false}} turns it off; on otherwise.
     static func modelsMayLook(at url: URL) -> Bool {
-        guard let d = try? Data(contentsOf: url), let root = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { return true }
+        guard FileManager.default.fileExists(atPath: url.path) else { return true }
+        guard let d = try? Data(contentsOf: url), let root = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { return false }   // can't read it: don't assume consent
         return ((root["screen"] as? [String: Any])?["models_may_look"] as? Bool) != false
     }
     static func setModelsMayLook(at url: URL, _ on: Bool) throws {

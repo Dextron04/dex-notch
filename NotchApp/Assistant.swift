@@ -54,7 +54,9 @@ final class Assistant {
     var recalled: [String] = []     // titles of the vault notes Gemma was handed for the last answer
     var toolNote: String?           // what claude/codex is doing right now ("Read", "shell", …)
     var seeScreen = false           // the eye: the next questions go with a screenshot of the display the notch lives on
-    private(set) var shot: Shot?
+    private(set) var shot: Shot?       // the eye's shot: kept while the eye is on
+    private var temp: Shot?             // a one-question shot (asked in words, or taken by a model): deleted when the answer ends
+    private var latest: Shot? { temp ?? shot }
     private(set) var marks: [ScreenMarks.Mark] = []   // in shot pixels
     var looked = false              // a model took a screenshot by itself a moment ago: the eye lights up so you see it
     private var runToken: String?   // the question being answered right now; look_at_screen requests need it
@@ -179,23 +181,29 @@ final class Assistant {
     /// The only places the screen is ever captured: the eye chip, ⌥⌘S, or a question that says "my screen" (see `send`).
     private func grab(eye: Bool = true) async -> Bool {
         screenProblem = nil
-        do { ScreenCapture.remove(shot); shot = try await ScreenCapture.capture(); if eye { seeScreen = true }; return true }
-        catch { if eye { shot = nil; seeScreen = false }; screenProblem = (error as? ScreenCapture.Denied)?.msg ?? error.localizedDescription; return false }
+        do {
+            if eye { shot = try await ScreenCapture.capture(); seeScreen = true }
+            else { temp = try await ScreenCapture.capture(name: ScreenCapture.lookName) }    // the eye's shot stays as it was
+            return true
+        } catch {
+            if eye { ScreenCapture.remove(shot); shot = nil; seeScreen = false }
+            screenProblem = (error as? ScreenCapture.Denied)?.msg ?? error.localizedDescription; return false
+        }
     }
+    private func flashEye() { looked = true; Task { try? await Task.sleep(for: .seconds(2.5)); looked = false } }
 
     /// `look_at_screen` called by a model (via ScreenBridge). Refused unless a question is being answered; at most `maxPerTurn` times.
     func startScreenBridge() { ScreenBridge.shared.start { [weak self] req in await self?.lookRequest(req) ?? Data() } }
     private func lookRequest(_ req: Data) async -> Data {
         func j(_ d: [String: Any]) -> Data { (try? JSONSerialization.data(withJSONObject: d)) ?? Data() }
         let o = (try? JSONSerialization.jsonObject(with: req)) as? [String: Any]
-        guard let t = runToken, o?["token"] as? String == t, busy else { return j(["error": "No question is being answered, so screen access is closed."]) }
+        guard Settings.modelsMayLook(at: settingsURL), let t = runToken, o?["token"] as? String == t, busy else { return j(["error": "No question is being answered, so screen access is closed."]) }
         guard limiter.take() else { return j(["error": "Already looked \(ScreenTool.maxPerTurn) times for this question."]) }
-        guard await grab(eye: false), let s = shot else { return j(["error": screenProblem ?? "Couldn't capture the screen."]) }
-        toolNote = "looked at your screen"; looked = true
-        Task { try? await Task.sleep(for: .seconds(2.5)); looked = false }
+        guard await grab(eye: false), let s = temp else { return j(["error": screenProblem ?? "Couldn't capture the screen."]) }
+        toolNote = "looked at your screen"; flashEye()
         return j(["path": s.url.path, "w": Int(s.pixelSize.width), "h": Int(s.pixelSize.height)])
     }
-    func dropShot() { ScreenCapture.remove(shot); shot = nil; seeScreen = false; clearMarks() }
+    func dropShot() { ScreenCapture.remove(shot); ScreenCapture.remove(temp); shot = nil; temp = nil; seeScreen = false; clearMarks() }
     func clearMarks() { marks = []; MarkOverlay.clear() }
     func toggleScreen() {
         guard !busy, backend != .gemma else { return }
@@ -286,8 +294,12 @@ final class Assistant {
                     }
                 } else {
                     var r = r
-                    if !seeScreen, ScreenMarks.wantsScreen(r.prompt), !(await grab()) { throw Failure(screenProblem ?? "Couldn't look at the screen.") }   // asked in so many words: same as the eye
-                    if seeScreen, let s = shot {
+                    var once = false      // asked in so many words: this question only; the eye stays off and the file goes when the answer ends
+                    if !seeScreen, ScreenMarks.wantsScreen(r.prompt) {
+                        guard await grab(eye: false) else { throw Failure(screenProblem ?? "Couldn't look at the screen.") }
+                        once = true; flashEye()
+                    }
+                    if let s = seeScreen ? shot : once ? temp : nil {
                         r.image = s.url.path
                         r.prompt = ScreenMarks.prompt(r.prompt, path: s.url.path, size: s.pixelSize, claude: b == .claude)
                     }
@@ -370,9 +382,9 @@ final class Assistant {
             needBreak = false; gotText = true
             guard marking else { turns[turns.count - 1].text += brk + t; return }
             raw += brk + t
-            let p = ScreenMarks.parse(raw, imageSize: shot?.pixelSize ?? .zero)      // the latest shot: the model may have taken a newer one itself
+            let p = ScreenMarks.parse(raw, imageSize: latest?.pixelSize ?? .zero, streaming: true)      // the latest shot: the model may have taken a newer one itself
             turns[turns.count - 1].text = p.clean
-            if let s = shot, p.marks != marks { showMarks(p.marks, s) }
+            if let s = latest, p.marks != marks { showMarks(p.marks, s) }
         }
         do {
             for try await e in AgentRunner.run(r, session: sessions[r.backend]) {
@@ -385,11 +397,17 @@ final class Assistant {
                 }
             }
         } catch let m as AgentRunner.Missing { throw Failure("`\(m.name)` not found. Install it and log in.") }
+        if marking, !turns.isEmpty, !raw.isEmpty {      // the answer is complete: show it whole (a trailing "<mark" is text now, not a tag being written)
+            let p = ScreenMarks.parse(raw, imageSize: latest?.pixelSize ?? .zero)
+            turns[turns.count - 1].text = p.clean
+            if let s = latest, p.marks != marks { showMarks(p.marks, s) }
+        }
     }
 
     private func finish() {
         defer { persist() }
         runToken = nil
+        ScreenCapture.remove(temp); temp = nil
         waiting = false; streaming = false; toolNote = nil
         if turns.last?.role == "assistant", turns.last?.text.isEmpty == true, error != nil { turns.removeLast() }
         journalGemmaExchange()

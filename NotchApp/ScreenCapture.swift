@@ -16,7 +16,10 @@ enum ScreenCapture {
     static let maxEdge: CGFloat = 1568      // what vision models see anyway
     private static var asked = false
 
-    static func capture(to dir: URL = AgentRunner.scratch) async throws -> Shot {
+    static let eyeName = "screen.png", lookName = "screen-look.png"
+
+    /// Written atomically (the old file stays valid until the new one is whole), readable by this user only.
+    static func capture(name: String = eyeName) async throws -> Shot {
         guard CGPreflightScreenCaptureAccess() else {
             if !asked { asked = true; _ = CGRequestScreenCaptureAccess() }
             throw Denied(msg: "Screen Recording is off. Allow Dex Notch in System Settings → Privacy & Security.")
@@ -31,10 +34,16 @@ enum ScreenCapture {
         let img = try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(display: display, excludingApplications: me, exceptingWindows: []), configuration: cfg)
         let rep = NSBitmapImageRep(cgImage: img)
         guard let png = rep.representation(using: .png, properties: [:]) else { throw Denied(msg: "Couldn't save the screenshot.") }
-        let url = dir.appendingPathComponent("screen.png")
+        let url = AgentRunner.scratch.appendingPathComponent(name)
         try png.write(to: url, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         return Shot(url: url, pixelSize: CGSize(width: img.width, height: img.height), screenFrame: screen.frame, thumb: NSImage(cgImage: img, size: NSSize(width: 44, height: 28)))
     }
 
+    /// Screenshots never outlive the app: gone at launch (a crash may have left one) and at quit.
+    static func sweep() {
+        let fm = FileManager.default
+        for n in (try? fm.contentsOfDirectory(atPath: AgentRunner.scratch.path)) ?? [] where n.hasPrefix("screen") && n.hasSuffix(".png") { try? fm.removeItem(at: AgentRunner.scratch.appendingPathComponent(n)) }
+    }
     static func remove(_ s: Shot?) { if let s { try? FileManager.default.removeItem(at: s.url) } }
 }

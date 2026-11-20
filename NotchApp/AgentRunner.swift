@@ -8,7 +8,8 @@ enum AgentRunner {
     static let scratch: URL = {
         let u = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("NotchApp/scratch", isDirectory: true)
-        try? FileManager.default.createDirectory(at: u, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: u, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        chmod(u.path, 0o700)      // already there from an older version: screenshots land here
         return u
     }()
 

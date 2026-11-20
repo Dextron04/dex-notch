@@ -21,13 +21,18 @@ final class ScreenBridge: @unchecked Sendable {
         var addr = sockaddr_un(); addr.sun_family = sa_family_t(AF_UNIX)
         guard fd >= 0, path.utf8.count < MemoryLayout.size(ofValue: addr.sun_path) else { return }
         withUnsafeMutableBytes(of: &addr.sun_path) { $0.copyBytes(from: path.utf8) }
+        let old = umask(0o177)      // born 0600, not chmod'ed afterwards
         let ok = withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) } } == 0
+        umask(old)
         guard ok else { close(fd); return }
         chmod(path, 0o600); listen(fd, 4); started = true
         Thread.detachNewThread { [self] in
             while true {
                 let c = accept(fd, nil, nil)
-                if c < 0 { continue }
+                if c < 0 { Thread.sleep(forTimeInterval: 0.1); continue }      // don't spin on a persistent error
+                var on: Int32 = 1, tv = timeval(tv_sec: 5, tv_usec: 0)
+                setsockopt(c, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))      // a peer that left must not kill the app on write
+                setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))      // a client that never sends must not hold a thread
                 Thread.detachNewThread { [self] in serve(c) }
             }
         }
@@ -68,6 +73,8 @@ enum ScreenMCP {
         withUnsafeMutableBytes(of: &addr.sun_path) { $0.copyBytes(from: path.utf8) }
         let ok = withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) } } == 0
         guard ok else { return fail("Dex Notch isn't running, so there's no screen to look at.") }
+        var on: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
         var msg = (try? JSONSerialization.data(withJSONObject: ["token": token, "reason": reason ?? ""])) ?? Data()
         msg.append(10)
         _ = msg.withUnsafeBytes { write(fd, $0.baseAddress, msg.count) }

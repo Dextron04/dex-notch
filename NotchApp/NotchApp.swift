@@ -1,16 +1,20 @@
 import SwiftUI
 import Carbon.HIToolbox
 
+/// The entry point. The CLIs start this binary as their screen tool (`--screen-mcp`): that branch runs before SwiftUI, the delegate or any hotkey exists.
 @main
+enum Launcher {
+    static func main() {
+        if CommandLine.arguments.contains(ScreenTool.flag) { ScreenMCP.serve(); exit(0) }
+        NotchApp.main()
+    }
+}
+
 struct NotchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     private var updater: AppUpdater { AppUpdater.shared }
     private var center: AddonCenter { AddonCenter.shared }
     private var gate: AccountGate { AccountGate.shared }
-
-    init() {      // the CLIs start this binary as their screen tool: serve it and never reach the UI
-        if CommandLine.arguments.contains(ScreenTool.flag) { ScreenMCP.serve(); exit(0) }
-    }
 
     var body: some Scene {
         MenuBarExtra {
@@ -58,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startApp() {
+        ScreenCapture.sweep()      // a screenshot left by a crash
         notch = NotchWindow(assistant: assistant)
         notch?.show()
         hotkeys = [
@@ -91,5 +96,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in MainActor.assumeIsolated { self?.notch?.show() } }
     }
 
-    func applicationWillTerminate(_ note: Notification) { assistant.persist() } // ⌘Q / logout mid-thought still keeps the conversation
+    func applicationWillTerminate(_ note: Notification) { assistant.persist(); ScreenCapture.sweep() } // ⌘Q / logout mid-thought still keeps the conversation
 }
