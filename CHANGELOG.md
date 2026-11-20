@@ -8,7 +8,12 @@ The newest version is at the top. Every release is on the [Releases page](https:
 
 ## Unreleased
 
-- **Dual judgement: ask Claude and Codex together.** Press Tab to **Both** (or start with `@both`) when both CLIs are installed. Each model answers, each judges the other's answer, the preferred model writes a hybrid that keeps the best of both, and the other model reviews it. A stage track shows the progress and a verdict line says who won. It takes about 1-2 minutes and six CLI runs per question, and it is always read-only.
+- **Dual judgement: ask Claude and Codex together.** Press Tab to **Both** (or start with `@both`) when both CLIs are installed. Each model answers, each judges the other's answer, the preferred model writes a hybrid that keeps the best of both, and the other model reviews it. A stage track shows the progress and a verdict line says who won. It takes about 20 seconds and six CLI runs per question, and it is always read-only.
+
+  <p align="center">
+    <img src="docs/assets/gif-dual-judgement.gif" alt="Pressing Tab to Both, asking a question, and watching the stage track move through Answering, Judging, Drafting and Reviewing until a verdict line names the winner." width="560"><br>
+    <a href="docs/assets/gif-dual-judgement.mp4">Watch it as a video</a>
+  </p>
 
 ## v0.9.4: Tighter limits on what Claude can reach
 
