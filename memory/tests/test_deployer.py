@@ -27,7 +27,8 @@ echo "$@" >> "$DEX_TEST_DIR/launchctl.calls"
 [ "$1" = kickstart ] || exit 0
 [ -f "$DEX_TEST_DIR/service.pid" ] && kill "$(cat "$DEX_TEST_DIR/service.pid")" 2>/dev/null
 mode=ok; [ -f "$DEX_TEST_BASE/current/agentvault/MODE" ] && mode=$(cat "$DEX_TEST_BASE/current/agentvault/MODE")
-nohup python3 "$DEX_TEST_DIR/service.py" "$DEX_TEST_PORT" "$mode" >/dev/null 2>&1 </dev/null &
+{ echo "PATH=$PATH"; command -v python3; } > "$DEX_TEST_DIR/service.err" 2>&1
+nohup python3 "$DEX_TEST_DIR/service.py" "$DEX_TEST_PORT" "$mode" >/dev/null 2>>"$DEX_TEST_DIR/service.err" </dev/null &
 echo $! > "$DEX_TEST_DIR/service.pid"
 sleep 0.4
 """
@@ -160,7 +161,8 @@ class DeployerTest(unittest.TestCase):
 
     def deploy_ok(self, n, **kw):
         sha = self.publish(n, **kw); r = self.run_deployer()
-        self.assertEqual(r.returncode, 0, r.stderr + self.log())
+        err = self.dir / "service.err"
+        self.assertEqual(r.returncode, 0, r.stderr + self.log() + (err.read_text() if err.exists() else ""))
         return sha
 
     # ---- the cases -----------------------------------------------------------------------------------------------
