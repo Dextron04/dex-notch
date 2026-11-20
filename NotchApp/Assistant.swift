@@ -53,6 +53,10 @@ final class Assistant {
     var folder: String?             // absolute path of the extra folder those runs may write to (nil = the scratch sandbox only)
     var recalled: [String] = []     // titles of the vault notes Gemma was handed for the last answer
     var toolNote: String?           // what claude/codex is doing right now ("Read", "shell", …)
+    var seeScreen = false           // the eye: the next questions go with a screenshot of the display the notch lives on
+    private(set) var shot: Shot?
+    private(set) var marks: [ScreenMarks.Mark] = []   // in shot pixels
+    var screenProblem: String?      // why the last capture didn't happen (shown where the status is)
     private var sessions: [Backend: String] = [:] // CLI session ids so follow-ups resume the same conversation
 
     /// Called whenever isOpen flips so the window can take/release key focus.
@@ -167,6 +171,31 @@ final class Assistant {
     func cycleFolder() { guard !busy, backend != .gemma else { return }; folder = AgentStream.nextFolder(folder, in: folderList); if folder != nil { work = true } }
     func toggleWork() { guard !busy, backend != .gemma else { return }; work.toggle() }
 
+    // MARK: screen help
+
+    /// The only places the screen is ever captured: the eye chip, ⌥⌘S, or a question that says "my screen" (see `send`).
+    private func grab() async -> Bool {
+        screenProblem = nil
+        do { ScreenCapture.remove(shot); shot = try await ScreenCapture.capture(); seeScreen = true; return true }
+        catch { shot = nil; seeScreen = false; screenProblem = (error as? ScreenCapture.Denied)?.msg ?? error.localizedDescription; return false }
+    }
+    func dropShot() { ScreenCapture.remove(shot); shot = nil; seeScreen = false; clearMarks() }
+    func clearMarks() { marks = []; MarkOverlay.clear() }
+    func toggleScreen() {
+        guard !busy, backend != .gemma else { return }
+        if seeScreen { dropShot(); screenProblem = nil } else { Task { _ = await grab() } }
+    }
+    /// ⌥⌘S: capture first, so the notch (which would be excluded anyway) opens onto a conversation that already has the shot.
+    func screenHotkey() {
+        guard !busy else { open(.prompt); return }
+        if backend == .gemma, let b = choices.first(where: { $0 != .gemma }) { backend = b }
+        Task { if backend != .gemma { _ = await grab() } else { screenProblem = "Screen help needs Claude or Codex." }; open(.prompt) }
+    }
+    private func showMarks(_ m: [ScreenMarks.Mark], _ s: Shot) {
+        marks = m
+        MarkOverlay.show(m.map { .init(rect: ScreenMarks.toScreen($0.rect, imageSize: s.pixelSize, screenFrame: s.screenFrame), label: $0.label) }, on: s.screenFrame)
+    }
+
     func toggle() { if isOpen && mode == .prompt { close() } else { open(.prompt) } }
     func toggleRecall() { if isOpen && mode == .recall { close() } else { open(.recall) } }
 
@@ -183,10 +212,11 @@ final class Assistant {
         if m == .prompt && backend == .gemma { warmLocalModel() }
     }
 
-    func close() {
+    func close(keepMarks: Bool = false) {
         NSLog("NotchApp: close (was open: %d)", isOpen ? 1 : 0)
         guard isOpen else { return }
         summaryTask?.cancel(); summarizing = false; summary = "" // recall-only state
+        if !keepMarks { clearMarks() }   // clicking away keeps them: that is how you get to the thing they point at
         // The conversation is NOT cleared and a running answer is NOT cancelled: clicking away must never lose work.
         closedAt = Date()
         isOpen = false
@@ -197,12 +227,13 @@ final class Assistant {
     /// ⌘N / the new-chat button: drop the conversation (and stop a running answer) on purpose.
     func newConversation() { task?.cancel(); reset() }
 
-    private func reset() { turns = []; draft = ""; error = nil; backend = AgentStream.defaultBackend(choices: choices, preferred: preferred) ?? .claude; work = false; folder = workspaceDefault; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; journaled = 0; persist() }
+    private func reset() { dropShot(); screenProblem = nil; turns = []; draft = ""; error = nil; backend = AgentStream.defaultBackend(choices: choices, preferred: preferred) ?? .claude; work = false; folder = workspaceDefault; sessions = [:]; toolNote = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; journaled = 0; persist() }
 
     // MARK: ask
 
     func send() {
-        let q = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        var q = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if q.isEmpty, seeScreen, backend != .gemma { q = ScreenMarks.defaultQuestion }   // eye on, nothing typed: just help
         guard !q.isEmpty, !busy else { return }
         var r = AgentStream.route(q)
         if r.prompt == q { r.backend = backend; r.work = work && backend != .gemma } // no prefix: use the dial
@@ -214,7 +245,7 @@ final class Assistant {
         }
         let b = r.backend
         exchange = (b, Date())
-        draft = ""; error = nil; toolNote = nil; recalled = []
+        draft = ""; error = nil; toolNote = nil; recalled = []; screenProblem = nil; clearMarks()
         turns.append(Turn(role: "user", text: r.prompt))
         turns.append(Turn(role: "assistant", text: ""))
         waiting = true
@@ -238,6 +269,12 @@ final class Assistant {
                         turns[turns.count - 1].text += t
                     }
                 } else {
+                    var r = r
+                    if !seeScreen, ScreenMarks.wantsScreen(r.prompt), !(await grab()) { throw Failure(screenProblem ?? "Couldn't look at the screen.") }   // asked in so many words: same as the eye
+                    if seeScreen, let s = shot {
+                        r.image = s.url.path
+                        r.prompt = ScreenMarks.prompt(r.prompt, path: s.url.path, size: s.pixelSize, claude: b == .claude)
+                    }
                     try await runAgent(r)
                 }
                 finish()
@@ -302,13 +339,18 @@ final class Assistant {
 
     /// Streams a `claude` / `codex` CLI run into the last assistant turn; `toolNote` shows what it is doing.
     private func runAgent(_ r: Route) async throws {
-        var gotText = false, needBreak = false
+        var gotText = false, needBreak = false, raw = ""
+        let s = r.image == nil ? nil : shot      // with a screenshot the model may write <mark> tags: keep the raw text, show it without them
         func add(_ t: String) {
             guard !turns.isEmpty else { return } // ⌘N during an answer can empty the list under us
             waiting = false; streaming = true; toolNote = nil
-            if needBreak, !turns[turns.count - 1].text.isEmpty { turns[turns.count - 1].text += "\n\n" }
+            let brk = needBreak && !turns[turns.count - 1].text.isEmpty ? "\n\n" : ""
             needBreak = false; gotText = true
-            turns[turns.count - 1].text += t
+            guard let s else { turns[turns.count - 1].text += brk + t; return }
+            raw += brk + t
+            let p = ScreenMarks.parse(raw, imageSize: s.pixelSize)
+            turns[turns.count - 1].text = p.clean
+            if p.marks != marks { showMarks(p.marks, s) }
         }
         do {
             for try await e in AgentRunner.run(r, session: sessions[r.backend]) {

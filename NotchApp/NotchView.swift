@@ -115,6 +115,7 @@ struct NotchView: View {
 
     private var statusText: String {
         if a.mode == .recall { return a.snapshot.recorderOK ? "recorder · running" : "recorder · not running" }
+        if let p = a.screenProblem { return p }
         if a.needsSetup { return "setup needed" }
         if a.backend != .gemma {
             return a.busy ? (a.toolNote.map { "\(a.backend.rawValue) · using \($0)" } ?? "\(a.backend.rawValue) · thinking")
@@ -193,10 +194,11 @@ struct NotchView: View {
                 ModelAnnounce(backend: b, work: a.work, hold: Self.announceHold, reduce: reduce).id(announceTick)
                     .transition(reduce ? .opacity : .modifier(active: Slide(x: 12, opacity: 0, blur: 5), identity: Slide(x: 0, opacity: 1, blur: 0)))
             }
+            eyeChip
             Image(systemName: "return")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(a.draft.isEmpty ? Ink.dim.opacity(0.5) : Ink.ember)
-                .animation(.easeOut(duration: 0.15), value: a.draft.isEmpty)
+                .foregroundStyle(a.draft.isEmpty && !a.seeScreen ? Ink.dim.opacity(0.5) : Ink.ember)
+                .animation(.easeOut(duration: 0.15), value: a.draft.isEmpty && !a.seeScreen)
         }
         .padding(.horizontal, 30)
         .frame(height: inputH)
@@ -205,6 +207,19 @@ struct NotchView: View {
             Rectangle().fill(Ink.text.opacity(hasAnswer ? 0.08 : 0)).frame(height: 1).padding(.horizontal, 26),
             alignment: .top)
         .background(Button("") { copy() }.keyboardShortcut("c", modifiers: [.command, .shift]).opacity(0).allowsHitTesting(false))
+    }
+
+    /// The eye: send the next questions with a screenshot. Off for the local model, which can't see.
+    private var eyeChip: some View {
+        Button { a.toggleScreen() } label: {
+            HStack(spacing: 5) {
+                if a.seeScreen, let t = a.shot?.thumb { Image(nsImage: t).resizable().frame(width: 22, height: 14).clipShape(RoundedRectangle(cornerRadius: 2)) }
+                Image(systemName: a.seeScreen ? "eye.fill" : "eye").font(.system(size: 12))
+            }
+            .foregroundStyle(a.seeScreen ? Ink.ember : Ink.dim).padding(6).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).disabled(a.backend == .gemma || a.busy).opacity(a.backend == .gemma ? 0.35 : 1)
+        .help(a.backend == .gemma ? "The local model can't see the screen" : "Show the model your screen  ⌥⌘S").accessibilityLabel("Share screen with the model")
     }
 
     /// Names the model at the notch once, right after a switch (⇥ or ⌘1-3), then lets it go. The row stays empty the rest of the time.

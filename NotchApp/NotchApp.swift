@@ -15,6 +15,7 @@ struct NotchApp: App {
                 if let v = updater.readyVersion { Button("Restart to update to \(v)") { updater.restartNow() } }
             } else {
             Button("Ask…  ⌥Space") { delegate.assistant.toggle() }
+            Button("Ask about my screen…  ⌥⌘S") { delegate.assistant.screenHotkey() }
             Button("Recall…  ⌥⇧Space") { delegate.assistant.toggleRecall() }
             if !center.needsReconnect.isEmpty { Button("Reconnect Gmail (\(center.needsReconnect.count))…") { center.reconnectAll() } }
             if let v = updater.readyVersion { Button("Restart to update to \(v)") { updater.restartNow() } }
@@ -58,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeys = [
             Hotkey(id: 1, keyCode: kVK_Space, modifiers: optionKey) { [assistant] in assistant.toggle() },
             Hotkey(id: 2, keyCode: kVK_Space, modifiers: optionKey | shiftKey) { [assistant] in assistant.toggleRecall() },
+            Hotkey(id: 3, keyCode: kVK_ANSI_S, modifiers: optionKey | cmdKey) { [assistant] in assistant.screenHotkey() },
         ]
         assistant.connect()
         AddonCenter.shared.start(assistant: assistant)

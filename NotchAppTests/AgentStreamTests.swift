@@ -9,6 +9,11 @@ final class AgentStreamTests: XCTestCase {
     func testClaudePrefix() {
         XCTAssertEqual(AgentStream.route("@claude  fix it "), Route(backend: .claude, work: false, prompt: "fix it"))
     }
+    func testCodexAttachesScreenshotBeforeThePrompt() {
+        XCTAssertEqual(AgentStream.codexArgs(prompt: "x", session: nil, work: false, image: "/s/screen.png").suffix(4), ["-i", "/s/screen.png", "--", "x"])
+        XCTAssertEqual(AgentStream.codexArgs(prompt: "x", session: "sid", work: false, image: "/s/screen.png").suffix(6), ["resume", "sid", "-i", "/s/screen.png", "--", "x"])
+        XCTAssertFalse(AgentStream.codexArgs(prompt: "x", session: nil, work: false).contains("-i"))
+    }
     func testCodexPlusIsWork() {
         XCTAssertEqual(AgentStream.route("@codex+ refactor"), Route(backend: .codex, work: true, prompt: "refactor"))
     }

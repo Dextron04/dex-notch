@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		029A6F7614CCBB48A636A655 /* Outlook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EA06C1877B686D4AD839108 /* Outlook.swift */; };
+		05AA4B4AF268B3C026F53D44 /* ScreenMarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE25660CF031DE1B2DE185CA /* ScreenMarks.swift */; };
 		05C4B682A284E7BCF449FB16 /* ConnectionLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4238EE4D607071C2DC49564E /* ConnectionLogic.swift */; };
 		07975AD6716BA1ACDE01E2E5 /* ConnectionMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BFA1F0DAEA9B84D65B834D /* ConnectionMonitor.swift */; };
 		07DDFEAAC32C48FC7609BA86 /* OfficialMarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72682E91183BD251F579ACB6 /* OfficialMarks.swift */; };
@@ -15,6 +16,7 @@
 		0999A29BFF7BFEF67D4DB6DD /* Gmail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */; };
 		0B58A8F9C40C3BA0C3325358 /* AgentStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CADAB3DBF5CC60D578B0C3 /* AgentStream.swift */; };
 		0C7BDE62527D048383248291 /* AgentStreamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93222A27B250E3C8A8AE083F /* AgentStreamTests.swift */; };
+		10FFCAB3A57071ED41149872 /* ScreenMarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE25660CF031DE1B2DE185CA /* ScreenMarks.swift */; };
 		11C732EA3D38A55B3B378D11 /* OfficialMarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72682E91183BD251F579ACB6 /* OfficialMarks.swift */; };
 		1C26891F3606A3AEA83E86B1 /* RecallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B56D0B5E24A59E4A23F196 /* RecallView.swift */; };
 		2351AC6AFE2DD2648AC941C8 /* ConnectionLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4238EE4D607071C2DC49564E /* ConnectionLogic.swift */; };
@@ -31,6 +33,7 @@
 		3DAB1EE2139C1FD0BE520C84 /* JournalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 930E261BCB82A59819B0A2A3 /* JournalTests.swift */; };
 		41396688D0553BBE1B3ED41A /* Changelog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE2273ED4887AF61DC376B5 /* Changelog.swift */; };
 		4589E5F5759E858CC57E6466 /* Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582019F4D21E660A42477FFC /* Journal.swift */; };
+		4A4B2C1CD6B0D56399BDCE80 /* ScreenMarksTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3D8A79FB7776A9B09D98036 /* ScreenMarksTests.swift */; };
 		50C799904FBE799B42C449D1 /* SVGPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99408511A3D90560197E556F /* SVGPath.swift */; };
 		514A700D4DB27AF92C2B20C0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 72DD816D131CAE9B673110C5 /* Assets.xcassets */; };
 		52631D7A79BA7039F38BDEFD /* ConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DADF648B64A895CF1EA10B0 /* ConnectionTests.swift */; };
@@ -53,6 +56,7 @@
 		85FB87399B6F72A9E1954306 /* PureLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A884A661AF58B421AD45E9F3 /* PureLogicTests.swift */; };
 		86BB296C647833D918FA33E1 /* WhatsNewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ED3A72A153FD60EEF8E9E06 /* WhatsNewView.swift */; };
 		898D7FB93A9186B951B4088F /* NotchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CBB2E551130DD2CE010BFF /* NotchView.swift */; };
+		8C88E25D451A44179209910A /* MarkOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24699BA2A06A3D94A587553D /* MarkOverlay.swift */; };
 		8D89300AC490B19D1C8CDA36 /* RecorderLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = D891818290A45CF95E1F7353 /* RecorderLogic.swift */; };
 		9D7DA6C3F8755AD1BA023406 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F216985AFA23BC8E9805806 /* ConversationStore.swift */; };
 		A25BBE365AAED7FB09729191 /* Reminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E728D5AB400774BF5A65DF /* Reminders.swift */; };
@@ -63,6 +67,7 @@
 		AF27DBE24C1C8EF9F4A23702 /* RecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98C88C7DB8676E86C4F91CB1 /* RecorderTests.swift */; };
 		B099E16A32014D0B4AEB986E /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 51A7B2DD66A95BA97994F08A /* Sparkle */; };
 		B0E8F6D04051DF78F4E9C917 /* SVGPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99408511A3D90560197E556F /* SVGPath.swift */; };
+		BBAE32CD0DA114C2AE0286D4 /* ScreenCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CBBFE06DBCF2FCC5FD5C7E /* ScreenCapture.swift */; };
 		BFF5DE6C28BCA61791F88A08 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */; };
 		C1E493FDAF1341459B05B3C3 /* Addons.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8544183AD3EF18DC864B247 /* Addons.swift */; };
 		C7D2A3408E46CB0BBFCAD224 /* AnswerBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE562AE9C74255701B08F531 /* AnswerBody.swift */; };
@@ -91,6 +96,7 @@
 		1BA1BFB9DA2701025378F6A5 /* ReplyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyView.swift; sourceTree = "<group>"; };
 		1EA06C1877B686D4AD839108 /* Outlook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Outlook.swift; sourceTree = "<group>"; };
 		218A6628EE36C2AEDB045329 /* Assistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Assistant.swift; sourceTree = "<group>"; };
+		24699BA2A06A3D94A587553D /* MarkOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkOverlay.swift; sourceTree = "<group>"; };
 		2F1487592A6A941D9CB95947 /* AgentRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRunner.swift; sourceTree = "<group>"; };
 		2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gmail.swift; sourceTree = "<group>"; };
 		34B56D0B5E24A59E4A23F196 /* RecallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecallView.swift; sourceTree = "<group>"; };
@@ -117,6 +123,7 @@
 		9F02AF06F7646206E66DA662 /* MailReply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailReply.swift; sourceTree = "<group>"; };
 		9F216985AFA23BC8E9805806 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
 		A2072C2C73BF69220A4AE40C /* AgentFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentFiles.swift; sourceTree = "<group>"; };
+		A3D8A79FB7776A9B09D98036 /* ScreenMarksTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenMarksTests.swift; sourceTree = "<group>"; };
 		A408D4D4233E5DC1C8E2622A /* SVGPathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGPathTests.swift; sourceTree = "<group>"; };
 		A4CBB2E551130DD2CE010BFF /* NotchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchView.swift; sourceTree = "<group>"; };
 		A5CADAB3DBF5CC60D578B0C3 /* AgentStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentStream.swift; sourceTree = "<group>"; };
@@ -129,10 +136,12 @@
 		CE562AE9C74255701B08F531 /* AnswerBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerBody.swift; sourceTree = "<group>"; };
 		CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchApp.swift; sourceTree = "<group>"; };
 		D891818290A45CF95E1F7353 /* RecorderLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecorderLogic.swift; sourceTree = "<group>"; };
+		DE25660CF031DE1B2DE185CA /* ScreenMarks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenMarks.swift; sourceTree = "<group>"; };
 		E2492641C06B062C753F0281 /* AgentFilesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentFilesTests.swift; sourceTree = "<group>"; };
 		E3FDC75598EA2E996BF9FAE8 /* KeychainStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStoreTests.swift; sourceTree = "<group>"; };
 		E451AE53070E99CF7BA21B3C /* AccountTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountTests.swift; sourceTree = "<group>"; };
 		E76E22DDB3A2D28B85B7C092 /* AlertView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertView.swift; sourceTree = "<group>"; };
+		E7CBBFE06DBCF2FCC5FD5C7E /* ScreenCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCapture.swift; sourceTree = "<group>"; };
 		E8544183AD3EF18DC864B247 /* Addons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Addons.swift; sourceTree = "<group>"; };
 		F4BFA1F0DAEA9B84D65B834D /* ConnectionMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionMonitor.swift; sourceTree = "<group>"; };
 		F5DE5AEC6077BF0580C62802 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
@@ -184,6 +193,7 @@
 				582019F4D21E660A42477FFC /* Journal.swift */,
 				0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */,
 				9F02AF06F7646206E66DA662 /* MailReply.swift */,
+				24699BA2A06A3D94A587553D /* MarkOverlay.swift */,
 				794A0159731A8951203F5BD8 /* ModelMark.swift */,
 				CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */,
 				A4CBB2E551130DD2CE010BFF /* NotchView.swift */,
@@ -196,6 +206,8 @@
 				C2E728D5AB400774BF5A65DF /* Reminders.swift */,
 				4B63938FF0CDB184A70CB883 /* ReplySession.swift */,
 				1BA1BFB9DA2701025378F6A5 /* ReplyView.swift */,
+				E7CBBFE06DBCF2FCC5FD5C7E /* ScreenCapture.swift */,
+				DE25660CF031DE1B2DE185CA /* ScreenMarks.swift */,
 				F5DE5AEC6077BF0580C62802 /* Settings.swift */,
 				04FED0FDAE6B5FC7FE0D0983 /* SetupView.swift */,
 				99408511A3D90560197E556F /* SVGPath.swift */,
@@ -218,6 +230,7 @@
 				E3FDC75598EA2E996BF9FAE8 /* KeychainStoreTests.swift */,
 				A884A661AF58B421AD45E9F3 /* PureLogicTests.swift */,
 				98C88C7DB8676E86C4F91CB1 /* RecorderTests.swift */,
+				A3D8A79FB7776A9B09D98036 /* ScreenMarksTests.swift */,
 				AA3A0540F48DFF4F8A00E753 /* SecurityHardeningTests.swift */,
 				BA22C6E41EAD33D9E8DD129E /* SettingsTests.swift */,
 				A408D4D4233E5DC1C8E2622A /* SVGPathTests.swift */,
@@ -381,6 +394,8 @@
 				338383E9953684F2000B1A66 /* Reminders.swift in Sources */,
 				50C799904FBE799B42C449D1 /* SVGPath.swift in Sources */,
 				AB5858CF9C6BCC0882589DB0 /* SVGPathTests.swift in Sources */,
+				05AA4B4AF268B3C026F53D44 /* ScreenMarks.swift in Sources */,
+				4A4B2C1CD6B0D56399BDCE80 /* ScreenMarksTests.swift in Sources */,
 				36E06C405D9DE3811D0D8107 /* SecurityHardeningTests.swift in Sources */,
 				654D8443649142B3C79DDA2D /* Settings.swift in Sources */,
 				2F9D4C587D08A0A859566F25 /* SettingsTests.swift in Sources */,
@@ -413,6 +428,7 @@
 				8180508E708118CF50F0B557 /* Journal.swift in Sources */,
 				BFF5DE6C28BCA61791F88A08 /* KeychainStore.swift in Sources */,
 				A8E7AF7E5FB0A8A3AA08ABB9 /* MailReply.swift in Sources */,
+				8C88E25D451A44179209910A /* MarkOverlay.swift in Sources */,
 				ED50E03DCA4D07EBAC51DB90 /* ModelMark.swift in Sources */,
 				E07EEF3C06EADD40BE52F384 /* NotchApp.swift in Sources */,
 				898D7FB93A9186B951B4088F /* NotchView.swift in Sources */,
@@ -426,6 +442,8 @@
 				2452662E03B5DE52879166A7 /* ReplySession.swift in Sources */,
 				E63B2AF16E49E360BBFAD95D /* ReplyView.swift in Sources */,
 				B0E8F6D04051DF78F4E9C917 /* SVGPath.swift in Sources */,
+				BBAE32CD0DA114C2AE0286D4 /* ScreenCapture.swift in Sources */,
+				10FFCAB3A57071ED41149872 /* ScreenMarks.swift in Sources */,
 				84C5DC1B9737D7A5558EE39A /* Settings.swift in Sources */,
 				A48F6F5CAD79AB60BD5BB30C /* SetupView.swift in Sources */,
 				33A991DD0C8D532FDD7C271B /* VaultReader.swift in Sources */,

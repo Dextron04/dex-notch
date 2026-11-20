@@ -5,7 +5,7 @@ enum Backend: String, Codable {
     /// What people (and VoiceOver) call it. `gemma` is the self-hosted Ollama connector, whatever model it serves.
     var displayName: String { switch self { case .gemma: "Local model"; case .claude: "Claude"; case .codex: "Codex" } }
 }
-struct Route: Equatable { var backend: Backend; var work: Bool; var prompt: String; var folder: String? = nil; var locked = false } // folder: absolute path `+` runs may also write to
+struct Route: Equatable { var backend: Backend; var work: Bool; var prompt: String; var folder: String? = nil; var locked = false; var image: String? = nil } // folder: absolute path `+` runs may also write to
 struct Snippet: Equatable { var title: String; var source: String; var snippet: String }
 enum AgentEvent: Equatable { case text(String), tool(String), session(String), final(String), error(String) }
 
@@ -176,11 +176,11 @@ enum AgentStream {
     /// The only config a triage run sees: no MCP servers, no hooks, nothing from your own `config.toml`.
     static let codexTriageConfig = "# Dex Notch triage: deliberately empty. No MCP servers.\n"
 
-    static func codexArgs(prompt: String, session: String?, work: Bool, folder: String? = nil) -> [String] {
+    static func codexArgs(prompt: String, session: String?, work: Bool, folder: String? = nil, image: String? = nil) -> [String] {
         // sandbox flags go before `resume`: the subcommand doesn't take them
         ["exec", "--json", "--skip-git-repo-check", "--sandbox", work ? "workspace-write" : "read-only"]
             + (work ? folder.map { ["--add-dir", $0] } ?? [] : [])
-            + (session.map { ["resume", $0] } ?? []) + ["--", prompt]   // `--`: a prompt starting with "-" is not an option
+            + (session.map { ["resume", $0] } ?? []) + (image.map { ["-i", $0] } ?? []) + ["--", prompt]   // `--`: a prompt starting with "-" is not an option
     }
 
     // MARK: stream parsing (one JSON object per line)
