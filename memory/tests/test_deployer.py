@@ -467,6 +467,24 @@ class InstallerMigrationTest(unittest.TestCase):
             self.assertTrue((d / "base" / "deploy-paused").is_file()); self.assertTrue((d / "base" / "connector-deploy.sh").is_file())
             self.assertIn(str(d / "home"), (d / "home/Library/LaunchAgents/in.dextron04.dex-deployer-personal.plist").read_text())
 
+    @unittest.skipUnless(shutil.which("plutil"), "plutil is macOS only")
+    def test_hosted_plist_rewrite_replaces_argv0_and_is_idempotent(self):
+        old = ["/opt/homebrew/bin/python3", "-m", "agentvault.hosted", "serve", "--root", "/var/dexhosted/data", "--public-url", "https://vault.dextron04.in", "--port", "8766"]
+        py = "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3.14"
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "h.plist"
+            f.write_bytes(plistlib.dumps({"Label": "in.dextron04.agentvault-hosted", "ProgramArguments": old, "WorkingDirectory": "/var/dexhosted/app",
+                                          "UserName": "_dexhosted", "EnvironmentVariables": {"PATH": "/opt/homebrew/bin:/usr/bin:/bin", "PYTHONPATH": "/var/dexhosted/app"}}))
+            for _ in range(2):
+                before = f.read_bytes()
+                r = subprocess.run([BASH, str(INSTALLER), "--rewrite-hosted-plist", str(f), "/var/dexhosted-deploy", py], capture_output=True, text=True)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                got = plistlib.loads(f.read_bytes())
+                self.assertEqual(got["ProgramArguments"], [py] + old[1:])
+                self.assertEqual(got["WorkingDirectory"], "/var/dexhosted-deploy/current"); self.assertEqual(got["UserName"], "_dexhosted")
+                self.assertEqual(got["EnvironmentVariables"], {"PATH": "/usr/bin:/bin", "PYTHONPATH": "/var/dexhosted-deploy/current"})
+            self.assertEqual(plistlib.loads(before), got)   # the second run changed nothing
+
 
 if __name__ == "__main__":
     unittest.main()

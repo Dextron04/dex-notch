@@ -106,9 +106,29 @@ personal_files() {
   [ ! -f "$OLD" ] || { mv "$OLD" "$OLD.disabled-$STAMP"; say "  old poller disabled: $OLD.disabled-$STAMP"; }
 }
 
+# Rewrite the hosted daemon plist FILE in place. NB: `plutil -replace ARRAY.N` INSERTS before index N (it does not replace), so
+# element 0 is removed then inserted; dict keys use -replace. Idempotent; asserts the array shape before it returns.
+# Test entry: --rewrite-hosted-plist FILE BASE PY (refuses to run as root)
+rewrite_hosted_plist() {
+  local f=$1 base=$2 py=$3 n0 first second n1
+  n0=$(plutil -extract ProgramArguments raw -o - "$f")
+  first=$(plutil -extract ProgramArguments.0 raw -o - "$f")
+  if [ "$first" != "$py" ]; then
+    plutil -remove ProgramArguments.0 "$f"
+    plutil -insert ProgramArguments.0 -string "$py" "$f"
+  fi
+  plutil -replace WorkingDirectory -string "$base/current" "$f"
+  case $(plutil -extract EnvironmentVariables.PATH raw -o - "$f" 2>/dev/null || true) in *homebrew*) plutil -replace EnvironmentVariables.PATH -string /usr/bin:/bin "$f";; esac
+  if plutil -extract EnvironmentVariables.PYTHONPATH raw -o - "$f" >/dev/null 2>&1; then plutil -replace EnvironmentVariables.PYTHONPATH -string "$base/current" "$f"; fi
+  n1=$(plutil -extract ProgramArguments raw -o - "$f")
+  first=$(plutil -extract ProgramArguments.0 raw -o - "$f"); second=$(plutil -extract ProgramArguments.1 raw -o - "$f")
+  [ "$first" = "$py" ] && [ "$second" = -m ] && [ "$n0" = "$n1" ] || die "plist rewrite produced a wrong ProgramArguments (0=$first 1=$second count $n0 -> $n1); live plist untouched"
+}
+
 if [ "${1:-}" = --migrate-only ]; then migrate_layout "${2:-}"; exit 0; fi
 if [ "${1:-}" = --migrate-copy ]; then migrate_copy "${2:-}" "${3:-}"; exit 0; fi
 if [ "${1:-}" = --personal-files ]; then shift; personal_files "$@"; exit 0; fi
+if [ "${1:-}" = --rewrite-hosted-plist ]; then [ "$(id -u)" != 0 ] || die "test entry: not as root"; rewrite_hosted_plist "${2:-}" "${3:-}" "${4:-}"; exit 0; fi
 
 DEPLOY_NOW=0 SKIP_PERSONAL=0
 for a in "$@"; do
@@ -201,10 +221,7 @@ chown root:wheel "$HOSTED_BASE/backups"
 if [ -f "$HOSTED_PLIST" ]; then
   tmp=$(mktemp "${TMPDIR:-/tmp}/hosted-plist.XXXXXX")
   cp "$HOSTED_PLIST" "$tmp"
-  plutil -replace WorkingDirectory -string "$HOSTED_BASE/current" "$tmp"
-  plutil -replace ProgramArguments.0 -string "$PY_BIN" "$tmp"
-  case $(plutil -extract EnvironmentVariables.PATH raw -o - "$tmp" 2>/dev/null || true) in *homebrew*) plutil -replace EnvironmentVariables.PATH -string /usr/bin:/bin "$tmp";; esac
-  if plutil -extract EnvironmentVariables.PYTHONPATH raw -o - "$tmp" >/dev/null 2>&1; then plutil -replace EnvironmentVariables.PYTHONPATH -string "$HOSTED_BASE/current" "$tmp"; fi
+  rewrite_hosted_plist "$tmp" "$HOSTED_BASE" "$PY_BIN"
   plutil -lint "$tmp" >/dev/null
   if cmp -s <(plutil -convert xml1 -o - "$HOSTED_PLIST") <(plutil -convert xml1 -o - "$tmp"); then
     say "  $HOSTED_PLIST already uses $HOSTED_BASE/current and $PY_BIN"
