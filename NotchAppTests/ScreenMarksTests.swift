@@ -35,6 +35,11 @@ final class ScreenMarksTests: XCTestCase {
             XCTAssertEqual(ScreenMarks.parse(t, imageSize: size).clean, t, t)
         }
     }
+    func testBadgesStandWhereMarksWere() {
+        let t = #"Open <mark x="1" y="1" w="5" h="5">Wi-Fi</mark> then <mark x="9" y="9" w="5" h="5">Bluetooth</mark>, <mark x="1" y="1">bad</mark> done."#
+        let p = ScreenMarks.parse(t, imageSize: size, badges: true)
+        XCTAssertEqual(p.clean, "Open ① then ②, done."); XCTAssertEqual(p.marks.count, 2)
+    }
     func testCodeIndentationSurvives() {
         let code = "```python\ndef f(x):\n    if x:\n        return  1\n```"
         XCTAssertEqual(ScreenMarks.parse(code, imageSize: size).clean, code)

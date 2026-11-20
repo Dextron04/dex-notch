@@ -27,7 +27,8 @@ enum ScreenMarks {
 
     /// The text without mark tags, and the well-formed marks clamped to `imageSize` (zero = no clamp). Text with no `<mark` comes back untouched.
     /// While `streaming`, an unfinished tag at the end is hidden so it never flashes in the notch; final text is never truncated.
-    static func parse(_ text: String, imageSize: CGSize = .zero, streaming: Bool = false) -> (clean: String, marks: [Mark]) {
+    /// `badges`: leave a ①…⑥ where each mark was, matching the numbers on the overlay, so the text points at the screen too.
+    static func parse(_ text: String, imageSize: CGSize = .zero, streaming: Bool = false, badges: Bool = false) -> (clean: String, marks: [Mark]) {
         var text = text
         if streaming {
             if let m = openTag.matches(in: text, range: NSRange(location: 0, length: (text as NSString).length)).last, let r = Range(m.range, in: text),
@@ -46,9 +47,10 @@ enum ScreenMarks {
             out += c; seam = false
         }
         for m in element.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
-            append(ns.substring(with: NSRange(location: last, length: m.range.location - last))); last = m.range.location + m.range.length; seam = true
-            guard marks.count < maxMarks, let r = rect(ns.substring(with: m.range(at: 1)), clamp: imageSize) else { continue }   // malformed or over the cap: stripped anyway
+            append(ns.substring(with: NSRange(location: last, length: m.range.location - last))); last = m.range.location + m.range.length
+            guard marks.count < maxMarks, let r = rect(ns.substring(with: m.range(at: 1)), clamp: imageSize) else { seam = true; continue }   // malformed or over the cap: stripped anyway
             marks.append(Mark(rect: r, label: ns.substring(with: m.range(at: 2)).trimmingCharacters(in: .whitespacesAndNewlines)))
+            if badges, let b = UnicodeScalar(0x245F + marks.count) { out += String(Character(b)); seam = false } else { seam = true }
         }
         append(ns.substring(from: last))
         out = closer.stringByReplacingMatches(in: out, range: NSRange(location: 0, length: (out as NSString).length), withTemplate: "")

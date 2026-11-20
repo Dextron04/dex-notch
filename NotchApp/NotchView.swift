@@ -118,7 +118,7 @@ struct NotchView: View {
         if let p = a.screenProblem { return p }
         if a.needsSetup { return "setup needed" }
         if a.backend != .gemma {
-            return a.busy ? (a.toolNote.map { "\(a.backend.rawValue) · using \($0)" } ?? "\(a.backend.rawValue) · thinking")
+            return a.busy ? (a.toolNote.map { "\(a.backend.rawValue) · " + ($0.hasPrefix("looked") ? $0 : "using \($0)") } ?? "\(a.backend.rawValue) · thinking")
                           : (a.work ? "\(a.backend.rawValue)+ · \(AgentStream.folderLabel(a.folder))" : "\(a.backend.rawValue) · subscription")
         }
         if a.gemma == nil { return a.configProblem != nil ? "local model · fix settings.json" : "local model · not set up" }
@@ -149,7 +149,7 @@ struct NotchView: View {
                     if let e = a.error {
                         Text(e).font(.system(size: 15)).foregroundStyle(Ink.emberDeep)
                     } else if !a.answer.isEmpty {
-                        AnswerBody(text: a.answer)
+                        AnswerBody(text: a.answer, accent: a.backend.accent)
                         if !a.recalled.isEmpty && !a.busy {
                             Text("from your vault · " + a.recalled.prefix(3).joined(separator: " · "))
                                 .font(.system(size: 11)).foregroundStyle(Ink.dim).lineLimit(2)
@@ -209,14 +209,32 @@ struct NotchView: View {
         .background(Button("") { copy() }.keyboardShortcut("c", modifiers: [.command, .shift]).opacity(0).allowsHitTesting(false))
     }
 
-    /// The eye: send the next questions with a screenshot. Off for the local model, which can't see.
+    /// The eye. Idle: dim outline. Armed: ember, filled, with the shot beside it (springs in from the right). Capturing: a quick blink.
+    /// A model looking by itself: the same armed look plus one ring that ripples out, so you see it happened.
     private var eyeChip: some View {
-        Button { a.toggleScreen() } label: {
+        let on = a.seeScreen || a.looked
+        return Button { a.toggleScreen() } label: {
             HStack(spacing: 5) {
-                if a.seeScreen || a.looked, let t = a.shot?.thumb { Image(nsImage: t).resizable().frame(width: 22, height: 14).clipShape(RoundedRectangle(cornerRadius: 2)) }
-                Image(systemName: a.seeScreen || a.looked ? "eye.fill" : "eye").font(.system(size: 12))
+                if on, let t = a.shot?.thumb ?? a.glimpse?.thumb {
+                    Image(nsImage: t).resizable().frame(width: 22, height: 14).clipShape(RoundedRectangle(cornerRadius: 3))
+                        .overlay(RoundedRectangle(cornerRadius: 3).stroke(Ink.ember.opacity(0.6), lineWidth: 1))
+                        .transition(reduce ? .opacity : .scale(scale: 0.4, anchor: .trailing).combined(with: .opacity))
+                }
+                Image(systemName: on ? "eye.fill" : "eye").font(.system(size: 12))
+                    .scaleEffect(y: a.capturing && !reduce ? 0.12 : 1)
+                    .animation(.easeInOut(duration: 0.09), value: a.capturing)
+                    .overlay {
+                        if !reduce {
+                            Circle().stroke(Ink.ember, lineWidth: 1.5).frame(width: 16, height: 16)
+                                .keyframeAnimator(initialValue: Ping(), trigger: a.lookTick) { v, f in v.scaleEffect(f.s).opacity(f.o) } keyframes: { _ in
+                                    KeyframeTrack(\.s) { LinearKeyframe(1, duration: 0.001); CubicKeyframe(2.2, duration: 0.6) }
+                                    KeyframeTrack(\.o) { LinearKeyframe(0.8, duration: 0.001); CubicKeyframe(0, duration: 0.6) }
+                                }
+                        }
+                    }
             }
-            .foregroundStyle(a.seeScreen || a.looked ? Ink.ember : Ink.dim).padding(6).contentShape(Rectangle())
+            .foregroundStyle(on ? Ink.ember : Ink.dim).padding(6).contentShape(Rectangle())
+            .animation(reduce ? .easeOut(duration: 0.15) : .spring(duration: 0.45, bounce: 0.25), value: on)
         }
         .buttonStyle(.plain).disabled(a.backend == .gemma || a.busy).opacity(a.backend == .gemma ? 0.35 : 1)
         .help(a.backend == .gemma ? "The local model can't see the screen" : "Show the model your screen  ⌥⌘S").accessibilityLabel("Share screen with the model")
@@ -264,6 +282,8 @@ struct NotchView: View {
         NSPasteboard.general.setString(a.answer, forType: .string)
     }
 }
+
+private struct Ping { var s = 1.0, o = 0.0 }
 
 /// Breathing status dot: steady ember when ready, slow pulse while working, grey when offline.
 private struct StatusDot: View {

@@ -1,57 +1,161 @@
 import SwiftUI
+import Observation
+
+// The notch reaching out and pointing. One archetype throughout: the notch's own spring (0.45s, a little bounce) for things that arrive,
+// a fast ease-out for things that leave. Reduce Motion keeps every state change but drops the travel: plain fades, no breathing.
+
+extension Backend {
+    /// The answering model's colour on the screen: Claude's orange, Codex's white, the local model's ember.
+    var accent: Color { switch self { case .claude: Color(red: 0.851, green: 0.467, blue: 0.341); case .codex: .white; case .gemma: Ink.ember } }
+}
+
+@Observable @MainActor
+final class MarkState { var marks: [ScreenMarks.Mark] = []; var accent = Ink.ember }
 
 /// Boxes with short labels drawn over the real screen. Click-through; gone on `clear()` or after a minute.
 @MainActor
 enum MarkOverlay {
     private static var panel: NSPanel?
+    private static var state = MarkState()
     private static var timer: Task<Void, Never>?
+    static var reduce: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
 
-    /// `marks` are in AppKit global points (see `ScreenMarks.toScreen`); `frame` is the display they are on.
-    static func show(_ marks: [ScreenMarks.Mark], on frame: CGRect) {
+    private static func makePanel(_ frame: CGRect) -> NSPanel {
+        let n = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        n.level = .statusBar        // above apps and the menu bar, which is where half the questions are about
+        n.isOpaque = false; n.backgroundColor = .clear; n.hasShadow = false; n.ignoresMouseEvents = true
+        n.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        return n
+    }
+
+    /// `marks` are in AppKit global points (see `ScreenMarks.toScreen`); `frame` is the display they are on. Calling it again with more marks
+    /// only animates the new ones in.
+    static func show(_ marks: [ScreenMarks.Mark], on frame: CGRect, accent: Color) {
         guard !marks.isEmpty else { clear(); return }
-        let p = panel ?? { let n = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-            n.level = .statusBar        // above apps and the menu bar, which is where half the questions are about
-            n.isOpaque = false; n.backgroundColor = .clear; n.hasShadow = false; n.ignoresMouseEvents = true
-            n.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-            panel = n; return n }()
-        p.setFrame(frame, display: false)
-        p.contentView = NSHostingView(rootView: MarkLayer(marks: marks, frame: frame))
-        p.alphaValue = 1; p.orderFrontRegardless()
+        if panel == nil {
+            state = MarkState()
+            let p = makePanel(frame)
+            p.contentView = NSHostingView(rootView: MarkLayer(state: state, frame: frame, reduce: reduce))
+            panel = p
+        }
+        panel?.setFrame(frame, display: false)
+        state.accent = accent; state.marks = marks
+        panel?.alphaValue = 1; panel?.orderFrontRegardless()
         timer?.cancel()
         timer = Task { try? await Task.sleep(for: .seconds(60)); if !Task.isCancelled { clear() } }
     }
 
+    /// Fast ease-out, a touch smaller as it goes: leaving is quicker than arriving.
     static func clear() {
         timer?.cancel(); timer = nil
         guard let p = panel else { return }
         panel = nil
-        NSAnimationContext.runAnimationGroup({ $0.duration = 0.25; p.animator().alphaValue = 0 }, completionHandler: { MainActor.assumeIsolated { p.orderOut(nil) } })
+        NSAnimationContext.runAnimationGroup({ $0.duration = 0.2; $0.timingFunction = CAMediaTimingFunction(name: .easeIn); p.animator().alphaValue = 0 },
+                                             completionHandler: { MainActor.assumeIsolated { p.orderOut(nil) } })
+    }
+
+    /// The shutter: an ember glow around the captured display's edge, in 80ms and out in 240ms. Shown after the capture, and our windows are excluded from it anyway.
+    static func flash(on frame: CGRect) {
+        let p = makePanel(frame)
+        p.contentView = NSHostingView(rootView: ShutterFlash(reduce: reduce))
+        p.orderFrontRegardless()
+        Task { try? await Task.sleep(for: .milliseconds(500)); p.orderOut(nil) }
+    }
+}
+
+private struct ShutterFlash: View {
+    let reduce: Bool
+    @State private var on = false
+    var body: some View {
+        Group {
+            if reduce { Rectangle().fill(Color.white.opacity(0.08)) }
+            else { Rectangle().strokeBorder(Ink.ember, lineWidth: 10).blur(radius: 9).overlay(Rectangle().strokeBorder(Ink.ember.opacity(0.7), lineWidth: 2)) }
+        }
+        .opacity(on ? 1 : 0).ignoresSafeArea()
+        .task {
+            withAnimation(.easeOut(duration: 0.08)) { on = true }
+            try? await Task.sleep(for: .milliseconds(80))
+            withAnimation(.easeIn(duration: 0.24)) { on = false }
+        }
     }
 }
 
 private struct MarkLayer: View {
-    let marks: [ScreenMarks.Mark]
+    let state: MarkState
     let frame: CGRect
-    @State private var shown = false
-    @State private var pulse = false
+    let reduce: Bool
+    @State private var dim = false
+
+    /// Local, top-left origin coordinates inside the panel.
+    private func local(_ r: CGRect) -> CGRect { CGRect(x: r.minX - frame.minX, y: frame.maxY - r.maxY, width: r.width, height: r.height) }
+    /// Reading order decides who appears first; the numbers stay as the model wrote them, so they match the badges in the answer.
+    private var order: [Int: Int] {
+        let s = state.marks.indices.sorted { let a = state.marks[$0].rect, b = state.marks[$1].rect; return (-a.maxY, a.minX) < (-b.maxY, b.minX) }
+        return Dictionary(uniqueKeysWithValues: s.enumerated().map { ($1, $0) })
+    }
 
     var body: some View {
+        let rects = state.marks.map { local($0.rect) }, rank = order
         ZStack(alignment: .topLeading) {
-            ForEach(Array(marks.enumerated()), id: \.offset) { i, m in
-                let x = m.rect.minX - frame.minX, y = frame.maxY - m.rect.maxY      // back to top-left origin inside the panel
-                RoundedRectangle(cornerRadius: 6).fill(Ink.ember.opacity(0.14))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Ink.ember, lineWidth: 2.5))
-                    .frame(width: m.rect.width, height: m.rect.height)
-                    .scaleEffect(pulse ? 1 : 1.06)
-                    .offset(x: x, y: y)
-                Text(marks.count > 1 ? "\(i + 1)  \(m.label)" : m.label)
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(.black)
-                    .padding(.horizontal, 8).padding(.vertical, 3).background(Ink.ember, in: Capsule())
-                    .offset(x: x, y: y > 28 ? y - 26 : y + m.rect.height + 4)
+            // a quiet dim everywhere except the marked spots, so the eye lands there; click-through like the rest
+            Rectangle().fill(.black.opacity(dim ? 0.2 : 0))
+                .mask(Rectangle().overlay(alignment: .topLeading) {
+                    ForEach(Array(rects.enumerated()), id: \.offset) { _, r in
+                        RoundedRectangle(cornerRadius: 8).frame(width: r.width + 12, height: r.height + 12).offset(x: r.minX - 6, y: r.minY - 6).blendMode(.destinationOut)
+                    }
+                }.compositingGroup())
+            if let first = rects.first { Connector(from: CGPoint(x: frame.width / 2, y: 0), to: CGPoint(x: first.midX, y: first.minY), accent: state.accent, reduce: reduce) }
+            ForEach(Array(rects.enumerated()), id: \.offset) { i, r in
+                MarkBox(n: i + 1, rect: r, label: state.marks[i].label, accent: state.accent, delay: Double(min(rank[i] ?? 0, 5)) * 0.07, reduce: reduce, width: frame.width)
             }
         }
         .frame(width: frame.width, height: frame.height, alignment: .topLeading)
-        .opacity(shown ? 1 : 0)
-        .onAppear { withAnimation(.easeOut(duration: 0.25)) { shown = true }; withAnimation(.spring(duration: 0.5, bounce: 0.4)) { pulse = true } }
+        .onAppear { withAnimation(.easeOut(duration: 0.35)) { dim = true } }
+    }
+}
+
+/// A faint dotted arc from the notch to the first mark, drawn on once: the notch reaching out.
+private struct Connector: View {
+    let from: CGPoint, to: CGPoint, accent: Color, reduce: Bool
+    @State private var drawn = false
+    var body: some View {
+        Path { p in p.move(to: from); p.addQuadCurve(to: to, control: CGPoint(x: (from.x + to.x) / 2 + (to.x < from.x ? -60 : 60), y: min(from.y, to.y) + abs(to.y - from.y) * 0.35)) }
+            .trim(from: 0, to: reduce || drawn ? 1 : 0)
+            .stroke(accent.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [1, 6]))
+            .opacity(drawn ? 1 : 0)
+            .onAppear { withAnimation(.easeOut(duration: reduce ? 0.2 : 0.6)) { drawn = true } }
+    }
+}
+
+private struct MarkBox: View {
+    let n: Int, rect: CGRect, label: String, accent: Color, delay: Double, reduce: Bool, width: CGFloat
+    @State private var drawn = false
+    @State private var landed = false
+    @State private var glow = false
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 8).fill(accent.opacity(landed ? 0.1 : 0))
+            RoundedRectangle(cornerRadius: 8).trim(from: 0, to: reduce || drawn ? 1 : 0).stroke(accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .opacity(drawn ? 1 : 0)
+                .shadow(color: accent.opacity(glow ? 0.6 : 0.15), radius: glow ? 11 : 3)      // ambient: breathes while it is up
+        }
+        .frame(width: rect.width, height: rect.height).offset(x: rect.minX, y: rect.minY)
+        pill.offset(x: min(max(rect.minX, 6), width - 260), y: rect.minY > 34 ? rect.minY - 30 : rect.maxY + 6)
+    }
+
+    private var pill: some View {
+        HStack(spacing: 6) {
+            Text("\(n)").font(.system(size: 11, weight: .bold)).foregroundStyle(.black).frame(width: 18, height: 18).background(accent, in: Circle())
+            Text(label).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Ink.text).lineLimit(1)
+        }
+        .padding(.leading, 4).padding(.trailing, 10).padding(.vertical, 4)
+        .background(.black.opacity(0.88), in: Capsule()).overlay(Capsule().stroke(accent.opacity(0.7), lineWidth: 1))
+        .scaleEffect(reduce ? 1 : landed ? 1 : 0.55, anchor: .bottomLeading).opacity(landed ? 1 : 0)
+        .onAppear {
+            withAnimation(.easeOut(duration: reduce ? 0.2 : 0.38).delay(delay)) { drawn = true }               // stroke draws on…
+            withAnimation(reduce ? .easeOut(duration: 0.2).delay(delay) : .spring(duration: 0.45, bounce: 0.3).delay(delay + 0.22)) { landed = true }   // …then the pill springs in
+            if !reduce { withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true).delay(delay + 0.8)) { glow = true } }
+        }
     }
 }

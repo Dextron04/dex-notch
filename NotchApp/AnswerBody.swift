@@ -4,6 +4,7 @@ import SwiftUI
 /// language label, copy button and light syntax colour. Handles a fence that is still streaming.
 struct AnswerBody: View {
     let text: String
+    var accent: Color = Ink.ember      // the badges ①…⑥ that stand for marks on the screen wear the answering model's colour
 
     private enum Block { case prose(String), code(lang: String, body: String) }
 
@@ -12,7 +13,7 @@ struct AnswerBody: View {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, b in
                 switch b {
                 case .prose(let s):
-                    Text(Self.prose(s))
+                    Text(Self.prose(s, accent: accent))
                         .font(.system(size: 16.5)).lineSpacing(4)
                         .foregroundStyle(Ink.text).textSelection(.enabled)
                 case .code(let lang, let code):
@@ -44,11 +45,17 @@ struct AnswerBody: View {
     }
 
     /// Inline markdown, with `code` spans in ember mono.
-    static func prose(_ s: String) -> AttributedString {
+    static func prose(_ s: String, accent: Color = Ink.ember) -> AttributedString {
         var a = (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
         for run in a.runs where run.inlinePresentationIntent?.contains(.code) == true {
             a[run.range].font = .system(size: 14.5, design: .monospaced)
             a[run.range].foregroundColor = Ink.ember
+        }
+        var i = a.startIndex
+        while i < a.endIndex {      // ①…⑥: where a mark was removed from the text
+            let n = a.index(afterCharacter: i)
+            if let u = a[i..<n].characters.first?.unicodeScalars.first, (0x2460...0x2465).contains(u.value) { a[i..<n].foregroundColor = accent; a[i..<n].font = .system(size: 17, weight: .bold) }
+            i = n
         }
         return RunSpace.safeLinks(a)     // only http(s) links stay clickable, with the real host shown after the label
     }

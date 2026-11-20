@@ -58,6 +58,9 @@ final class Assistant {
     private var temp: Shot?             // a one-question shot (asked in words, or taken by a model): deleted when the answer ends
     private var latest: Shot? { temp ?? shot }
     private(set) var marks: [ScreenMarks.Mark] = []   // in shot pixels
+    var capturing = false           // a capture is in flight: the eye blinks
+    private(set) var lookTick = 0   // bumps when a model looks by itself: the eye ripples
+    var glimpse: Shot? { temp }     // the one-question shot, for the thumbnail
     var looked = false              // a model took a screenshot by itself a moment ago: the eye lights up so you see it
     private var runToken: String?   // the question being answered right now; look_at_screen requests need it
     private var limiter = ScreenTool.Limiter()
@@ -180,17 +183,19 @@ final class Assistant {
 
     /// The only places the screen is ever captured: the eye chip, ⌥⌘S, or a question that says "my screen" (see `send`).
     private func grab(eye: Bool = true) async -> Bool {
-        screenProblem = nil
+        screenProblem = nil; capturing = true
+        defer { capturing = false }
         do {
             if eye { shot = try await ScreenCapture.capture(); seeScreen = true }
             else { temp = try await ScreenCapture.capture(name: ScreenCapture.lookName) }    // the eye's shot stays as it was
+            if let s = eye ? shot : temp { MarkOverlay.flash(on: s.screenFrame) }
             return true
         } catch {
             if eye { ScreenCapture.remove(shot); shot = nil; seeScreen = false }
             screenProblem = (error as? ScreenCapture.Denied)?.msg ?? error.localizedDescription; return false
         }
     }
-    private func flashEye() { looked = true; Task { try? await Task.sleep(for: .seconds(2.5)); looked = false } }
+    private func flashEye() { looked = true; lookTick += 1; Task { try? await Task.sleep(for: .seconds(2.5)); looked = false } }
 
     /// `look_at_screen` called by a model (via ScreenBridge). Refused unless a question is being answered; at most `maxPerTurn` times.
     func startScreenBridge() { ScreenBridge.shared.start { [weak self] req in await self?.lookRequest(req) ?? Data() } }
@@ -217,7 +222,7 @@ final class Assistant {
     }
     private func showMarks(_ m: [ScreenMarks.Mark], _ s: Shot) {
         marks = m
-        MarkOverlay.show(m.map { .init(rect: ScreenMarks.toScreen($0.rect, imageSize: s.pixelSize, screenFrame: s.screenFrame), label: $0.label) }, on: s.screenFrame)
+        MarkOverlay.show(m.map { .init(rect: ScreenMarks.toScreen($0.rect, imageSize: s.pixelSize, screenFrame: s.screenFrame), label: $0.label) }, on: s.screenFrame, accent: exchange.backend.accent)
     }
 
     func toggle() { if isOpen && mode == .prompt { close() } else { open(.prompt) } }
@@ -382,7 +387,7 @@ final class Assistant {
             needBreak = false; gotText = true
             guard marking else { turns[turns.count - 1].text += brk + t; return }
             raw += brk + t
-            let p = ScreenMarks.parse(raw, imageSize: latest?.pixelSize ?? .zero, streaming: true)      // the latest shot: the model may have taken a newer one itself
+            let p = ScreenMarks.parse(raw, imageSize: latest?.pixelSize ?? .zero, streaming: true, badges: true)      // the latest shot: the model may have taken a newer one itself
             turns[turns.count - 1].text = p.clean
             if let s = latest, p.marks != marks { showMarks(p.marks, s) }
         }
@@ -398,7 +403,7 @@ final class Assistant {
             }
         } catch let m as AgentRunner.Missing { throw Failure("`\(m.name)` not found. Install it and log in.") }
         if marking, !turns.isEmpty, !raw.isEmpty {      // the answer is complete: show it whole (a trailing "<mark" is text now, not a tag being written)
-            let p = ScreenMarks.parse(raw, imageSize: latest?.pixelSize ?? .zero)
+            let p = ScreenMarks.parse(raw, imageSize: latest?.pixelSize ?? .zero, badges: true)
             turns[turns.count - 1].text = p.clean
             if let s = latest, p.marks != marks { showMarks(p.marks, s) }
         }
