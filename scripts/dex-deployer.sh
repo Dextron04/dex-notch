@@ -243,8 +243,10 @@ if grep -qE '(^/|(^|/)\.\.(/|$))' "$WORK/list.txt"; then reject_tarball "tarball
 top=$(head -n1 "$WORK/list.txt"); top=${top%%/*}
 { re "$top" '^[A-Za-z0-9._-]+$' && [[ $top == *"$s7"* ]]; } || reject_tarball "top dir '$top' does not carry the sha"
 mkdir "$WORK/pristine"
-tar -xzf "$WORK/src.tgz" -C "$WORK/pristine" "$top/$TEST_DIR" 2>>"$LOG" || reject_tarball "no $TEST_DIR in tarball"
+# the whole tree, minus heavy assets tests never read: tests reach scripts/, PRIVACY.md and docs/ through REPO_ROOT (the release still gets only SRC_SUBDIR)
+tar -xzf "$WORK/src.tgz" -C "$WORK/pristine" --exclude="$top/docs/assets" --exclude="$top/katana-assets" --exclude='*.xcodeproj' --exclude='*.mp4' --exclude='*.gif' --exclude='*.png' --exclude='*.zip' 2>>"$LOG" || reject_tarball "tarball cannot be unpacked"
 PRIS=$WORK/pristine/$top
+[ -d "$PRIS/$TEST_DIR" ] || reject_tarball "no $TEST_DIR in tarball"
 { [ -d "$PRIS/$SRC_SUBDIR" ] && has_files "$PRIS/$SRC_SUBDIR"; } || reject_tarball "no $SRC_SUBDIR in tarball"
 
 # ---- 4. anything new? -------------------------------------------------------------------------------------------
@@ -256,13 +258,13 @@ fi
 
 # ---- 5. test before switching, as the service user, never root -----------------------------------------------------
 # code under test: root-owned, readable by the service user. Its writable state (TMPDIR, HOME) is a separate dir owned by that user.
-mkdir "$WORK/test" "$WORK/state" && cp -R "$PRIS/$TEST_DIR" "$WORK/test/$TEST_DIR"
+mkdir "$WORK/test" "$WORK/state" && cp -R "$PRIS" "$WORK/test/repo"
 if [ "$ME" = 0 ]; then chown "$RUN_USER" "$WORK/state"; fi
 chmod 700 "$WORK/state"
 "${RUNAS[@]}" mkdir "$WORK/state/tmp" "$WORK/state/home"
 log "testing $s7 as $RUN_USER"
 tests_ok=1
-( cd "$WORK/test/$TEST_DIR" && run_timeout "$TEST_TIMEOUT" "${RUNAS[@]}" env -i PATH="$PATH" HOME="$WORK/state/home" TMPDIR="$WORK/state/tmp" LANG=en_US.UTF-8 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests ) > "$WORK/test.log" 2>&1 || tests_ok=0
+( cd "$WORK/test/repo/$TEST_DIR" && run_timeout "$TEST_TIMEOUT" "${RUNAS[@]}" env -i PATH="$PATH" HOME="$WORK/state/home" TMPDIR="$WORK/state/tmp" LANG=en_US.UTF-8 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests ) > "$WORK/test.log" 2>&1 || tests_ok=0
 if [ "$tests_ok" = 0 ]; then
   log "REJECTED $s7: tests failed (last lines follow)"; tail -n 12 "$WORK/test.log" >> "$LOG"
   record_seen "$sha" rejected-tests; notify "Rejected $s7 on $NAME: tests failed"; exit 1

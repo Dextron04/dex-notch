@@ -35,7 +35,7 @@ Two targets use the same script, `scripts/dex-deployer.sh`, with one config file
  download /tarball/<sha> into <base>/tmp/work.XXXX   (top dir must carry the sha; no links in it)
    source dir hash == current release's hash ? --yes--> record, exit
             |
- run `python3 -m unittest discover -s tests` from memory/ as the service user
+ run `python3 -m unittest discover -s tests` from memory/ of the test copy (whole tree minus heavy assets) as the service user
    (sudo -u _dexhosted, empty env, timeout; code root-owned and read-only to it,
    TMPDIR and HOME in a separate work/state dir that only that user deletes)   fail --> REJECTED, record, exit
             |
@@ -60,7 +60,7 @@ Limits worth knowing:
 - The mini only deploys what is on master with a green `test` job. Anyone who can push to master can ship code there; protect the branch.
 - **Root never works inside a directory the service owns.** `/var/dexhosted` (owned by `_dexhosted`) holds only the service's data and logs. Everything root reads, writes, switches or deletes lives in `/var/dexhosted-deploy`, owned by root. The service gets read access to the code, nothing else. Otherwise a compromised service could swap `releases` or `tmp` for a symlink to `/etc` or a home folder and let root's `rm -rf` or `mv` follow it.
 - **Defence in depth in the script (both targets).** At start, before pruning, and before switching, it checks that the base, `logs`, `releases`, `tmp` and every release dir are real directories (no symlinks), owned by the running user and not group- or world-writable, and, as root, that every ancestor of the base is too. If not it refuses (exit 2) and logs. `rm -rf` runs only on `<base>/releases/<name>` or its own `<base>/tmp/work.*`, right after its parent was checked. The test step's writable state is a separate directory owned by the service user, deleted by that user (`sudo -u`), so root never walks into it. Tarballs that contain links are rejected. Residual: the personal target runs as `mac-agent`, which owns everything under `~/agentvault`, so the checks there guard against mistakes and other users, not against `mac-agent` itself.
-- Tests run from a read-only, root-owned copy of `memory/`; a test that writes into its own source tree fails and blocks the deploy (the suite passes in a read-only tree today).
+- Tests run from a read-only, root-owned copy of the whole tarball tree (`<copy>/memory` is the working dir), not just `memory/`: several tests run `REPO_ROOT/scripts/*.sh` or read `PRIVACY.md` and `docs/*.md`. Only heavy assets tests never read are left out: `docs/assets/`, `katana-assets/`, `*.xcodeproj`, `*.mp4`, `*.gif`, `*.png`, `*.zip`. The release still gets only `src_subdir`. A test that writes into its own source tree fails and blocks the deploy (the suite passes in a read-only tree today).
 - `notify=osascript` in a config shows a macOS notification on rollback or rejection, but a root daemon has no GUI session, so it is mostly useful for the personal target. `notify=/path/to/cmd` runs `cmd "message"` (no shell), e.g. a script that sends mail.
 
 ## Install (once, on the mini)

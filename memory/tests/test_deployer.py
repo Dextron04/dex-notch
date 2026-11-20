@@ -38,7 +38,7 @@ def free_port():
         s.bind(("127.0.0.1", 0)); return s.getsockname()[1]
 
 
-def make_tarball(sha, version, mode="ok", tests="pass", top=None):
+def make_tarball(sha, version, mode="ok", tests="pass", top=None, extra=None):
     top = top or "o-r-" + sha[:7]
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as t:
@@ -49,6 +49,7 @@ def make_tarball(sha, version, mode="ok", tests="pass", top=None):
         add("memory/agentvault/MODE", mode)
         add("memory/tests/test_x.py", "import unittest\nclass T(unittest.TestCase):\n    def test_x(self): self.assertTrue(%s)\n" % (tests == "pass"))
         add("README.md", "not part of the release")
+        for name, text in (extra or {}).items(): add(name, text)
     return buf.getvalue()
 
 
@@ -175,6 +176,14 @@ class DeployerTest(unittest.TestCase):
         self.assertEqual((self.base / "current" / "agentvault" / "VERSION").stat().st_mode & 0o777, 0o644)
         self.assertEqual(os.listdir(self.base / "tmp"), [])          # work dir cleaned up
         self.assertFalse((self.base / ".deploy.lock").exists())
+
+    def test_test_copy_has_the_whole_repo_but_the_release_only_agentvault(self):
+        t = ("import unittest\nfrom pathlib import Path\nR = Path(__file__).resolve().parents[2]\n"
+             "class T(unittest.TestCase):\n    def test_x(self):\n        self.assertTrue((R / 'scripts' / 'x.sh').is_file()); self.assertTrue((R / 'PRIVACY.md').is_file())\n"
+             "        self.assertTrue((R / 'docs' / 't.md').is_file()); self.assertFalse((R / 'docs' / 'assets').exists())\n")
+        extra = {"memory/tests/test_repo.py": t, "scripts/x.sh": "#!/bin/bash\n", "PRIVACY.md": "p", "docs/t.md": "t", "docs/assets/big.gif": "g"}
+        self.deploy_ok(1, extra=extra)
+        self.assertEqual(sorted(p.name for p in (self.base / "current").iterdir() if not p.name.startswith(".")), ["agentvault"])
 
     def test_ci_not_green_is_skipped_and_recorded(self):
         sha = self.publish(1, ci="failure"); r = self.run_deployer()
