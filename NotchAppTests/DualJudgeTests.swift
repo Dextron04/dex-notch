@@ -103,6 +103,16 @@ final class DualJudgeTests: XCTestCase {
         XCTAssertEqual(r.verdict, "No verdict; Claude merged both. Reviewed by Codex.")
         XCTAssertEqual(r.answer, "the draft")
     }
+    func testParseReviewKeepsBodyVerbatim() {
+        let body = "**bold** and a * b\n# Heading\n```c\n#include <stdio.h>\n```"
+        XCTAssertEqual(DualJudge.parseReview("REVISED:\n" + body + "\n"), body)
+        XCTAssertEqual(DualJudge.parseReview("**REVISED:**\n" + body), body)
+    }
+    func testSplitDraftPromptSaysSplit() {
+        let c = Judgement(better: .claude, claudeStrengths: "", codexStrengths: "")
+        let x = Judgement(better: .codex, claudeStrengths: "", codexStrengths: "")
+        XCTAssertTrue(DualJudge.draftPrompt(question: "Q", claude: "a", codex: "b", judgements: [.claude: c, .codex: x]).contains("The judges split; start from the Claude answer."))
+    }
     func testDraftFailureKeepsBetterAnswer() async throws {
         let st = Stages()
         let r = try await go(Self.fake { b, k in k == .draft ? nil : Self.agree(b, k) }, st)

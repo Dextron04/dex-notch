@@ -38,6 +38,7 @@ enum DualJudge {
         let n = judgements.values.filter { $0.better != nil }.count
         let pick = n == 2 && judgements[.claude]?.better == judgements[.codex]?.better ? "Both judges preferred the \(w.displayName) answer; start from it."
             : n == 1 ? "One judge preferred the \(w.displayName) answer; start from it."
+            : n == 2 ? "The judges split; start from the \(w.displayName) answer."
             : "No verdict; start from the \(w.displayName) answer."
         let fold = [Backend.claude, .codex].compactMap { judgements[$0] }.map { o == .claude ? $0.claudeStrengths : $0.codexStrengths }.filter { !$0.isEmpty }.joined(separator: "\n")
         return """
@@ -93,9 +94,8 @@ enum DualJudge {
         return v.count == 1 ? v.first! : .claude // agree or a single vote decides; split or none -> Claude
     }
     static func parseReview(_ reply: String) -> String? {
-        let t = reply.replacingOccurrences(of: "*", with: "").replacingOccurrences(of: "#", with: "")
-        guard let m = t.range(of: #"(?m)^[ \t]*revised:"#, options: [.regularExpression, .caseInsensitive]) else { return nil }
-        let body = t[m.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let m = reply.range(of: #"(?mi)^[ \t#*_]*revised:[ \t*_]*"#, options: .regularExpression) else { return nil }
+        let body = reply[m.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
         return body.isEmpty ? nil : body
     }
     static func verdictLine(votes: [Backend: Judgement], writer: Backend, revised: Bool) -> String {
