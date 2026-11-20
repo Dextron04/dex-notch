@@ -16,6 +16,11 @@ From the notch, ask Claude or ChatGPT (Codex) about what's on screen. The answer
 - Eye on (or hotkey) and Enter with nothing typed sends a default "look at my screen and help, point at the relevant spots" prompt.
 - Implementation notes: our own windows are excluded by ScreenCaptureKit, so the notch is never hidden for a capture. Click-away keeps marks (that is how you reach the thing marked); Esc, the hotkey toggle, a new send, new chat, or 60s clear them.
 
+### The model looks by itself (`look_at_screen`)
+- Both CLIs get an MCP tool `look_at_screen(reason?)`. Server = the app binary run with `--screen-mcp` (handled in `NotchApp.init` before any UI), so nothing new is installed. Claude: second `--mcp-config` JSON + `mcp__screen` allowed. Codex: `-c mcp_servers.screen.*` overrides (config.toml untouched).
+- The helper never captures. It sends {token, reason} over a 0600 unix socket (`Application Support/NotchApp/screen.sock`, peer uid checked); the app refuses unless that question's token is live, allows 3 per question, captures with ScreenCaptureKit (own windows excluded) and replies with path/size; the helper returns the PNG as an MCP image block plus a text line about mark coordinates. Marks map onto the latest shot's display.
+- Visible: the eye lights up for ~2.5s and the status shows "looked at your screen". Setting "Let models look at the screen on their own" (settings.json `screen.models_may_look`, default on); off = tool not offered. Gemma and locked mail-triage runs never get it (triage handles untrusted mail).
+
 ## Design
 
 ### Capture (`ScreenCapture.swift`, new)

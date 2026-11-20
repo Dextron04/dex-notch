@@ -213,10 +213,10 @@ struct NotchView: View {
     private var eyeChip: some View {
         Button { a.toggleScreen() } label: {
             HStack(spacing: 5) {
-                if a.seeScreen, let t = a.shot?.thumb { Image(nsImage: t).resizable().frame(width: 22, height: 14).clipShape(RoundedRectangle(cornerRadius: 2)) }
-                Image(systemName: a.seeScreen ? "eye.fill" : "eye").font(.system(size: 12))
+                if a.seeScreen || a.looked, let t = a.shot?.thumb { Image(nsImage: t).resizable().frame(width: 22, height: 14).clipShape(RoundedRectangle(cornerRadius: 2)) }
+                Image(systemName: a.seeScreen || a.looked ? "eye.fill" : "eye").font(.system(size: 12))
             }
-            .foregroundStyle(a.seeScreen ? Ink.ember : Ink.dim).padding(6).contentShape(Rectangle())
+            .foregroundStyle(a.seeScreen || a.looked ? Ink.ember : Ink.dim).padding(6).contentShape(Rectangle())
         }
         .buttonStyle(.plain).disabled(a.backend == .gemma || a.busy).opacity(a.backend == .gemma ? 0.35 : 1)
         .help(a.backend == .gemma ? "The local model can't see the screen" : "Show the model your screen  ⌥⌘S").accessibilityLabel("Share screen with the model")

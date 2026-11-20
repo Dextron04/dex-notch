@@ -27,6 +27,7 @@ final class SetupModel {
     var message: String?
     var hostedConnected: String?
     var keepConversations = true
+    var modelsLook = true
     var whyOpen: Set<SetupPane> = []
 
     private let url = Settings.defaultURL
@@ -48,6 +49,7 @@ final class SetupModel {
         if ad.microsoftIsOwn, let id = ad.microsoftClientID { msID = id; msOpen = true } else if ad.microsoftClientID == nil { msOpen = true }
         hostedConnected = HostedAccount.connectedHost(at: url)
         keepConversations = HostedAccount.uploads(at: url)
+        modelsLook = Settings.modelsMayLook(at: url)
         if let g = a.gemma { host = g.host; model = g.model; keychainService = g.keychainService; keychainAccount = g.keychainAccount; localOpen = true }
     }
 
@@ -83,6 +85,12 @@ final class SetupModel {
     func remove(_ f: String) { folders.removeAll { $0 == f }; if workspace == f { workspace = nil } }
 
     /// Acts at once (not part of Save). The recorder re-reads settings.json every tick, so it takes effect within seconds.
+    func setModelsLook(_ on: Bool) {
+        message = nil
+        do { try Settings.setModelsMayLook(at: url, on); modelsLook = on }
+        catch { message = "Couldn't save settings.json: \(error.localizedDescription)" }
+    }
+
     func setKeepConversations(_ on: Bool) {
         message = nil
         do { try HostedAccount.setUpload(at: url, on); keepConversations = on }
@@ -331,6 +339,12 @@ struct SetupView: View {
             header("Models", "Who answers when you ask. One is enough to start. They run on your own subscriptions, so there are no keys to enter.")
             why("Dex Notch doesn't think for itself. It passes your questions to an AI you already use, such as Claude or Codex, running on this Mac. We only check that one is installed. Nothing goes through our servers.")
             card { cliRow(.claude); cliRow(.codex); localRow }
+            subhead("Screen")
+            card {
+                row(title: "Let models look at the screen on their own", detail: m.modelsLook ? "On: Claude or Codex may take a screenshot while answering when it helps. The eye lights up each time." : "Off: they only see your screen when you turn the eye on or ask about it.",
+                    lead: { Image(systemName: "eye").font(.system(size: 16)).foregroundStyle(Ink.dim) },
+                    trail: { Toggle("", isOn: Binding(get: { m.modelsLook }, set: { m.setModelsLook($0) })).labelsHidden().toggleStyle(.switch) })
+            }
             if a.detected && a.cliFound.isEmpty {
                 link("Check again") { a.refreshAvailability() }.padding(.top, 18)
             }

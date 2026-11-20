@@ -8,6 +8,10 @@ struct NotchApp: App {
     private var center: AddonCenter { AddonCenter.shared }
     private var gate: AccountGate { AccountGate.shared }
 
+    init() {      // the CLIs start this binary as their screen tool: serve it and never reach the UI
+        if CommandLine.arguments.contains(ScreenTool.flag) { ScreenMCP.serve(); exit(0) }
+    }
+
     var body: some Scene {
         MenuBarExtra {
             if !gate.isOpen {                // nothing runs until the server has confirmed the account
@@ -62,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Hotkey(id: 3, keyCode: kVK_ANSI_S, modifiers: optionKey | cmdKey) { [assistant] in assistant.screenHotkey() },
         ]
         assistant.connect()
+        assistant.startScreenBridge()
         AddonCenter.shared.start(assistant: assistant)
         ConnectionMonitor.shared.onMissing = { s, c in AddonCenter.shared.queueConnectCard(s, c) }
         ConnectionMonitor.shared.openSettings = { [assistant] in SetupWindow.shared.show(assistant: assistant, pane: .memory) }

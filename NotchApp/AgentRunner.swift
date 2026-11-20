@@ -62,8 +62,8 @@ enum AgentRunner {
                 p.arguments = route.locked
                     ? (route.backend == .claude ? AgentStream.lockedClaudeArgs(prompt: route.prompt) : AgentStream.lockedCodexArgs(prompt: route.prompt))
                     : route.backend == .claude
-                    ? AgentStream.claudeArgs(prompt: route.prompt, session: session, work: route.work, folder: route.folder, scratch: scratch.standardizedFileURL.path, mcpConfig: mcp)
-                    : AgentStream.codexArgs(prompt: route.prompt, session: session, work: route.work, folder: route.folder, image: route.image)
+                    ? AgentStream.claudeArgs(prompt: route.prompt, session: session, work: route.work, folder: route.folder, scratch: scratch.standardizedFileURL.path, mcpConfig: mcp, look: route.look)
+                    : AgentStream.codexArgs(prompt: route.prompt, session: session, work: route.work, folder: route.folder, image: route.image, look: route.look)
                 p.currentDirectoryURL = cwd
                 env["PATH"] = loginPATH
                 p.environment = env

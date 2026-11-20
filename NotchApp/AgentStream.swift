@@ -5,7 +5,7 @@ enum Backend: String, Codable {
     /// What people (and VoiceOver) call it. `gemma` is the self-hosted Ollama connector, whatever model it serves.
     var displayName: String { switch self { case .gemma: "Local model"; case .claude: "Claude"; case .codex: "Codex" } }
 }
-struct Route: Equatable { var backend: Backend; var work: Bool; var prompt: String; var folder: String? = nil; var locked = false; var image: String? = nil } // folder: absolute path `+` runs may also write to
+struct Route: Equatable { var backend: Backend; var work: Bool; var prompt: String; var folder: String? = nil; var locked = false; var image: String? = nil; var look: ScreenTool.Launch? = nil } // folder: absolute path `+` runs may also write to
 struct Snippet: Equatable { var title: String; var source: String; var snippet: String }
 enum AgentEvent: Equatable { case text(String), tool(String), session(String), final(String), error(String) }
 
@@ -147,17 +147,18 @@ enum AgentStream {
     }
 
     static func claudeArgs(prompt: String, session: String?, work: Bool, folder: String? = nil,
-                           scratch: String = AgentStream.defaultScratch, mcpConfig: String? = nil) -> [String] {
+                           scratch: String = AgentStream.defaultScratch, mcpConfig: String? = nil, look: ScreenTool.Launch? = nil) -> [String] {
         var a = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--append-system-prompt",
                  work ? brief + " You may edit files and run shell commands; commands run in a sandbox: they can only write inside the current folder and have no network." : brief]
         if let session { a += ["--resume", session] }
         // Your other settings, hooks and auto-allowed MCP tools (a mail sender, say) must not be reachable from a question:
         // project settings only, and only the agentvault MCP server, if you have one.
         a += ["--setting-sources", "project", "--strict-mcp-config"]
-        if let mcpConfig { a += ["--mcp-config", mcpConfig] }
+        let configs = [mcpConfig, look.map(ScreenTool.claudeConfig)].compactMap { $0 }
+        if !configs.isEmpty { a += ["--mcp-config"] + configs }
         // Ask: look things up only, reading only the scratch folder. Work (`+`): may also edit and run commands (inside the sandbox above), in the scratch and chosen folders.
         let roots = [scratch] + (work ? folder.map { [$0] } ?? [] : [])
-        a += ["--allowedTools"] + roots.map { pathRule("Read", $0) } + (work ? [] : ["WebSearch", "WebFetch"]) + (mcpConfig == nil ? [] : ["mcp__agentvault"])
+        a += ["--allowedTools"] + roots.map { pathRule("Read", $0) } + (work ? [] : ["WebSearch", "WebFetch"]) + (mcpConfig == nil ? [] : ["mcp__agentvault"]) + (look == nil ? [] : ["mcp__\(ScreenTool.server)"])
         if work { a += roots.map { pathRule("Edit", $0) } + ["Bash", "--permission-mode", "acceptEdits", "--settings", claudeSandbox(folder: folder)] }
         a += ["--disallowedTools"] + secretDenyRules + (work ? [] : ["Bash", "Edit", "Write", "NotebookEdit"])
         return a + ["--", prompt] // `--`: variadic flags above must not swallow the prompt, and a leading "-" must not parse as an option
@@ -176,9 +177,9 @@ enum AgentStream {
     /// The only config a triage run sees: no MCP servers, no hooks, nothing from your own `config.toml`.
     static let codexTriageConfig = "# Dex Notch triage: deliberately empty. No MCP servers.\n"
 
-    static func codexArgs(prompt: String, session: String?, work: Bool, folder: String? = nil, image: String? = nil) -> [String] {
+    static func codexArgs(prompt: String, session: String?, work: Bool, folder: String? = nil, image: String? = nil, look: ScreenTool.Launch? = nil) -> [String] {
         // sandbox flags go before `resume`: the subcommand doesn't take them
-        ["exec", "--json", "--skip-git-repo-check", "--sandbox", work ? "workspace-write" : "read-only"]
+        ["exec"] + (look.map(ScreenTool.codexArgs) ?? []) + ["--json", "--skip-git-repo-check", "--sandbox", work ? "workspace-write" : "read-only"]
             + (work ? folder.map { ["--add-dir", $0] } ?? [] : [])
             + (session.map { ["resume", $0] } ?? []) + (image.map { ["-i", $0] } ?? []) + ["--", prompt]   // `--`: a prompt starting with "-" is not an option
     }

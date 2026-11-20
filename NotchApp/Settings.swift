@@ -103,6 +103,19 @@ enum Settings {
         return std
     }
 
+    /// "Let models look at the screen on their own": {"screen": {"models_may_look": false}} turns it off; on otherwise.
+    static func modelsMayLook(at url: URL) -> Bool {
+        guard let d = try? Data(contentsOf: url), let root = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { return true }
+        return ((root["screen"] as? [String: Any])?["models_may_look"] as? Bool) != false
+    }
+    static func setModelsMayLook(at url: URL, _ on: Bool) throws {
+        try mutate(at: url) { root in
+            var s = root["screen"] as? [String: Any] ?? [:]
+            if on { s.removeValue(forKey: "models_may_look") } else { s["models_may_look"] = false }
+            if s.isEmpty { root.removeValue(forKey: "screen") } else { root["screen"] = s }
+        }
+    }
+
     /// Saves what the Settings window collected, keeping every other key in the file as it was.
     static func update(at url: URL, defaultBackend: Backend?, workspaceDefault: String?, folders: [String], gemma: GemmaSettings? = nil, removeGemma: Bool = false) throws {
         var obj: [String: Any] = [:]

@@ -56,6 +56,9 @@ final class Assistant {
     var seeScreen = false           // the eye: the next questions go with a screenshot of the display the notch lives on
     private(set) var shot: Shot?
     private(set) var marks: [ScreenMarks.Mark] = []   // in shot pixels
+    var looked = false              // a model took a screenshot by itself a moment ago: the eye lights up so you see it
+    private var runToken: String?   // the question being answered right now; look_at_screen requests need it
+    private var limiter = ScreenTool.Limiter()
     var screenProblem: String?      // why the last capture didn't happen (shown where the status is)
     private var sessions: [Backend: String] = [:] // CLI session ids so follow-ups resume the same conversation
 
@@ -174,10 +177,23 @@ final class Assistant {
     // MARK: screen help
 
     /// The only places the screen is ever captured: the eye chip, ⌥⌘S, or a question that says "my screen" (see `send`).
-    private func grab() async -> Bool {
+    private func grab(eye: Bool = true) async -> Bool {
         screenProblem = nil
-        do { ScreenCapture.remove(shot); shot = try await ScreenCapture.capture(); seeScreen = true; return true }
-        catch { shot = nil; seeScreen = false; screenProblem = (error as? ScreenCapture.Denied)?.msg ?? error.localizedDescription; return false }
+        do { ScreenCapture.remove(shot); shot = try await ScreenCapture.capture(); if eye { seeScreen = true }; return true }
+        catch { if eye { shot = nil; seeScreen = false }; screenProblem = (error as? ScreenCapture.Denied)?.msg ?? error.localizedDescription; return false }
+    }
+
+    /// `look_at_screen` called by a model (via ScreenBridge). Refused unless a question is being answered; at most `maxPerTurn` times.
+    func startScreenBridge() { ScreenBridge.shared.start { [weak self] req in await self?.lookRequest(req) ?? Data() } }
+    private func lookRequest(_ req: Data) async -> Data {
+        func j(_ d: [String: Any]) -> Data { (try? JSONSerialization.data(withJSONObject: d)) ?? Data() }
+        let o = (try? JSONSerialization.jsonObject(with: req)) as? [String: Any]
+        guard let t = runToken, o?["token"] as? String == t, busy else { return j(["error": "No question is being answered, so screen access is closed."]) }
+        guard limiter.take() else { return j(["error": "Already looked \(ScreenTool.maxPerTurn) times for this question."]) }
+        guard await grab(eye: false), let s = shot else { return j(["error": screenProblem ?? "Couldn't capture the screen."]) }
+        toolNote = "looked at your screen"; looked = true
+        Task { try? await Task.sleep(for: .seconds(2.5)); looked = false }
+        return j(["path": s.url.path, "w": Int(s.pixelSize.width), "h": Int(s.pixelSize.height)])
     }
     func dropShot() { ScreenCapture.remove(shot); shot = nil; seeScreen = false; clearMarks() }
     func clearMarks() { marks = []; MarkOverlay.clear() }
@@ -275,6 +291,12 @@ final class Assistant {
                         r.image = s.url.path
                         r.prompt = ScreenMarks.prompt(r.prompt, path: s.url.path, size: s.pixelSize, claude: b == .claude)
                     }
+                    if ScreenTool.offered(b, setting: Settings.modelsMayLook(at: settingsURL)), let exe = Bundle.main.executablePath {
+                        let token = UUID().uuidString
+                        runToken = token; limiter = .init()
+                        r.look = ScreenTool.Launch(exe: exe, socket: ScreenBridge.socketPath, token: token)
+                        if r.image == nil { r.prompt += "\n\n" + ScreenTool.hint }
+                    }
                     try await runAgent(r)
                 }
                 finish()
@@ -340,17 +362,17 @@ final class Assistant {
     /// Streams a `claude` / `codex` CLI run into the last assistant turn; `toolNote` shows what it is doing.
     private func runAgent(_ r: Route) async throws {
         var gotText = false, needBreak = false, raw = ""
-        let s = r.image == nil ? nil : shot      // with a screenshot the model may write <mark> tags: keep the raw text, show it without them
+        let marking = r.image != nil || r.look != nil      // with a screenshot the model may write <mark> tags: keep the raw text, show it without them
         func add(_ t: String) {
             guard !turns.isEmpty else { return } // ⌘N during an answer can empty the list under us
             waiting = false; streaming = true; toolNote = nil
             let brk = needBreak && !turns[turns.count - 1].text.isEmpty ? "\n\n" : ""
             needBreak = false; gotText = true
-            guard let s else { turns[turns.count - 1].text += brk + t; return }
+            guard marking else { turns[turns.count - 1].text += brk + t; return }
             raw += brk + t
-            let p = ScreenMarks.parse(raw, imageSize: s.pixelSize)
+            let p = ScreenMarks.parse(raw, imageSize: shot?.pixelSize ?? .zero)      // the latest shot: the model may have taken a newer one itself
             turns[turns.count - 1].text = p.clean
-            if p.marks != marks { showMarks(p.marks, s) }
+            if let s = shot, p.marks != marks { showMarks(p.marks, s) }
         }
         do {
             for try await e in AgentRunner.run(r, session: sessions[r.backend]) {
@@ -367,6 +389,7 @@ final class Assistant {
 
     private func finish() {
         defer { persist() }
+        runToken = nil
         waiting = false; streaming = false; toolNote = nil
         if turns.last?.role == "assistant", turns.last?.text.isEmpty == true, error != nil { turns.removeLast() }
         journalGemmaExchange()
