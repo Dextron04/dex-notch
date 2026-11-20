@@ -44,7 +44,7 @@ re "$KEEP" '^[0-9]+$' && [ "$KEEP" -ge 2 ]      || die 2 "config: keep must be >
 re "$HEALTH_TIMEOUT" '^[0-9]+$'                 || die 2 "config: bad health_timeout"
 re "$TEST_TIMEOUT" '^[0-9]+$'                   || die 2 "config: bad test_timeout"
 [ -z "$RELEASE_OWNER" ] || re "$RELEASE_OWNER" '^[A-Za-z0-9._-]+(:[A-Za-z0-9._-]+)?$' || die 2 "config: bad release_owner"
-{ re "$PYTHON" '^/[A-Za-z0-9._/+-]+$' && [[ $PYTHON != *..* ]]; } || die 2 "config: python must be a plain absolute path to an interpreter"
+{ re "$PYTHON" '^/[^[:space:]]+$' && [[ $PYTHON != *..* ]]; } || die 2 "config: python must be a plain absolute path to an interpreter"
 [ "$NHEALTH" -ge 1 ] || die 2 "config: at least one health= line"
 for p in "$SRC_SUBDIR" "$TEST_DIR"; do
   re "$p" '^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$' && [[ $p != *..* ]] || die 2 "config: bad source path '$p'"

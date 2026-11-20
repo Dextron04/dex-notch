@@ -102,7 +102,7 @@ personal_files() {
   if [ "$new" = 1 ] && [ "$now" = 0 ]; then : > "$base/deploy-paused"; fi
   mkdir -p "$home/Library/LaunchAgents"
   sed -e "s|__PREFIX__|$prefix|g" -e "s|__HOME__|$home|g" "$prefix/personal.plist.template" > "$A.new" && mv -f "$A.new" "$A"
-  chmod 644 "$A"; plutil -lint "$A" >/dev/null
+  chmod 644 "$A"; if command -v plutil >/dev/null; then plutil -lint "$A" >/dev/null; fi   # (no plutil off macOS: CI)
   [ ! -f "$OLD" ] || { mv "$OLD" "$OLD.disabled-$STAMP"; say "  old poller disabled: $OLD.disabled-$STAMP"; }
 }
 
