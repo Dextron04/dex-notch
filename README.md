@@ -87,7 +87,7 @@ Don't have `claude` or `codex` yet? The notch tells you what to install and wait
   </tr>
   <tr>
     <td align="center"><sub><b>Quiet.</b> No row of logos. The top-left says which model is on and what it may do.</sub></td>
-    <td align="center"><sub><b>Switch and it says so.</b> <code>⇥</code> or <code>⌘1</code> <code>⌘2</code> <code>⌘3</code> and the notch names the model once, its logo and name with an ember line that runs out, then it is gone.</sub></td>
+    <td align="center"><sub><b>Switch and it says so.</b> <code>⇥</code> or <code>⌘1</code>–<code>⌘4</code> and the notch names the model once, its logo and name with an ember line that runs out, then it is gone.</sub></td>
   </tr>
   <tr>
     <td colspan="2" align="center"><img src="docs/assets/shot-codex.png" alt="Codex selected with edit rights, shown as a plus after its name, working in the Projects folder" width="50%"></td>
@@ -132,7 +132,7 @@ Press `⌥⇧ Space` to see what you and your agents have been doing.
 |---|---|
 | **Every AI is an island.** What you decided with Claude Code is invisible to Codex, Gemini and ChatGPT. | A recorder turns every session into a redacted markdown note in one Obsidian vault. Every agent can search it. |
 | **Setup that takes an afternoon.** | A DMG and one window. It finds your CLIs, tells you the install command for what's missing, and asks where edit runs may write. |
-| **Switching model means retyping `@names`.** | `⇥` or `⌘1/2/3`, and the notch names the model once, then clears. Typing `@claude ` still works and switches the model. |
+| **Switching model means retyping `@names`.** | `⇥` or `⌘1`–`⌘4`, and the notch names the model once, then clears. Typing `@claude ` still works and switches the model. |
 | **Two models, two answers, no tiebreak.** | Press `⇥` to **Both** (or start with `@both`) when Claude and Codex are both installed. Each answers; each judges the other; the preferred model drafts a hybrid with the best of both, and the other reviews it. About 1-2 minutes and six CLI runs per question, always read-only. |
 | **A local model that makes things up about your own work.** | Before each local-model answer the notch searches your vault, hands the model the best snippets, and names the notes it used. |
 | **"Can it run code?" without giving a model your machine.** | `+` turns on edit rights *and* a shell, inside an OS sandbox: no network, and writes only to a scratch folder plus the folders you chose. |
@@ -167,7 +167,7 @@ Press `⌥⇧ Space` to see what you and your agents have been doing.
 |---|---|
 | `↩` | send |
 | `⇥` / `⇧⇥` | next / previous model |
-| `⌘1` `⌘2` `⌘3` | the 1st, 2nd, 3rd model you have |
+| `⌘1`–`⌘4` | the 1st to 4th model you have |
 | `⌘E` | allow edits and sandboxed commands (Claude, Codex) |
 | `⌘F` | cycle the folder edit runs may write to (your scratch sandbox, then each folder you allowed) |
 | `⌘N` | new conversation |

@@ -326,13 +326,13 @@ final class Assistant {
         } catch let m as AgentRunner.Missing { throw Failure("`\(m.name)` not found. Install it and log in.") }
     }
 
-    /// Both: claude and codex answer, one judges, the loser drafts, the winner reviews. Read-only; never touches `sessions`.
+    /// Both: claude and codex both answer, both judge, the preferred one drafts a hybrid, the other reviews it. Read-only; never touches `sessions`.
     private func runDual(_ question: String) async throws {
-        let history = DualJudge.historyText(turns.dropLast(2).map { (role: $0.role, text: $0.text) })
-        let ask: DualAsk = { backend, prompt, onText in
+        let history = DualJudge.historyText(turns.dropLast(2).suffix(20).map { (role: $0.role, text: $0.text) })
+        let ask: DualAsk = { backend, prompt, isInternal, onText in
             var got = "", final = ""
             do {
-                for try await e in AgentRunner.run(Route(backend: backend, work: false, prompt: prompt), session: nil) {
+                for try await e in AgentRunner.run(Route(backend: backend, work: false, prompt: prompt, locked: isInternal), session: nil) {
                     switch e {
                     case .text(let t): got += t; onText(t)
                     case .final(let t): final = t
@@ -365,15 +365,15 @@ final class Assistant {
         journalGemmaExchange()
     }
 
-    /// Gemma has no session log of its own, so each finished exchange goes to the vault journal (claude/codex runs are already
+    /// Gemma has no session log of its own, and Both runs its internal stages unrecorded, so each finished exchange goes to the vault journal (claude/codex runs are already
     /// recorded from their own logs). Skipped on errors and cancels: only a complete question + answer is worth remembering.
     private func journalGemmaExchange() {
         defer { journaled = turns.count }
-        guard exchange.backend == .gemma, error == nil, turns.count > journaled, turns.count >= 2,
+        guard exchange.backend == .gemma || exchange.backend == .both, error == nil, turns.count > journaled, turns.count >= 2,
               turns[turns.count - 1].role == "assistant", !turns[turns.count - 1].text.isEmpty, turns[turns.count - 2].role == "user" else { return }
         try? Journal.append([JournalEntry(role: "user", text: turns[turns.count - 2].text, ts: exchange.askedAt),
                              JournalEntry(role: "assistant", text: turns[turns.count - 1].text, ts: Date())],
-                            conv: convID, model: "gemma", to: Journal.defaultDir) // best effort: never block the notch on disk trouble
+                            conv: convID, model: exchange.backend == .both ? "both" : "gemma", to: Journal.defaultDir) // best effort: never block the notch on disk trouble
     }
 
     struct Failure: Error { let msg: String; init(_ m: String) { msg = m } }

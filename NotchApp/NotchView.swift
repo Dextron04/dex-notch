@@ -172,6 +172,7 @@ struct NotchView: View {
                 .padding(.horizontal, 30)
                 .padding(.vertical, 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .animation(reduce ? nil : .smooth(duration: 0.25), value: a.dualStage != nil && a.busy)
                 .background(GeometryReader { Color.clear.preference(key: HeightKey.self, value: $0.size.height) })
             }
             .scrollIndicators(.never)

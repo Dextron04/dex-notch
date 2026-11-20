@@ -103,6 +103,7 @@ struct DualVerdictLine: View {
         .opacity(shown ? 1 : 0)
         .offset(y: shown || reduce ? 0 : 6)
         .onAppear { withAnimation(reduce ? .easeOut(duration: 0.2) : .spring(duration: 0.45, bounce: 0.15).delay(0.1)) { shown = true } }
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Verdict: \(verdict)")
     }
 }

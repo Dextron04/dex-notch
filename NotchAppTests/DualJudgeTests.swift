@@ -12,17 +12,18 @@ final class DualJudgeTests: XCTestCase {
     }
     /// Script: (backend, kind) -> reply, or nil to throw.
     static func fake(_ script: @escaping @Sendable (Backend, Kind) -> String?, seen: Seen? = nil) -> DualAsk {
-        { b, p, onText in
+        { b, p, isInternal, onText in
             let k = kind(p)
-            seen?.add(b, k, p)
+            seen?.add(b, k, p, isInternal)
             guard let r = script(b, k) else { throw Boom() }
             onText(r)
             return r
         }
     }
     final class Seen: @unchecked Sendable {
-        private let l = NSLock(); private var items: [(Backend, Kind, String)] = []
-        func add(_ b: Backend, _ k: Kind, _ p: String) { l.lock(); items.append((b, k, p)); l.unlock() }
+        private let l = NSLock(); private var items: [(Backend, Kind, String)] = []; private var flags: [(Kind, Bool)] = []
+        func add(_ b: Backend, _ k: Kind, _ p: String, _ i: Bool) { l.lock(); items.append((b, k, p)); flags.append((k, i)); l.unlock() }
+        func internals(_ k: Kind) -> [Bool] { l.lock(); defer { l.unlock() }; return flags.filter { $0.0 == k }.map(\.1) }
         func prompts(_ k: Kind) -> [String] { l.lock(); defer { l.unlock() }; return items.filter { $0.1 == k }.map { $0.2 } }
     }
     final class Stages: @unchecked Sendable {
@@ -36,7 +37,7 @@ final class DualJudgeTests: XCTestCase {
     static let agree: @Sendable (Backend, Kind) -> String? = { b, k in
         switch k {
         case .answer: return b == .claude ? "claude answer" : "codex answer"
-        case .judge: return "BETTER: claude\nCLAUDE HAS: clarity\nCODEX HAS: an example"
+        case .judge: return "BETTER: A\nA HAS: clarity\nB HAS: an example"
         case .draft: return "the draft"
         case .review: return "APPROVED"
         }
@@ -86,7 +87,7 @@ final class DualJudgeTests: XCTestCase {
         XCTAssertTrue(r.verdict.hasSuffix(" Revised by Codex."))
     }
     func testSplitVoteVerdict() async throws {
-        let r = try await go(Self.fake { b, k in k == .judge ? "BETTER: \(b == .claude ? "codex" : "claude")\nCLAUDE HAS: x\nCODEX HAS: y" : Self.agree(b, k) })
+        let r = try await go(Self.fake { b, k in k == .judge ? "BETTER: \(b == .claude ? "B" : "A")\nA HAS: x\nB HAS: y" : Self.agree(b, k) })
         XCTAssertEqual(r.verdict, "Split vote; Claude merged both. Reviewed by Codex.")
     }
     func testAnswerFailureFallsBackToOther() async throws {
@@ -147,5 +148,44 @@ final class DualJudgeTests: XCTestCase {
         XCTAssertTrue(h.contains("hi") && h.contains("hello"))
         XCTAssertTrue(DualJudge.answerPrompt(question: "Q2", history: h).contains("hello"))
         XCTAssertEqual(DualJudge.historyText([]), "")
+    }
+
+    func testHistoryReachesAllStagesAndInternalFlags() async throws {
+        let seen = Seen()
+        _ = try await DualJudge.run(question: "Q", history: "User: HIST-MARK", ask: Self.fake(Self.agree, seen: seen), onStage: { _ in }, onDraft: { _ in })
+        for k in [Kind.answer, .judge, .draft, .review] {
+            XCTAssertEqual(seen.prompts(k).count, k == .draft || k == .review ? 1 : 2)
+            XCTAssertTrue(seen.prompts(k).allSatisfy { $0.contains("Conversation so far:") && $0.contains("HIST-MARK") }, "\(k)")
+            XCTAssertTrue(seen.internals(k).allSatisfy { $0 == (k != .answer) }, "\(k)")
+        }
+        XCTAssertFalse(DualJudge.judgePrompt(question: "Q", claude: "a", codex: "b").contains("Conversation so far"))
+    }
+    func testJudgePromptIsBlind() {
+        let p = DualJudge.judgePrompt(question: "Q", claude: "a", codex: "b")
+        XCTAssertTrue(p.contains("ANSWER A") && p.contains("ANSWER B") && p.contains("BETTER: A"))
+        XCTAssertFalse(p.lowercased().contains("claude") || p.lowercased().contains("codex"))
+        XCTAssertEqual(DualJudge.parseJudgement("BETTER: B\nA HAS: x\nB HAS: y").better, .codex)
+        XCTAssertEqual(DualJudge.parseJudgement("BETTER: B\nA HAS: x\nB HAS: y").claudeStrengths, "x")
+    }
+    func testEmptyAnswerCountsAsFailure() async throws {
+        let r = try await go(Self.fake { b, k in b == .claude && k == .answer ? "  \n" : Self.agree(b, k) })
+        XCTAssertEqual(r.answer, "codex answer")
+        XCTAssertEqual(r.winner, .codex)
+        XCTAssertEqual(r.verdict, "Claude couldn't answer — showing Codex's.")
+    }
+    func testEmptyDraftFallsBack() async throws {
+        let r = try await go(Self.fake { b, k in k == .draft ? " " : Self.agree(b, k) })
+        XCTAssertEqual(r.answer, "claude answer")
+        XCTAssertEqual(r.verdict, "Claude couldn't merge — showing Claude's answer.")
+    }
+    func testEmptyJudgeReplyIsNoVote() async throws {
+        let r = try await go(Self.fake { b, k in k == .judge ? "\n " : Self.agree(b, k) })
+        XCTAssertEqual(r.verdict, "No verdict; Claude merged both. Reviewed by Codex.")
+    }
+    func testStrengthsKeptWithoutVerdictLine() async throws {
+        let seen = Seen()
+        let r = try await go(Self.fake({ b, k in k == .judge ? "A HAS: A-MARK\nB HAS: B-MARK" : Self.agree(b, k) }, seen: seen))
+        XCTAssertTrue(seen.prompts(.draft)[0].contains("B-MARK"))
+        XCTAssertTrue(r.verdict.hasPrefix("No verdict"))
     }
 }
