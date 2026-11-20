@@ -60,12 +60,13 @@ final class ConversationStoreTests: XCTestCase {
 
     func testOldSavedTurnWithoutVerdictDecodes() throws {
         let t = try JSONDecoder().decode(SavedTurn.self, from: Data(#"{"role":"assistant","text":"hi"}"#.utf8))
-        XCTAssertNil(t.verdict)
+        XCTAssertNil(t.verdict); XCTAssertNil(t.winner)
     }
 
     func testVerdictRoundTrips() throws {
-        let c = SavedConversation(turns: [SavedTurn(role: "user", text: "q"), SavedTurn(role: "assistant", text: "a", verdict: "Claude won")], backend: .both)
+        let c = SavedConversation(turns: [SavedTurn(role: "user", text: "q"), SavedTurn(role: "assistant", text: "a", verdict: "Claude won", winner: .codex)], backend: .both)
         try ConversationStore.save(c, to: url)
         XCTAssertEqual(ConversationStore.load(from: url, now: now)?.turns.last?.verdict, "Claude won")
+        XCTAssertEqual(ConversationStore.load(from: url, now: now)?.turns.last?.winner, .codex)
     }
 }

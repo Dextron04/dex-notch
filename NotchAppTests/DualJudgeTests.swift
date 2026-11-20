@@ -30,7 +30,7 @@ final class DualJudgeTests: XCTestCase {
         func add(_ s: DualStage) { l.lock(); v.append(s); l.unlock() }
         func draft(_ s: String) { l.lock(); drafts.append(s); l.unlock() }
     }
-    func go(_ ask: @escaping DualAsk, _ st: Stages = Stages()) async throws -> (answer: String, verdict: String) {
+    func go(_ ask: @escaping DualAsk, _ st: Stages = Stages()) async throws -> (answer: String, verdict: String, winner: Backend) {
         try await DualJudge.run(question: "Q", history: "", ask: ask, onStage: { st.add($0) }, onDraft: { st.draft($0) })
     }
     static let agree: @Sendable (Backend, Kind) -> String? = { b, k in
@@ -75,6 +75,7 @@ final class DualJudgeTests: XCTestCase {
         XCTAssertEqual(st.v, [.answering, .judging, .drafting(by: .claude), .reviewing(by: .codex)])
         XCTAssertEqual(r.answer, "the draft")
         XCTAssertEqual(r.verdict, "Both preferred Claude's answer; Codex's points folded in. Reviewed by Codex.")
+        XCTAssertEqual(r.winner, .claude)
         XCTAssertEqual(st.drafts.last, "the draft")
     }
     func testRevisionReplacesDraft() async throws {
@@ -93,6 +94,7 @@ final class DualJudgeTests: XCTestCase {
         let r = try await go(Self.fake { b, k in b == .codex && k == .answer ? nil : Self.agree(b, k) }, st)
         XCTAssertEqual(r.answer, "claude answer")
         XCTAssertEqual(r.verdict, "Codex couldn't answer — showing Claude's.")
+        XCTAssertEqual(r.winner, .claude)
         XCTAssertEqual(st.v, [.answering])
     }
     func testBothFailThrows() async {
@@ -118,6 +120,7 @@ final class DualJudgeTests: XCTestCase {
         let r = try await go(Self.fake { b, k in k == .draft ? nil : Self.agree(b, k) }, st)
         XCTAssertEqual(r.answer, "claude answer")
         XCTAssertEqual(r.verdict, "Claude couldn't merge — showing Claude's answer.")
+        XCTAssertEqual(r.winner, .claude)
         XCTAssertEqual(st.v, [.answering, .judging, .drafting(by: .claude)])
         XCTAssertEqual(st.drafts.last, "claude answer")
     }

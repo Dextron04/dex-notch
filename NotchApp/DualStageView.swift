@@ -91,11 +91,7 @@ private struct DualMarks: View {
 /// One quiet line under a finished Both answer: who won, in the judges' words.
 struct DualVerdictLine: View {
     let verdict: String
-    /// The verdict line names the writer first; its mark leads the line.
-    private var winner: Backend? {
-        let c = verdict.range(of: "Claude")?.lowerBound, x = verdict.range(of: "Codex")?.lowerBound
-        switch (c, x) { case let (c?, x?): return c < x ? .claude : .codex; case (.some, nil): return .claude; case (nil, .some): return .codex; default: return nil }
-    }
+    let winner: Backend?
     @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var shown = false
 
@@ -118,7 +114,7 @@ struct DualVerdictLine: View {
         DualStageView(stage: .judging)
         DualStageView(stage: .drafting(by: .claude))
         DualStageView(stage: .reviewing(by: .codex))
-        DualVerdictLine(verdict: "Both preferred Claude's answer; Codex's points folded in. Reviewed by Codex.")
+        DualVerdictLine(verdict: "Both preferred Claude's answer; Codex's points folded in. Reviewed by Codex.", winner: .claude)
     }
     .padding(30).frame(width: 560).background(.black)
 }

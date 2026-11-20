@@ -28,7 +28,7 @@ final class Assistant {
     }
     private static let system = "You answer inside a tiny overlay beside the Mac's notch. Be brief and direct: plain sentences, no headings, no preamble. Use short lists only when asked. Put any code in fenced blocks with a language tag."
 
-    struct Turn { var role: String; var text: String; var verdict: String? = nil }
+    struct Turn { var role: String; var text: String; var verdict: String? = nil; var winner: Backend? = nil }
 
     enum Mode { case prompt, recall }
     enum RecallPage: Int, CaseIterable {
@@ -131,7 +131,7 @@ final class Assistant {
     // MARK: persistence — the open conversation survives quitting the app
 
     func persist() {
-        let c = SavedConversation(id: convID, turns: turns.map { SavedTurn(role: $0.role, text: $0.text, verdict: $0.verdict) }, backend: backend, work: work, folder: folder,
+        let c = SavedConversation(id: convID, turns: turns.map { SavedTurn(role: $0.role, text: $0.text, verdict: $0.verdict, winner: $0.winner) }, backend: backend, work: work, folder: folder,
                                   sessions: Dictionary(uniqueKeysWithValues: sessions.map { ($0.key.rawValue, $0.value) }),
                                   draft: draft, recalled: recalled, closedAt: closedAt ?? Date())
         try? ConversationStore.save(c, to: storeURL) // best effort: a full disk must never break the notch
@@ -139,7 +139,7 @@ final class Assistant {
 
     private func restore() {
         guard let c = ConversationStore.load(from: storeURL) else { return }
-        turns = c.turns.map { Turn(role: $0.role, text: $0.text, verdict: $0.verdict) }
+        turns = c.turns.map { Turn(role: $0.role, text: $0.text, verdict: $0.verdict, winner: $0.winner) }
         backend = c.backend; work = c.work; recalled = c.recalled
         folder = c.folder.map { $0.hasPrefix("/") ? $0 : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent($0).path }  // older saves stored just "Desktop"
         sessions = Dictionary(uniqueKeysWithValues: c.sessions.compactMap { k, v in Backend(rawValue: k).map { ($0, v) } })
@@ -355,7 +355,7 @@ final class Assistant {
             } })
         guard !turns.isEmpty else { return } // ⌘N during the run
         turns[turns.count - 1].text = out.answer
-        turns[turns.count - 1].verdict = out.verdict
+        turns[turns.count - 1].verdict = out.verdict; turns[turns.count - 1].winner = out.winner
     }
 
     private func finish() {

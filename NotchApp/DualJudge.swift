@@ -109,7 +109,7 @@ enum DualJudge {
 
     static func run(question: String, history: String, ask: DualAsk,
                     onStage: @escaping @Sendable (DualStage) async -> Void,
-                    onDraft: @escaping @Sendable (String) async -> Void) async throws -> (answer: String, verdict: String) {
+                    onDraft: @escaping @Sendable (String) async -> Void) async throws -> (answer: String, verdict: String, winner: Backend) {
         await onStage(.answering)
         let p = answerPrompt(question: question, history: history)
         async let c = attempt(ask, .claude, p), x = attempt(ask, .codex, p)
@@ -118,8 +118,8 @@ enum DualJudge {
         let claude: String, codex: String
         switch (rc, rx) {
         case let (.success(a), .success(b)): claude = a; codex = b
-        case let (.success(a), .failure): return (a, "Codex couldn't answer — showing Claude's.")
-        case let (.failure, .success(b)): return (b, "Claude couldn't answer — showing Codex's.")
+        case let (.success(a), .failure): return (a, "Codex couldn't answer — showing Claude's.", .claude)
+        case let (.failure, .success(b)): return (b, "Claude couldn't answer — showing Codex's.", .codex)
         case let (.failure(e), .failure): throw e
         }
 
@@ -144,7 +144,7 @@ enum DualJudge {
             try Task.checkCancellation()
             let own = w == .claude ? claude : codex
             await onDraft(own) // replaces any partial text
-            return (own, "\(w.displayName) couldn't merge — showing \(w.displayName)'s answer.")
+            return (own, "\(w.displayName) couldn't merge — showing \(w.displayName)'s answer.", w)
         }
         cont.finish(); await pump.value
         try Task.checkCancellation()
@@ -156,7 +156,7 @@ enum DualJudge {
             if let fix = parseReview(r) { final = fix; revised = true; await onDraft(fix) }
         }
         try Task.checkCancellation()
-        return (final, verdictLine(votes: votes, writer: w, revised: revised))
+        return (final, verdictLine(votes: votes, writer: w, revised: revised), w)
     }
 
     private static func attempt(_ ask: DualAsk, _ b: Backend, _ p: String) async -> Result<String, Error> {

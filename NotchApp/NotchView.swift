@@ -161,7 +161,7 @@ struct NotchView: View {
                         Text(e).font(.system(size: 15)).foregroundStyle(Ink.emberDeep)
                     } else if !a.answer.isEmpty {
                         AnswerBody(text: a.answer)
-                        if !a.busy, let v = a.turns.last?.verdict { DualVerdictLine(verdict: v) }
+                        if !a.busy, let v = a.turns.last?.verdict { DualVerdictLine(verdict: v, winner: a.turns.last?.winner) }
                         if !a.recalled.isEmpty && !a.busy {
                             Text("from your vault · " + a.recalled.prefix(3).joined(separator: " · "))
                                 .font(.system(size: 11)).foregroundStyle(Ink.dim).lineLimit(2)
