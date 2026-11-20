@@ -55,7 +55,8 @@ TXT
 
 hdiutil create -volname "Dex Notch $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DIST/dex-notch-$VERSION.dmg" >/dev/null
 ditto -c -k --keepParent "$APP" "$DIST/dex-notch-$VERSION.zip"
-hdiutil verify "$DIST/dex-notch-$VERSION.dmg" >/dev/null
+# hdiutil can still hold the fresh image for a moment on CI ("Resource temporarily unavailable"), so retry before calling it broken.
+for i in 1 2 3 4 5; do hdiutil verify "$DIST/dex-notch-$VERSION.dmg" >/dev/null && break; [ "$i" = 5 ] && { echo "DMG failed verification" >&2; exit 1; }; sleep 5; done
 
 # Signing the update (appcast.xml) and the checksums live in scripts/sign-update.sh, so CI can give the Sparkle private key to that step alone.
 # CI sets SKIP_UPDATE_SIGNING=1 here and runs it as a separate step; everywhere else it just follows.
