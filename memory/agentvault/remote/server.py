@@ -1,5 +1,5 @@
 """HTTP front for the remote connector: OAuth endpoints + MCP over streamable HTTP (plain JSON responses). Stdlib only."""
-import hmac, html, ipaddress, json, time
+import hmac, html, ipaddress, json, sys, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -8,6 +8,18 @@ from .oauth import OAuthError, OAuthStore
 from .tools import REMEMBER, REMIND, remember, remind, retire_reminders
 
 MAX_BODY = 1024 * 1024
+
+
+def header_ok(extra) -> bool:
+    """False if any header name or value could split the response (CR, LF or NUL). Python's http.server writes them raw."""
+    return not any(c in str(x) for k, v in (extra or {}).items() for x in (k, v) for c in "\r\n\0")
+
+
+class SafeHeaders:
+    """Mixin for a request handler: a header carrying CR, LF or NUL is refused at the last step, whatever put it there."""
+    def send_header(self, k, v):
+        if not header_ok({k: v}): raise ValueError("header injection refused")
+        super().send_header(k, v)
 MAX_FAILS, LOCK_SECONDS, MAX_TRACKED = 5, 600, 10_000
 
 def client_key(ip: str) -> str:
@@ -29,7 +41,7 @@ def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str
         if name == "remember": return remember(vault, args)
         if name == "remind": return remind(vault, args)
 
-    class H(BaseHTTPRequestHandler):
+    class H(SafeHeaders, BaseHTTPRequestHandler):
         server_version = "agentvault"
         def log_message(self, *a): pass  # never log URLs: they carry codes
 
@@ -37,6 +49,7 @@ def make_server(vault: Path, store: OAuthStore, passphrase: str, public_url: str
         def send(self, status, body=b"", ctype="application/json", extra=None):
             if isinstance(body, (dict, list)): body = json.dumps(body).encode()
             elif isinstance(body, str): body = body.encode()
+            if not header_ok(extra): print("refused a response header with CR/LF/NUL", file=sys.stderr, flush=True); status, body, ctype, extra = 500, b'{"error":"server_error"}', "application/json", None
             self.send_response(status)
             self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")

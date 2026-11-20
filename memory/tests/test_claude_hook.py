@@ -1,4 +1,4 @@
-import json, subprocess, sys, tempfile, unittest
+import json, os, stat, subprocess, sys, tempfile, unittest
 from pathlib import Path
 MEM = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MEM))
@@ -16,6 +16,12 @@ class HookInstall(unittest.TestCase):
         claude_hook.run("add", self.f)
         self.assertEqual(len(self.ours()), 1)
         self.assertIn("hooks/session_start.py", self.ours()[0]["hooks"][0]["command"])
+
+    def test_file_mode_is_kept_and_a_new_file_is_private(self):
+        claude_hook.run("add", self.f); self.assertEqual(stat.S_IMODE(self.f.stat().st_mode), 0o600)
+        for m in (0o600, 0o640):
+            self.f.chmod(m); claude_hook.run("remove", self.f); self.assertEqual(stat.S_IMODE(self.f.stat().st_mode), m)
+            claude_hook.run("add", self.f)
 
     def test_merges_keeps_everything_else_and_backs_up(self):
         self.f.parent.mkdir(parents=True)

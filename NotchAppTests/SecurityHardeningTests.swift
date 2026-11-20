@@ -29,6 +29,7 @@ final class ToolScopeTests: XCTestCase {
         let allowed = list(a, after: "--allowedTools")
         for t in ["Read", "Edit"] { XCTAssertTrue(allowed.contains("\(t)(//Users/me/Desktop/**)"), t); XCTAssertTrue(allowed.contains("\(t)(/\(scratch)/**)"), t) }
         XCTAssertFalse(allowed.contains("Read")); XCTAssertFalse(allowed.contains("Edit")); XCTAssertFalse(allowed.contains("Write"))
+        XCTAssertFalse(allowed.contains("WebFetch")); XCTAssertFalse(allowed.contains("WebSearch"))      // nothing outside the sandbox can carry out what a shell read
     }
     func testYourOtherSettingsAndMCPToolsAreNotReachable() {
         for work in [false, true] {
@@ -52,6 +53,10 @@ final class ToolScopeTests: XCTestCase {
         let s = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(a[a.firstIndex(of: "--settings")! + 1].utf8)) as? [String: Any])
         let deny = (((s["sandbox"] as? [String: Any])?["filesystem"]) as? [String: Any])?["denyRead"] as? [String]
         XCTAssertTrue(deny?.contains("~/.ssh") ?? false)
+        for p in ["~/.npmrc", "~/.git-credentials", "~/.docker", "~/.kube", "~/.zsh_history", "~/.bash_history", "~/Library/Messages", "~/Library/Mail", "~/Library/Cookies", "~/Library/Safari",
+                  "~/Library/Application Support/Google/Chrome", "~/Library/Application Support/BraveSoftware", "~/.config/gh", "~/.pypirc", "~/.cargo/credentials", "~/.cargo/credentials.toml"] {
+            XCTAssertTrue(deny?.contains(p) ?? false, p)
+        }
     }
     func testCodexPromptsAreAfterDoubleDashEvenWhenTheyLookLikeFlags() {
         for work in [false, true] {
@@ -79,6 +84,22 @@ final class RunSpaceTests: XCTestCase {
         try "keep".write(to: d.appendingPathComponent("notes.txt"), atomically: true, encoding: .utf8)
         XCTAssertEqual(Set(RunSpace.scrub(d)), [".claude", ".mcp.json", "CLAUDE.md", "AGENTS.md"])
         XCTAssertEqual(try fm.contentsOfDirectory(atPath: d.path), ["notes.txt"])
+        XCTAssertTrue(RunSpace.scrub(d).isEmpty)
+    }
+    func testScrubRemovesEverySymlinkAndNestedPlantedFilesWithoutFollowingThem() throws {
+        let d = try tmp(), outside = try tmp(), fm = FileManager.default
+        try "secret".write(to: outside.appendingPathComponent("target.txt"), atomically: true, encoding: .utf8)
+        try fm.createDirectory(at: d.appendingPathComponent("a/b/.claude"), withIntermediateDirectories: true)
+        try "{}".write(to: d.appendingPathComponent("a/b/.claude/settings.json"), atomically: true, encoding: .utf8)
+        try "obey".write(to: d.appendingPathComponent("a/CLAUDE.md"), atomically: true, encoding: .utf8)
+        try "obey".write(to: d.appendingPathComponent("a/b/AGENTS.md"), atomically: true, encoding: .utf8)
+        try "keep".write(to: d.appendingPathComponent("a/b/notes.txt"), atomically: true, encoding: .utf8)
+        try fm.createSymbolicLink(at: d.appendingPathComponent("a/link.txt"), withDestinationURL: outside.appendingPathComponent("target.txt"))
+        try fm.createSymbolicLink(at: d.appendingPathComponent("dirlink"), withDestinationURL: outside)       // a link to a folder: removed, not entered
+        try fm.createSymbolicLink(at: d.appendingPathComponent("a/b/dangling"), withDestinationURL: URL(fileURLWithPath: "/nonexistent"))
+        XCTAssertEqual(Set(RunSpace.scrub(d)), ["a/b/.claude", "a/CLAUDE.md", "a/b/AGENTS.md", "a/link.txt", "dirlink", "a/b/dangling"])
+        XCTAssertEqual(try fm.contentsOfDirectory(atPath: d.appendingPathComponent("a/b").path), ["notes.txt"])
+        XCTAssertEqual(try fm.contentsOfDirectory(atPath: outside.path), ["target.txt"])       // nothing outside was touched
         XCTAssertTrue(RunSpace.scrub(d).isEmpty)
     }
     func testEveryLockedRunGetsANewEmptyFolder() throws {

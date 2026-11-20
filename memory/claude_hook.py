@@ -2,7 +2,7 @@
 """Add or remove the start-up digest as a Claude Code SessionStart hook in ~/.claude/settings.json.
 Merges into what is there (never overwrites), is idempotent, and backs the file up before changing it.
   python3 claude_hook.py add [--settings FILE] [--vault DIR]      python3 claude_hook.py remove [--settings FILE]"""
-import argparse, json, shlex, shutil, sys
+import argparse, json, os, shlex, shutil, stat, sys
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parent / "hooks" / "session_start.py"
@@ -47,10 +47,14 @@ def run(action, path, vault=None):
     try: changed = add(cfg, command(vault)) if action == "add" else remove(cfg)
     except (AttributeError, TypeError): raise ValueError(f"{path} has an unexpected 'hooks' shape; left alone")
     if not changed: return f"{path}: nothing to change"
+    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o600     # keep the file's own permissions; a new one is private
     if path.exists():
         shutil.copy2(path, path.with_name(path.name + ".dex-backup"))
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp"); tmp.write_text(json.dumps(cfg, indent=2) + "\n"); tmp.replace(path)
+    tmp = path.with_name(path.name + ".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600); os.fchmod(fd, mode)
+    with os.fdopen(fd, "w") as f: f.write(json.dumps(cfg, indent=2) + "\n")
+    tmp.replace(path)
     return f"{path}: start-up digest hook {'installed' if action == 'add' else 'removed'}"
 
 if __name__ == "__main__":

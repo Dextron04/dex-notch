@@ -5,7 +5,7 @@ from http.cookies import SimpleCookie
 from typing import Callable, Optional
 from urllib.parse import parse_qs, urlencode, urlparse
 from .. import mcp_server
-from ..remote.server import MAX_BODY, client_key
+from ..remote.server import MAX_BODY, SafeHeaders, client_key, header_ok
 from ..remote.tools import REMEMBER, REMIND, retire_reminders
 from ..index import session_files
 from .. import seal
@@ -66,7 +66,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
     link_ip, poll_ip = Limiter(20, 3600, now), Limiter(240, 60, now)   # Mac link codes started per hour, and polls for the answer per minute, per address
     exporting, export_slots = set(), threading.BoundedSemaphore(2)  # a zip of a whole vault is heavy: one per user, two at a time
 
-    class H(BaseHTTPRequestHandler):
+    class H(SafeHeaders, BaseHTTPRequestHandler):
         server_version = "agentvault-hosted"
         timeout = 60   # a client that opens a connection and says nothing is dropped, not held for ever
         def log_message(self, *a): pass  # never log URLs: they carry codes and sign-in tokens
@@ -76,6 +76,7 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
         def send(self, status, body=b"", ctype="application/json", extra=None):
             if isinstance(body, (dict, list)): body = json.dumps(body).encode()
             elif isinstance(body, str): body = body.encode()
+            if not header_ok(extra): print("refused a response header with CR/LF/NUL", file=sys.stderr, flush=True); status, body, ctype, extra = 500, b'{"error":"server_error"}', "application/json", None
             self.send_response(status)
             self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(body)))
             if "Cache-Control" not in (extra or {}): self.send_header("Cache-Control", "no-store")
@@ -168,8 +169,14 @@ def make_server(store: Store, auth: Auth, public_url: str, send_mail: Callable[[
             if f.get("link"): return "/link?" + urlencode({"code": link.normalize(f["link"])}) if link.peek(store, f["link"], now()) else None
             return "/account"
         def next_path(self, f):
+            """The page to go to after setup, rebuilt from what the client sent (never copied): an authorize request that is still valid, a link code that is still open, or /account."""
             n = f.get("next", "")
-            return n if n == "/account" or n.startswith(("/link?", "/authorize?")) else "/account"
+            if not isinstance(n, str) or len(n) > 4096: return "/account"
+            kind, _, qs = n.partition("?")
+            fields = {k: v[0] for k, v in parse_qs(qs).items()}
+            if kind == "/authorize": return self.next_for(fields) or "/account"
+            if kind == "/link": return self.next_for({"link": fields.get("code", "")}) or "/account"
+            return "/account"
         def static(self, rel):
             p = (ui.STATIC / rel).resolve()
             if not p.is_relative_to(ui.STATIC) or not p.is_file() or p.suffix not in STATIC_TYPES: return self.send(404, {"error": "not_found"})

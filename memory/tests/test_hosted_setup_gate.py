@@ -116,4 +116,32 @@ class SetupGateTests(unittest.TestCase):
         self.assertEqual(self.form("/login/verify", {"t": tb})[0], 400); self.assertIsNone(self.store.by_email("b@example.com"))        # at verify: the beta filled meanwhile
         self.assertIn("full", self.form("/login", {"email": "b@example.com"})[2])
 
+class HeaderInjectionTests(SetupGateTests):
+    def raw(self, target):
+        import socket
+        so = socket.create_connection(self.base[7:].split(":")[0:1] + [self.srv.server_address[1]]); so.sendall(("GET %s HTTP/1.1\r\nHost: x\r\nCookie: %s\r\nConnection: close\r\n\r\n" % (target, self.ck["Cookie"])).encode())
+        out = b""
+        while (c := so.recv(65536)): out += c
+        so.close(); return out.split(b"\r\n\r\n")[0].decode().split("\r\n")
+    def test_setup_next_cannot_inject_a_header_or_a_cookie(self):
+        self.ck = self.session()
+        evil = "/link?%0d%0aSet-Cookie:%20av_session%3Dattacker%3B%20Path%3D/"
+        for nxt in (evil, "/authorize?%0d%0aX-Injected:%201", "/account%0d%0aX-Injected:%201", "/link?code=%0d%0aX-Injected:%201"):
+            lines = self.raw("/account/setup?next=" + nxt); self.assertFalse([l for l in lines if l.lower().startswith(("x-injected", "set-cookie"))], (nxt, lines))
+        # locked account: setup redirects to the rebuilt next, still no extra header
+        pk, prf = Passkey(), w.b64u(secrets.token_bytes(32)); self.enroll(self.ck, pk, prf)
+        lines = self.raw("/account/setup?next=" + evil)
+        self.assertTrue(lines[0].split()[1] == "302"); self.assertIn("Location: /account", lines)
+        self.assertFalse([l for l in lines if l.lower().startswith(("x-injected", "set-cookie"))], lines)
+    def test_next_path_is_rebuilt_not_copied(self):
+        self.ck = self.session(); code = self.link_code()
+        self.assertEqual(self.sent_to_setup(*self.get("/link?code=" + code, self.ck)[:2]), "/link?code=" + code)
+        st, _, page = self.get("/account/setup?next=/link?code=" + code, self.ck); self.assertIn("/link?code=" + code, page)
+        st, _, page = self.get("/account/setup?next=/link?code=bogus", self.ck); self.assertNotIn("bogus", page)
+    def test_send_refuses_cr_lf_nul_in_any_header(self):
+        from agentvault.remote.server import header_ok
+        for bad in ("a\r\nX: 1", "a\nb", "a\0b"):
+            self.assertFalse(header_ok({"Location": bad})); self.assertFalse(header_ok({bad: "v"}))
+        self.assertTrue(header_ok({"Location": "/ok?x=1"}))
+
 if __name__ == "__main__": unittest.main()

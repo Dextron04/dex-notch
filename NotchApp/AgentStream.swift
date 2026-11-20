@@ -128,7 +128,9 @@ enum AgentStream {
     static var defaultScratch: String { NSHomeDirectory() + "/Library/Application Support/NotchApp/scratch" }
 
     /// Places a prompt-injected model must never read, whatever else is allowed. Claude Code path rules: `~/` is the home folder.
-    static let secretPaths = ["~/.ssh", "~/.aws", "~/.config", "~/.gnupg", "~/Library/Keychains", "~/.netrc", "~/.claude.json", "~/.claude/.credentials.json", "~/.codex/auth.json"]
+    static let secretPaths = ["~/.ssh", "~/.aws", "~/.config", "~/.gnupg", "~/Library/Keychains", "~/.netrc", "~/.claude.json", "~/.claude/.credentials.json", "~/.codex/auth.json",
+        "~/.npmrc", "~/.git-credentials", "~/.docker", "~/.kube", "~/.zsh_history", "~/.bash_history", "~/.pypirc", "~/.config/gh", "~/.cargo/credentials", "~/.cargo/credentials.toml",
+        "~/Library/Messages", "~/Library/Mail", "~/Library/Cookies", "~/Library/Safari", "~/Library/Application Support/Google/Chrome", "~/Library/Application Support/BraveSoftware"]
 
     /// `Read(~/.ssh)` and `Read(~/.ssh/**)` for every secret place (the first covers a single file, the second a folder).
     static var secretDenyRules: [String] { secretPaths.flatMap { ["Read(\($0))", "Read(\($0)/**)"] } }
@@ -155,7 +157,7 @@ enum AgentStream {
         if let mcpConfig { a += ["--mcp-config", mcpConfig] }
         // Ask: look things up only, reading only the scratch folder. Work (`+`): may also edit and run commands (inside the sandbox above), in the scratch and chosen folders.
         let roots = [scratch] + (work ? folder.map { [$0] } ?? [] : [])
-        a += ["--allowedTools"] + roots.map { pathRule("Read", $0) } + ["WebSearch", "WebFetch"] + (mcpConfig == nil ? [] : ["mcp__agentvault"])
+        a += ["--allowedTools"] + roots.map { pathRule("Read", $0) } + (work ? [] : ["WebSearch", "WebFetch"]) + (mcpConfig == nil ? [] : ["mcp__agentvault"])
         if work { a += roots.map { pathRule("Edit", $0) } + ["Bash", "--permission-mode", "acceptEdits", "--settings", claudeSandbox(folder: folder)] }
         a += ["--disallowedTools"] + secretDenyRules + (work ? [] : ["Bash", "Edit", "Write", "NotebookEdit"])
         return a + ["--", prompt] // `--`: variadic flags above must not swallow the prompt, and a leading "-" must not parse as an option
@@ -304,15 +306,24 @@ enum RunSpace {
     /// Files a model could plant in the scratch folder to change how the next run behaves (settings, MCP servers, instructions).
     static let plantable = [".claude", ".mcp.json", "CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", ".codex"]
 
-    /// Wipes whatever a previous run could have left to steer this one. Returns what it removed.
+    /// Wipes whatever a previous run could have left to steer this one: the files above at any depth, and every symlink (a link out of the folder could
+    /// make a later read or edit land somewhere else). Walks without following links. Returns what it removed, relative to `dir`.
     @discardableResult
     static func scrub(_ dir: URL) -> [String] {
-        plantable.filter { name in
-            let path = dir.appendingPathComponent(name).path
-            // attributesOfItem sees a dangling symlink too; fileExists would not
-            guard (try? FileManager.default.attributesOfItem(atPath: path)) != nil else { return false }
-            return (try? FileManager.default.removeItem(atPath: path)) != nil
+        let fm = FileManager.default
+        var removed: [String] = []
+        func walk(_ url: URL, _ rel: String) {
+            for name in (try? fm.contentsOfDirectory(atPath: url.path)) ?? [] {
+                let child = url.appendingPathComponent(name), r = rel.isEmpty ? name : rel + "/" + name
+                // attributesOfItem is lstat: it sees a link itself, and a dangling one
+                guard let type = (try? fm.attributesOfItem(atPath: child.path))?[.type] as? FileAttributeType else { continue }
+                if type == .typeSymbolicLink || plantable.contains(name) {
+                    if (try? fm.removeItem(atPath: child.path)) != nil { removed.append(r) }
+                } else if type == .typeDirectory { walk(child, r) }
+            }
         }
+        walk(dir, "")
+        return removed
     }
 
     /// A new empty working folder for one locked (tool-free) run; the caller deletes it afterwards.
