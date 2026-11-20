@@ -18,7 +18,7 @@ final class Assistant {
     private(set) var detected = false            // false until the first look for them has finished
 
     /// The models on the dial: installed CLIs, plus Gemma when configured.
-    var choices: [Backend] { AgentStream.order.filter { $0 == .gemma ? gemma != nil : cliFound.contains($0) } }
+    var choices: [Backend] { AgentStream.dialChoices(cliFound: cliFound, hasGemma: gemma != nil) }
     var needsSetup: Bool { detected && choices.isEmpty }
     var configProblem: String? { settingsProblem ?? gemmaProblem ?? workspaceProblems.first }
     /// What ⌘F cycles through: configured folders that exist.
@@ -111,14 +111,14 @@ final class Assistant {
             let first = !detected
             cliFound = found; detected = true
             let next = AgentStream.backendAfterDetection(current: backend, firstDetection: first, hasConversation: !turns.isEmpty, choices: choices, preferred: preferred)
-            if next != backend { backend = next; if next == .gemma { work = false } }
+            if next != backend { backend = next; if next == .gemma || next == .both { work = false } }
         }
     }
 
     /// If the selected model isn't available (uninstalled, or Gemma was removed from settings), move to one that is.
     private func settleBackend() {
         guard !choices.isEmpty, !choices.contains(backend), let d = AgentStream.defaultBackend(choices: choices, preferred: preferred) else { return }
-        backend = d; if d == .gemma { work = false }
+        backend = d; if d == .gemma || d == .both { work = false }
     }
 
     /// Menu: "Set up Gemma…" — opens settings.json in the default text editor (creating a blank one first).
@@ -159,13 +159,13 @@ final class Assistant {
 
     // MARK: model dial
 
-    func setBackend(_ b: Backend) { guard !busy, choices.contains(b) else { return }; backend = b; if b == .gemma { work = false; warmLocalModel() } }
+    func setBackend(_ b: Backend) { guard !busy, choices.contains(b) else { return }; backend = b; if b == .gemma || b == .both { work = false }; if b == .gemma { warmLocalModel() } }
     func cycleBackend(_ d: Int) { setBackend(AgentStream.cycle(backend, by: d, among: choices)) }
     /// ⌘1 ⌘2 ⌘3 pick the 1st, 2nd, 3rd model that is actually on the dial.
     func setBackendAt(_ i: Int) { if choices.indices.contains(i) { setBackend(choices[i]) } }
     /// ⌘F: sandbox → Desktop → Downloads → Documents → Projects → sandbox. Picking a folder implies edit rights.
-    func cycleFolder() { guard !busy, backend != .gemma else { return }; folder = AgentStream.nextFolder(folder, in: folderList); if folder != nil { work = true } }
-    func toggleWork() { guard !busy, backend != .gemma else { return }; work.toggle() }
+    func cycleFolder() { guard !busy, backend != .gemma, backend != .both else { return }; folder = AgentStream.nextFolder(folder, in: folderList); if folder != nil { work = true } }
+    func toggleWork() { guard !busy, backend != .gemma, backend != .both else { return }; work.toggle() }
 
     func toggle() { if isOpen && mode == .prompt { close() } else { open(.prompt) } }
     func toggleRecall() { if isOpen && mode == .recall { close() } else { open(.recall) } }
@@ -205,7 +205,7 @@ final class Assistant {
         let q = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !busy else { return }
         var r = AgentStream.route(q)
-        if r.prompt == q { r.backend = backend; r.work = work && backend != .gemma } // no prefix: use the dial
+        if r.prompt == q { r.backend = backend; r.work = work && backend != .gemma && backend != .both } // no prefix: use the dial
         else { backend = r.backend; work = r.work }                                  // pasted "@claude …" switches the dial
         guard !r.prompt.isEmpty else { draft = ""; return } // bare "@claude": just switch
         if r.work, let f = folder {                         // `+` run with a chosen folder: grant write access to exactly that one, re-checked now

@@ -1,9 +1,9 @@
 import Foundation
 
 enum Backend: String, Codable {
-    case gemma, claude, codex
+    case gemma, claude, codex, both
     /// What people (and VoiceOver) call it. `gemma` is the self-hosted Ollama connector, whatever model it serves.
-    var displayName: String { switch self { case .gemma: "Local model"; case .claude: "Claude"; case .codex: "Codex" } }
+    var displayName: String { switch self { case .gemma: "Local model"; case .claude: "Claude"; case .codex: "Codex"; case .both: "Both" } }
 }
 struct Route: Equatable { var backend: Backend; var work: Bool; var prompt: String; var folder: String? = nil; var locked = false } // folder: absolute path `+` runs may also write to
 struct Snippet: Equatable { var title: String; var source: String; var snippet: String }
@@ -21,7 +21,7 @@ enum AgentStream {
         guard let b = Backend(rawValue: work ? String(name.dropLast()) : name), b != .gemma || !work else {
             return Route(backend: .gemma, work: false, prompt: t)
         }
-        return Route(backend: b, work: work && b != .gemma, prompt: t.dropFirst(word.count).trimmingCharacters(in: .whitespacesAndNewlines))
+        return Route(backend: b, work: work && b != .gemma && b != .both, prompt: t.dropFirst(word.count).trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     /// A conversation survives closing the notch; it only starts fresh after this long away (or on ⌘N).
@@ -95,7 +95,11 @@ enum AgentStream {
     /// Refresh the loaded model shortly before its keep-alive would run out; never more often than that.
     static func shouldWarm(last: Date?, now: Date) -> Bool { last.map { now.timeIntervalSince($0) > 25 * 60 } ?? true }
 
-    static let order: [Backend] = [.gemma, .claude, .codex]
+    static let order: [Backend] = [.gemma, .claude, .codex, .both]
+    /// The dial: the local model if present, each CLI found, and Both only when both CLIs are there.
+    static func dialChoices(cliFound: Set<Backend>, hasGemma: Bool) -> [Backend] {
+        order.filter { switch $0 { case .gemma: hasGemma; case .both: cliFound.contains(.claude) && cliFound.contains(.codex); default: cliFound.contains($0) } }
+    }
     static func cycle(_ b: Backend, by d: Int) -> Backend {
         let n = order.count
         return order[((order.firstIndex(of: b) ?? 0) + d % n + n) % n]
@@ -106,7 +110,7 @@ enum AgentStream {
         let name = draft[draft.index(after: draft.startIndex)..<sp].lowercased()
         let edits = name.hasSuffix("+")
         guard let b = Backend(rawValue: edits ? String(name.dropLast()) : name) else { return nil }
-        return (b, edits && b != .gemma, String(draft[sp...].drop { $0.isWhitespace }))
+        return (b, edits && b != .gemma && b != .both, String(draft[sp...].drop { $0.isWhitespace }))
     }
 
     private static let brief = "You answer inside a tiny overlay beside the Mac's notch. Be brief and direct: plain sentences, no headings, no preamble."

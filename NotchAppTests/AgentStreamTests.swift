@@ -180,10 +180,11 @@ final class ModelDialTests: XCTestCase {
     func testCycleForwardWraps() {
         XCTAssertEqual(AgentStream.cycle(.gemma, by: 1), .claude)
         XCTAssertEqual(AgentStream.cycle(.claude, by: 1), .codex)
-        XCTAssertEqual(AgentStream.cycle(.codex, by: 1), .gemma)
+        XCTAssertEqual(AgentStream.cycle(.codex, by: 1), .both); XCTAssertEqual(AgentStream.cycle(.both, by: 1), .gemma)
     }
     func testCycleBackwardWraps() {
-        XCTAssertEqual(AgentStream.cycle(.gemma, by: -1), .codex)
+        XCTAssertEqual(AgentStream.cycle(.gemma, by: -1), .both)
+        XCTAssertEqual(AgentStream.cycle(.both, by: -1), .codex)
         XCTAssertEqual(AgentStream.cycle(.codex, by: -1), .claude)
     }
     func testTypedPrefixConvertsOnceTheSpaceArrives() {
@@ -438,4 +439,15 @@ final class SearchQueryTests: XCTestCase {
         let p = AgentStream.memoryPrompt([Snippet(title: "T", source: "Sessions/x/t.md", snippet: "s")]).lowercased()
         XCTAssertTrue(p.contains("clearly about the question")); XCTAssertTrue(p.contains("couldn't find"))
     }
+
+    func testBothPrefixIsReadOnly() { XCTAssertEqual(AgentStream.route("@both+ hi"), Route(backend: .both, work: false, prompt: "hi")) }
+    func testBothOnlyWithBothCLIs() {
+        XCTAssertEqual(AgentStream.dialChoices(cliFound: [.claude, .codex], hasGemma: false), [.claude, .codex, .both])
+        XCTAssertEqual(AgentStream.dialChoices(cliFound: [.claude], hasGemma: true), [.gemma, .claude])
+    }
+    func testDefaultNeverPicksBothUnlessPreferred() {
+        XCTAssertEqual(AgentStream.defaultBackend(choices: [.claude, .codex, .both], preferred: nil), .claude)
+        XCTAssertEqual(AgentStream.defaultBackend(choices: [.claude, .codex, .both], preferred: .both), .both)
+    }
+    func testConsumeBothPrefixNeverWork() { XCTAssertEqual(AgentStream.consumePrefix("@both+ x")?.work, false) }
 }

@@ -34,6 +34,11 @@ struct ModelMark: View {
             switch backend {
             case .claude: GridShape(path: Self.claude).fill(Self.claudeOrange).opacity(active ? 1 : 0.5)
             case .codex: GridShape(path: Self.codex).fill(Color.white, style: FillStyle(eoFill: true)).opacity(active ? 1 : 0.5)
+            case .both: // placeholder: Task 4 polishes
+                ZStack {
+                    GridShape(path: Self.claude).fill(Self.claudeOrange).frame(width: size * 0.7, height: size * 0.7).offset(x: -size * 0.15, y: -size * 0.15)
+                    GridShape(path: Self.codex).fill(Color.white, style: FillStyle(eoFill: true)).frame(width: size * 0.7, height: size * 0.7).offset(x: size * 0.15, y: size * 0.15)
+                }.opacity(active ? 1 : 0.5)
             case .gemma:
                 LocalMark().stroke(active ? Ink.ember : Ink.dim, style: StrokeStyle(lineWidth: size * 0.11, lineCap: .round, lineJoin: .round))
             }
