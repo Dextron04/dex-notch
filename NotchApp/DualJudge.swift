@@ -131,14 +131,14 @@ enum DualJudge {
         let p = answerPrompt(question: question, history: history)
         async let c = attempt(ask, .claude, p, false), x = attempt(ask, .codex, p, false)
         var (rc, rx) = await (c, x)
-        if case let .success(t) = rc, blank(t) { rc = .failure(Empty()) }
-        if case let .success(t) = rx, blank(t) { rx = .failure(Empty()) }
+        if case let .success(t) = rc, blank(t) { rc = .failure(Empty()); NSLog("DualJudge: claude answer run failed: %@", reason(Empty())) }
+        if case let .success(t) = rx, blank(t) { rx = .failure(Empty()); NSLog("DualJudge: codex answer run failed: %@", reason(Empty())) }
         try Task.checkCancellation()
         let claude: String, codex: String
         switch (rc, rx) {
         case let (.success(a), .success(b)): claude = a; codex = b
-        case let (.success(a), .failure): return (a, "Codex couldn't answer — showing Claude's.", .claude)
-        case let (.failure, .success(b)): return (b, "Claude couldn't answer — showing Codex's.", .codex)
+        case let (.success(a), .failure(e)): return (a, failureNote(.codex, e, "showing Claude's."), .claude)
+        case let (.failure(e), .success(b)): return (b, failureNote(.claude, e, "showing Codex's."), .codex)
         case let (.failure(e), .failure): throw e
         }
 
@@ -179,10 +179,24 @@ enum DualJudge {
         return (final, verdictLine(votes: votes, writer: w, revised: revised), w)
     }
 
-    private struct Empty: Error {}
+    private struct Empty: Error, LocalizedError { var errorDescription: String? { "it returned no text" } }
+
+    /// Why a run failed, in a few words for the note under the answer (and the log): the first line of the error, never the prompt or anything the model saw.
+    static func reason(_ e: Error) -> String {
+        if e is CancellationError { return "it was cancelled" }
+        let line = e.localizedDescription.split(whereSeparator: \.isNewline).first.map(String.init)?.trimmingCharacters(in: .whitespaces) ?? ""
+        return line.count > 90 ? String(line.prefix(90)) + "…" : line
+    }
+    static func failureNote(_ b: Backend, _ e: Error, _ tail: String) -> String {
+        let r = reason(e)
+        return "\(b.displayName) couldn't answer\(r.isEmpty ? "" : " (\(r))") — \(tail)"
+    }
     private static func blank(_ s: String) -> Bool { s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private static func attempt(_ ask: DualAsk, _ b: Backend, _ p: String, _ isInternal: Bool) async -> Result<String, Error> {
-        do { return .success(try await ask(b, p, isInternal) { _ in }) } catch { return .failure(error) }
+        do { return .success(try await ask(b, p, isInternal) { _ in }) } catch {
+            NSLog("DualJudge: %@ %@ run failed: %@", b.rawValue, isInternal ? "internal" : "answer", reason(error))
+            return .failure(error)
+        }
     }
     private final class Accumulator: @unchecked Sendable {
         private let l = NSLock(); private var s = ""

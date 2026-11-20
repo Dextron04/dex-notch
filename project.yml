@@ -25,7 +25,7 @@ targets:
   NotchAppTests:
     type: bundle.unit-test
     platform: macOS
-    sources: [NotchAppTests, NotchApp/Outlook.swift, NotchApp/Changelog.swift, NotchApp/Reminders.swift, NotchApp/VaultReader.swift, NotchApp/AgentStream.swift, NotchApp/ConversationStore.swift, NotchApp/Journal.swift, NotchApp/Settings.swift, NotchApp/Account.swift, NotchApp/ConnectionLogic.swift, NotchApp/RecorderLogic.swift, NotchApp/AgentFiles.swift, NotchApp/SVGPath.swift, NotchApp/OfficialMarks.swift, NotchApp/KeychainStore.swift, NotchApp/Addons.swift, NotchApp/Gmail.swift, NotchApp/MailReply.swift, NotchApp/ScreenMarks.swift, NotchApp/ScreenTool.swift, NotchApp/DualJudge.swift] # these have no UI deps, so tests compile it directly (no app host needed)
+    sources: [NotchAppTests, NotchApp/Outlook.swift, NotchApp/Changelog.swift, NotchApp/Reminders.swift, NotchApp/VaultReader.swift, NotchApp/AgentStream.swift, NotchApp/ConversationStore.swift, NotchApp/Journal.swift, NotchApp/Settings.swift, NotchApp/Account.swift, NotchApp/ConnectionLogic.swift, NotchApp/RecorderLogic.swift, NotchApp/AgentFiles.swift, NotchApp/SVGPath.swift, NotchApp/OfficialMarks.swift, NotchApp/KeychainStore.swift, NotchApp/Addons.swift, NotchApp/Gmail.swift, NotchApp/MailReply.swift, NotchApp/ScreenMarks.swift, NotchApp/ScreenTool.swift, NotchApp/DualJudge.swift, NotchApp/AgentRunner.swift] # these have no UI deps, so tests compile it directly (no app host needed)
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

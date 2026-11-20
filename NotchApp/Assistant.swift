@@ -469,7 +469,7 @@ final class Assistant {
                             conv: convID, model: exchange.backend == .both ? "both" : "gemma", to: Journal.defaultDir) // best effort: never block the notch on disk trouble
     }
 
-    struct Failure: Error { let msg: String; init(_ m: String) { msg = m } }
+    struct Failure: Error, LocalizedError { let msg: String; init(_ m: String) { msg = m }; var errorDescription: String? { msg } }
     private func friendly(_ e: Error) -> String {
         let n = e as NSError
         if n.domain == NSURLErrorDomain, n.code == NSURLErrorCannotConnectToHost || n.code == NSURLErrorNetworkConnectionLost {

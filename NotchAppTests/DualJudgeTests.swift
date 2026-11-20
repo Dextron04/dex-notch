@@ -1,7 +1,7 @@
 import XCTest
 
 final class DualJudgeTests: XCTestCase {
-    struct Boom: Error {}
+    struct Boom: Error, LocalizedError { var errorDescription: String? { "boom" } }
     enum Kind { case answer, judge, draft, review }
     static func kind(_ p: String) -> Kind {
         if p.contains("You are judging two answers") { return .judge }
@@ -93,7 +93,7 @@ final class DualJudgeTests: XCTestCase {
         let st = Stages()
         let r = try await go(Self.fake { b, k in b == .codex && k == .answer ? nil : Self.agree(b, k) }, st)
         XCTAssertEqual(r.answer, "claude answer")
-        XCTAssertEqual(r.verdict, "Codex couldn't answer — showing Claude's.")
+        XCTAssertEqual(r.verdict, "Codex couldn't answer (boom) — showing Claude's.")
         XCTAssertEqual(r.winner, .claude)
         XCTAssertEqual(st.v, [.answering])
     }
@@ -170,7 +170,16 @@ final class DualJudgeTests: XCTestCase {
         let r = try await go(Self.fake { b, k in b == .claude && k == .answer ? "  \n" : Self.agree(b, k) })
         XCTAssertEqual(r.answer, "codex answer")
         XCTAssertEqual(r.winner, .codex)
-        XCTAssertEqual(r.verdict, "Claude couldn't answer — showing Codex's.")
+        XCTAssertEqual(r.verdict, "Claude couldn't answer (it returned no text) — showing Codex's.")
+    }
+    func testFailureNoteNamesTheReasonButNeverMoreThanAShortFirstLine() {
+        struct E: Error, LocalizedError { var errorDescription: String? { "claude exited with code 1. Is it logged in?\nsecret second line" } }
+        XCTAssertEqual(DualJudge.failureNote(.claude, E(), "showing Codex's."), "Claude couldn't answer (claude exited with code 1. Is it logged in?) — showing Codex's.")
+        XCTAssertEqual(DualJudge.reason(CancellationError()), "it was cancelled")
+        XCTAssertLessThanOrEqual(DualJudge.reason(Long()).count, 91)
+        struct Long: Error, LocalizedError { var errorDescription: String? { String(repeating: "x", count: 500) } }
+        struct Blank: Error, LocalizedError { var errorDescription: String? { "" } }
+        XCTAssertEqual(DualJudge.failureNote(.codex, Blank(), "showing Claude's."), "Codex couldn't answer — showing Claude's.")
     }
     func testEmptyDraftFallsBack() async throws {
         let r = try await go(Self.fake { b, k in k == .draft ? " " : Self.agree(b, k) })
@@ -192,5 +201,26 @@ final class DualJudgeTests: XCTestCase {
         let ask: DualAsk = { b, p, _, _ in Self.agree(b, Self.kind(p))! } // never calls onText
         _ = try await go(ask, st)
         XCTAssertEqual(st.drafts.first, "the draft")
+    }
+}
+
+/// Both runs two CLIs at once: one run's output must end when that run ends, not when the other one writes or exits.
+final class RunnerLinesTests: XCTestCase {
+    func testLinesSplitAndFlushTheTail() async {
+        let p = Pipe()
+        p.fileHandleForWriting.write(Data("one\ntwo\nthr".utf8)); p.fileHandleForWriting.write(Data("ee".utf8)); try? p.fileHandleForWriting.close()
+        var got: [String] = []
+        for await l in AgentRunner.lines(of: p.fileHandleForReading) { got.append(l) }
+        XCTAssertEqual(got, ["one", "two", "three"])
+    }
+    func testOneStreamEndsWhileAnotherIsStillWaiting() async {
+        let a = Pipe(), b = Pipe()      // b never gets data or EOF during the test: a pending read, like Codex thinking
+        let held = Task { for await _ in AgentRunner.lines(of: b.fileHandleForReading) {} }
+        try? await Task.sleep(for: .milliseconds(100))
+        a.fileHandleForWriting.write(Data("x\n".utf8)); try? a.fileHandleForWriting.close()
+        let done = expectation(description: "a ended")
+        Task { for await _ in AgentRunner.lines(of: a.fileHandleForReading) {}; done.fulfill() }
+        await fulfillment(of: [done], timeout: 2)
+        held.cancel(); try? b.fileHandleForWriting.close()
     }
 }

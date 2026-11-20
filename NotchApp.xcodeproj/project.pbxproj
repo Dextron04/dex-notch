@@ -18,6 +18,7 @@
 		0C7BDE62527D048383248291 /* AgentStreamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93222A27B250E3C8A8AE083F /* AgentStreamTests.swift */; };
 		10FFCAB3A57071ED41149872 /* ScreenMarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE25660CF031DE1B2DE185CA /* ScreenMarks.swift */; };
 		11C732EA3D38A55B3B378D11 /* OfficialMarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72682E91183BD251F579ACB6 /* OfficialMarks.swift */; };
+		19F57BDD0E57F4185421BB37 /* AgentRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1487592A6A941D9CB95947 /* AgentRunner.swift */; };
 		1C26891F3606A3AEA83E86B1 /* RecallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B56D0B5E24A59E4A23F196 /* RecallView.swift */; };
 		2351AC6AFE2DD2648AC941C8 /* ConnectionLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4238EE4D607071C2DC49564E /* ConnectionLogic.swift */; };
 		23B64ECBB548D9A23A57FD34 /* AgentRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1487592A6A941D9CB95947 /* AgentRunner.swift */; };
@@ -396,6 +397,7 @@
 				DBEE7E9BC8319DCAC4FCFA1D /* AddonsTests.swift in Sources */,
 				7FCADEC44B5C5D8874704B14 /* AgentFiles.swift in Sources */,
 				7CCD7858AD952E891A97FD44 /* AgentFilesTests.swift in Sources */,
+				19F57BDD0E57F4185421BB37 /* AgentRunner.swift in Sources */,
 				5D77FCCB6F6B59832FB84838 /* AgentStream.swift in Sources */,
 				0C7BDE62527D048383248291 /* AgentStreamTests.swift in Sources */,
 				63D645C29800B22057DB59E2 /* Changelog.swift in Sources */,
