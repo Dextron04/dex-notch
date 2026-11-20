@@ -21,14 +21,14 @@ class H(BaseHTTPRequestHandler):
 HTTPServer(("127.0.0.1", port), H).serve_forever()
 """
 
+# no nohup: with no controlling terminal (sudo, launchd) macOS nohup dies with "can't detach from console" and the service never starts
 # stands in for launchctl: `kickstart -k <domain>/<label>` restarts the fake service, in the mode the new `current` asks for
 STUB_LAUNCHCTL = """#!/bin/bash
 echo "$@" >> "$DEX_TEST_DIR/launchctl.calls"
 [ "$1" = kickstart ] || exit 0
 [ -f "$DEX_TEST_DIR/service.pid" ] && kill "$(cat "$DEX_TEST_DIR/service.pid")" 2>/dev/null
 mode=ok; [ -f "$DEX_TEST_BASE/current/agentvault/MODE" ] && mode=$(cat "$DEX_TEST_BASE/current/agentvault/MODE")
-{ echo "PATH=$PATH"; command -v python3; } > "$DEX_TEST_DIR/service.err" 2>&1
-nohup python3 "$DEX_TEST_DIR/service.py" "$DEX_TEST_PORT" "$mode" >/dev/null 2>>"$DEX_TEST_DIR/service.err" </dev/null &
+python3 "$DEX_TEST_DIR/service.py" "$DEX_TEST_PORT" "$mode" >/dev/null 2>>"$DEX_TEST_DIR/service.err" </dev/null &
 echo $! > "$DEX_TEST_DIR/service.pid"
 sleep 0.4
 """
