@@ -6,6 +6,10 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## Unreleased
+
+- **Dual judgement: ask Claude and Codex together.** Press Tab to **Both** (or start with `@both`) when both CLIs are installed. Each model answers, each judges the other's answer, the preferred model writes a hybrid that keeps the best of both, and the other model reviews it. A stage track shows the progress and a verdict line says who won. It takes about 1-2 minutes and six CLI runs per question, and it is always read-only.
+
 ## v0.9.4: Tighter limits on what Claude can reach
 
 *20 November 2026*

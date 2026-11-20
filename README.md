@@ -133,6 +133,7 @@ Press `⌥⇧ Space` to see what you and your agents have been doing.
 | **Every AI is an island.** What you decided with Claude Code is invisible to Codex, Gemini and ChatGPT. | A recorder turns every session into a redacted markdown note in one Obsidian vault. Every agent can search it. |
 | **Setup that takes an afternoon.** | A DMG and one window. It finds your CLIs, tells you the install command for what's missing, and asks where edit runs may write. |
 | **Switching model means retyping `@names`.** | `⇥` or `⌘1/2/3`, and the notch names the model once, then clears. Typing `@claude ` still works and switches the model. |
+| **Two models, two answers, no tiebreak.** | Press `⇥` to **Both** (or start with `@both`) when Claude and Codex are both installed. Each answers; each judges the other; the preferred model drafts a hybrid with the best of both, and the other reviews it. About 1-2 minutes and six CLI runs per question, always read-only. |
 | **A local model that makes things up about your own work.** | Before each local-model answer the notch searches your vault, hands the model the best snippets, and names the notes it used. |
 | **"Can it run code?" without giving a model your machine.** | `+` turns on edit rights *and* a shell, inside an OS sandbox: no network, and writes only to a scratch folder plus the folders you chose. |
 | **Click away, lose the chat.** | The conversation survives closing the notch, quitting and restarting. It starts fresh after 30 idle minutes or on `⌘N`. |
