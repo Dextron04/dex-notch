@@ -1,5 +1,5 @@
 """Runs scripts/dex-deployer.sh against a temp base dir, a fake GitHub API and a fake service restarted by a stub `launchctl`."""
-import getpass, hashlib, io, json, os, shutil, socket, subprocess, sys, tarfile, tempfile, threading, unittest
+import getpass, hashlib, io, json, os, plistlib, re, shutil, socket, subprocess, sys, tarfile, tempfile, threading, unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -116,12 +116,12 @@ class DeployerTest(unittest.TestCase):
             if not p.is_symlink(): p.chmod(0o755 if p.is_dir() else 0o644)
         shutil.rmtree(self.dir, ignore_errors=True)
 
-    def write_conf(self, base=None, keep=None, suffix="dexhosted"):
+    def write_conf(self, base=None, keep=None, suffix="dexhosted", python=None):
         base = str(self.base) if base is None else base
         self.conf = self.dir / "t.conf"
         self.conf.write_text("\n".join([
             "name=test", "repo=o/r", "label=in.test.service", "domain=system", "base=" + base, "base_suffix=" + suffix,
-            "run_user=" + getpass.getuser(), "src_subdir=memory/agentvault", "test_dir=memory", "keep=%d" % (keep or self.keep),
+            "run_user=" + getpass.getuser(), "python=" + (python or sys.executable), "src_subdir=memory/agentvault", "test_dir=memory", "keep=%d" % (keep or self.keep),
             "health=GET http://127.0.0.1:%d/healthz 200" % self.port, "health=POST http://127.0.0.1:%d/mcp 401" % self.port,
             "health_timeout=3", "test_timeout=60"]) + "\n")
 
@@ -285,6 +285,76 @@ class DeployerTest(unittest.TestCase):
         self.publish(1, mode="bad"); r = self.run_deployer()
         self.assertEqual(r.returncode, 1); self.assertIn("no previous release", self.log())
 
+    # ---- the interpreter root runs must not be replaceable by a non-root user. The seam: DEX_TRUST_UID (owner to trust instead of 0) and
+    # DEX_TRUST_ANCHOR (where the walk up stops); both are ignored when the deployer runs as root.
+    def trusted_py(self):
+        root = self.dir / "trust"; (root / "bin").mkdir(parents=True)
+        py = root / "bin" / "python"; py.write_text('#!/bin/sh\nexec "%s" "$@"\n' % sys.executable)
+        for p in (root, root / "bin"): p.chmod(0o755)
+        py.chmod(0o755)
+        return root, py
+
+    def run_trusted(self, root, py, uid=None):
+        self.write_conf(python=str(py)); self.publish(1)
+        return self.run_deployer(env={"DEX_TRUST_UID": str(os.getuid() if uid is None else uid), "DEX_TRUST_ANCHOR": str(root)})
+
+    def assert_py_refused(self, r, why):
+        self.assertEqual(r.returncode, 2, r.stderr); self.assertIn("interpreter untrusted", r.stderr); self.assertIn(why, r.stderr)
+        self.assertIsNone(self.current()); self.assertEqual(self.kicks(), 0)
+
+    def test_trusted_interpreter_deploys(self):
+        root, py = self.trusted_py(); r = self.run_trusted(root, py)
+        self.assertEqual(r.returncode, 0, r.stderr + self.log()); self.assertEqual(self.version(), "v1")
+
+    def test_interpreter_owned_by_the_wrong_user_is_refused(self):
+        root, py = self.trusted_py()
+        self.assert_py_refused(self.run_trusted(root, py, uid=os.getuid() + 1), "is owned by uid")
+
+    def test_interpreter_in_a_writable_dir_is_refused(self):
+        root, py = self.trusted_py(); (root / "bin").chmod(0o775)
+        self.assert_py_refused(self.run_trusted(root, py), "writable")
+        (root / "bin").chmod(0o755); root.chmod(0o757)                      # any ancestor up to the anchor counts
+        self.assert_py_refused(self.run_trusted(root, py), "writable")
+
+    def test_writable_interpreter_file_is_refused(self):
+        root, py = self.trusted_py(); py.chmod(0o775)
+        self.assert_py_refused(self.run_trusted(root, py), "writable")
+
+    def test_interpreter_symlinks_are_refused(self):
+        root, py = self.trusted_py()
+        (root / "bin" / "python3").symlink_to(py)                           # a file symlink, even to a good target
+        self.assert_py_refused(self.run_trusted(root, root / "bin" / "python3"), "symlink")
+        (root / "linkdir").symlink_to(root / "bin")                         # a directory symlink on the path
+        self.assert_py_refused(self.run_trusted(root, root / "linkdir" / "python"), "symlink")
+        outside = self.dir / "outside-bin"; outside.mkdir(); (outside / "python").write_text("#!/bin/sh\n"); (outside / "python").chmod(0o755)
+        (root / "bin" / "py2").symlink_to(outside / "python")               # a symlink into a user-writable location
+        self.assert_py_refused(self.run_trusted(root, root / "bin" / "py2"), "symlink")
+
+    def test_interpreter_outside_the_trusted_tree_is_refused(self):
+        root, py = self.trusted_py(); other = self.dir / "other"; other.mkdir()
+        self.assert_py_refused(self.run_trusted(other, py), "outside")
+
+    def test_missing_interpreter_is_refused(self):
+        root, py = self.trusted_py(); py.unlink()
+        self.assert_py_refused(self.run_trusted(root, py), "not an executable")
+
+    def test_no_user_writable_python_on_root_paths(self):
+        script = SCRIPT.read_text()
+        code = [l for l in script.splitlines() if not l.lstrip().startswith("#")]
+        self.assertEqual([l for l in code if re.search(r"(^|[\s(;|&`=])python3(\s|$)", l)], [], "bare python in the deployer")   # only "$PYTHON" may run
+        for f in (SCRIPT, INSTALLER, REPO_ROOT / "memory/launchd/in.dextron04.dex-deployer-hosted.plist.template",
+                  REPO_ROOT / "memory/launchd/in.dextron04.dex-deployer-personal.plist.template"):
+            for l in f.read_text().splitlines():
+                if not l.lstrip().startswith("#") and not l.lstrip().startswith("<!--") and "homebrew" in l.lower() and "case" not in l:
+                    self.fail("%s mentions Homebrew in code: %s" % (f.name, l))
+        self.assertNotIn("/opt/homebrew", (REPO_ROOT / "scripts/deploy-targets/hosted.conf").read_text().replace("Never point this at Homebrew", ""))
+
+    def test_deployer_plist_templates_have_no_homebrew_or_usr_local_in_path(self):
+        for name in ("hosted", "personal"):
+            t = (REPO_ROOT / ("memory/launchd/in.dextron04.dex-deployer-%s.plist.template" % name)).read_text()
+            path = plistlib.loads(t.replace("__PREFIX__", "/x").replace("__HOME__", "/h").encode())["EnvironmentVariables"]["PATH"]
+            self.assertEqual(path, "/usr/bin:/bin:/usr/sbin:/sbin")
+
     # ---- a compromised service must not be able to aim root's rm/mv/ln outside the tree --------------------------------
     def _outside(self):
         out = self.dir / "outside"; (out / "releases-victim").mkdir(parents=True)
@@ -362,6 +432,40 @@ class InstallerMigrationTest(unittest.TestCase):
             self.assertEqual(len(list((new / "releases").iterdir())), 1)
             r = subprocess.run([BASH, str(INSTALLER), "--migrate-only", "/"], capture_output=True, text=True)
             self.assertNotEqual(r.returncode, 0)
+
+    def test_copy_refuses_a_tree_with_a_symlink_and_leaves_its_target_alone(self):
+        with tempfile.TemporaryDirectory() as d:
+            victim = Path(d) / "victim"; victim.write_text("keep")
+            old, new = Path(d) / "old-app", Path(d) / "dexhosted-deploy"
+            (old / "agentvault").mkdir(parents=True); (old / "agentvault" / "evil").symlink_to(victim); new.mkdir()
+            r = subprocess.run([BASH, str(INSTALLER), "--migrate-copy", str(old), str(new)], capture_output=True, text=True)
+            self.assertNotEqual(r.returncode, 0); self.assertIn("links", r.stderr)
+            self.assertEqual(victim.read_text(), "keep"); self.assertFalse((new / "current").exists())
+
+    def test_personal_files_refuse_planted_symlinks_and_leave_targets_alone(self):
+        for planted in ("base/deploy-paused", "base/connector-deploy.sh", "home/Library/LaunchAgents/in.dextron04.dex-deployer-personal.plist",
+                        "home/Library/LaunchAgents", "base/tmp", "base/backups"):
+            with tempfile.TemporaryDirectory() as d:
+                d = Path(d); victim = d / "victim"; victim.write_text("keep")
+                prefix = d / "prefix"; prefix.mkdir()
+                (prefix / "connector-deploy.sh").write_text("#!/bin/zsh\n"); (prefix / "personal.plist.template").write_text('<?xml version="1.0"?><plist version="1.0"><dict><key>H</key><string>__HOME__</string></dict></plist>')
+                (d / "base").mkdir(); (d / "home" / "Library" / "LaunchAgents").mkdir(parents=True)
+                link = d / planted
+                if link.exists(): link.rmdir()
+                link.symlink_to(victim)
+                r = subprocess.run([BASH, str(INSTALLER), "--personal-files", str(d / "base"), str(d / "home"), str(prefix), "1", "0"], capture_output=True, text=True)
+                self.assertNotEqual(r.returncode, 0, planted); self.assertIn("symlink", r.stderr, planted)
+                self.assertEqual(victim.read_text(), "keep", planted)
+
+    def test_personal_files_normal_run_and_never_as_root_marker(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d); prefix = d / "prefix"; prefix.mkdir()
+            (prefix / "connector-deploy.sh").write_text("#!/bin/zsh\n"); (prefix / "personal.plist.template").write_text('<?xml version="1.0"?><plist version="1.0"><dict><key>H</key><string>__HOME__</string></dict></plist>')
+            (d / "base").mkdir(); (d / "home").mkdir()
+            r = subprocess.run([BASH, str(INSTALLER), "--personal-files", str(d / "base"), str(d / "home"), str(prefix), "1", "0"], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertTrue((d / "base" / "deploy-paused").is_file()); self.assertTrue((d / "base" / "connector-deploy.sh").is_file())
+            self.assertIn(str(d / "home"), (d / "home/Library/LaunchAgents/in.dextron04.dex-deployer-personal.plist").read_text())
 
 
 if __name__ == "__main__":

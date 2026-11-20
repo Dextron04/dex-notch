@@ -65,7 +65,7 @@ sudo tee /Library/LaunchDaemons/in.dextron04.agentvault-hosted.plist >/dev/null 
 <key>WorkingDirectory</key><string>/var/dexhosted/app</string>
 <key>EnvironmentVariables</key><dict><key>PYTHONDONTWRITEBYTECODE</key><string>1</string></dict>
 <key>ProgramArguments</key><array>
-<string>/opt/homebrew/bin/python3</string><string>-m</string><string>agentvault.hosted</string><string>serve</string>
+<string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3.14</string><string>-m</string><string>agentvault.hosted</string><string>serve</string>
 <string>--root</string><string>/var/dexhosted/data</string>
 <string>--public-url</string><string>https://vault.dextron04.in</string>
 <string>--port</string><string>8766</string>
@@ -118,7 +118,7 @@ sudo tee /Library/LaunchDaemons/in.dextron04.agentvault-hosted-backup.plist >/de
 <key>UserName</key><string>_dexhosted</string><key>GroupName</key><string>_dexhosted</string>
 <key>ProgramArguments</key><array><string>/bin/bash</string><string>/var/dexhosted/hosted-backup.sh</string></array>
 <key>EnvironmentVariables</key><dict>
-<key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin</string>
+<key>PATH</key><string>/usr/bin:/bin</string>
 <key>HOME</key><string>/var/dexhosted</string>
 <key>HOSTED_ROOT</key><string>/var/dexhosted/data</string>
 <key>HOSTED_BACKUPS</key><string>/var/dexhosted/backups</string>
@@ -154,7 +154,7 @@ Then **rotate the Resend API key** (it sat in a file `mac-agent` could read), pu
 | Deploy code | `rsync -a --delete --exclude __pycache__ agentvault tests mac-agent:/tmp/dex-deploy/` then `ssh -t mac-agent 'sudo rsync -a --delete /tmp/dex-deploy/ /var/dexhosted/app/ && sudo launchctl kickstart -k system/in.dextron04.agentvault-hosted'` (asks for the sudo password on purpose) |
 | Restart | `sudo launchctl kickstart -k system/in.dextron04.agentvault-hosted` |
 | Logs | `sudo tail -f /var/dexhosted/logs/hosted.log` |
-| Stats, invites, grant | `sudo -u _dexhosted env PYTHONPATH=/var/dexhosted/app /opt/homebrew/bin/python3 -m agentvault.hosted stats --root /var/dexhosted/data` (same for `invite`, `invites`, `grant`) |
+| Stats, invites, grant | `sudo -u _dexhosted env PYTHONPATH=/var/dexhosted/app /Library/Frameworks/Python.framework/Versions/3.14/bin/python3.14 -m agentvault.hosted stats --root /var/dexhosted/data` (same for `invite`, `invites`, `grant`) |
 | See the waitlist | `sudo -u _dexhosted sqlite3 -header -column /var/dexhosted/data/hosted.db "select email,note,datetime(created,'unixepoch') joined,invited_at is not null invited from waitlist order by created"` |
 | Restore a backup | stop the daemon, then `scripts/hosted-restore.sh ARCHIVE EMPTY_DIR` as `_dexhosted`, check it, move it into `/var/dexhosted/data`, start the daemon |
 
@@ -167,6 +167,6 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/in.dextron04.agentvault-
 Anything signed up since step 6 is only in `/var/dexhosted/data`; copy it back first (`sudo rsync -a /var/dexhosted/data/ ~/agentvault-hosted/data/`, then `sudo chown -R mac-agent ~/agentvault-hosted/data`).
 
 ## What this does not fix
-- **The Python interpreter is still writable by `mac-agent`** (`/opt/homebrew` belongs to it). Someone who has already taken over `mac-agent` could replace it, and the service would run their code as `_dexhosted` at its next restart. Closing that needs a root-owned Python (for example the python.org installer in `/Library/Frameworks`, then point the plist at it). Worth doing before opening past the first testers.
+- **The Python interpreter used to be writable by `mac-agent`** (`/opt/homebrew` belongs to it), and the root deployer also ran Homebrew tools. That path to root and to `_dexhosted` is closed by `scripts/install-deployer.sh`: the daemon, the nightly backup and the deployer now run only root-owned code (python.org framework in `/Library/Frameworks`, system tools in `/usr/bin`). The deployer refuses to run if that stops being true. Details and the upgrade procedure: [deploy-pipeline.md](deploy-pipeline.md#the-root-owned-python-runtime). If you set the daemon up by hand from steps 5 and 9 above, use that interpreter path in the plists.
 - Notes are still plain files, protected by FileVault and by who can read them, not encrypted per user.
 - Root, and anyone who can `sudo` on the mini, can still read everything.

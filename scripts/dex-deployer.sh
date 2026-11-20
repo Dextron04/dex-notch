@@ -5,7 +5,9 @@
 # bash 3.2 compatible (macOS /bin/bash). Config is parsed key by key, never sourced or eval'd. See docs/deploy-pipeline.md.
 set -euo pipefail
 umask 022
-PATH="/opt/homebrew/bin:/usr/local/bin:${PATH:-/usr/bin:/bin}"
+# Root runs this script, so nothing user-writable (Homebrew, /usr/local) may be on PATH: system dirs only, and the tools that matter by absolute path.
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+CURL=/usr/bin/curl TAR=/usr/bin/tar SUDO=/usr/bin/sudo
 
 die() { printf 'dex-deployer: %s\n' "$2" >&2; exit "$1"; }
 re() { [[ $1 =~ $2 ]]; }
@@ -14,7 +16,7 @@ re() { [[ $1 =~ $2 ]]; }
 CONF=${1:-}
 [ -n "$CONF" ] && [ -f "$CONF" ] || die 2 "usage: dex-deployer.sh TARGET.conf"
 NAME="" REPO="" BRANCH=master CI_JOB=test LABEL="" DOMAIN="" BASE="" BASE_SUFFIX="" RUN_USER="" RELEASE_OWNER=""
-SRC_SUBDIR="" TEST_DIR="" KEEP=5 HEALTH_TIMEOUT=30 TEST_TIMEOUT=900 NOTIFY=""
+PYTHON="" SRC_SUBDIR="" TEST_DIR="" KEEP=5 HEALTH_TIMEOUT=30 TEST_TIMEOUT=900 NOTIFY=""
 HEALTH=(); NHEALTH=0
 while IFS= read -r line || [ -n "$line" ]; do
   case $line in ''|'#'*) continue;; esac
@@ -25,7 +27,7 @@ while IFS= read -r line || [ -n "$line" ]; do
     name) NAME=$val;; repo) REPO=$val;; branch) BRANCH=$val;; ci_job) CI_JOB=$val;; label) LABEL=$val;; domain) DOMAIN=$val;;
     base) BASE=$val;; base_suffix) BASE_SUFFIX=$val;; run_user) RUN_USER=$val;; release_owner) RELEASE_OWNER=$val;;
     src_subdir) SRC_SUBDIR=$val;; test_dir) TEST_DIR=$val;; keep) KEEP=$val;; health_timeout) HEALTH_TIMEOUT=$val;;
-    test_timeout) TEST_TIMEOUT=$val;; notify) NOTIFY=$val;;
+    test_timeout) TEST_TIMEOUT=$val;; notify) NOTIFY=$val;; python) PYTHON=$val;;
     health) HEALTH[$NHEALTH]=$val; NHEALTH=$((NHEALTH+1));;
     *) die 2 "unknown config key: $key";;
   esac
@@ -42,6 +44,7 @@ re "$KEEP" '^[0-9]+$' && [ "$KEEP" -ge 2 ]      || die 2 "config: keep must be >
 re "$HEALTH_TIMEOUT" '^[0-9]+$'                 || die 2 "config: bad health_timeout"
 re "$TEST_TIMEOUT" '^[0-9]+$'                   || die 2 "config: bad test_timeout"
 [ -z "$RELEASE_OWNER" ] || re "$RELEASE_OWNER" '^[A-Za-z0-9._-]+(:[A-Za-z0-9._-]+)?$' || die 2 "config: bad release_owner"
+{ re "$PYTHON" '^/[A-Za-z0-9._/+-]+$' && [[ $PYTHON != *..* ]]; } || die 2 "config: python must be a plain absolute path to an interpreter"
 [ "$NHEALTH" -ge 1 ] || die 2 "config: at least one health= line"
 for p in "$SRC_SUBDIR" "$TEST_DIR"; do
   re "$p" '^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$' && [[ $p != *..* ]] || die 2 "config: bad source path '$p'"
@@ -84,6 +87,31 @@ tree_ok() {   # base, its working subdirs and every release dir; as root also ev
   done
   return 0
 }
+# The interpreter root runs for JSON parsing, and the tests run under as the service user, must not be replaceable by a non-root user:
+# no symlink anywhere on its path, and the file and every directory above it owned by root and not group/world-writable. As root this is
+# mandatory. Test seam (ignored as root, where the environment is launchd's): DEX_TRUST_UID is the owner to trust instead of 0 and
+# DEX_TRUST_ANCHOR the directory where the walk stops, so unit tests run as a normal user can exercise the check. A non-root run with
+# neither set (the personal target, whose Homebrew Python belongs to its own user) only needs an executable file.
+TRUST_UID=0 TRUST_ANCHOR=/ STRICT=0
+if [ "$ME" = 0 ]; then STRICT=1
+elif [ -n "${DEX_TRUST_UID:-}" ]; then STRICT=1 TRUST_UID=$DEX_TRUST_UID TRUST_ANCHOR=${DEX_TRUST_ANCHOR:-/}; fi
+BADPY=""
+py_ok() {
+  local p=$PYTHON o m
+  { [ -f "$PYTHON" ] && [ -x "$PYTHON" ]; } || { BADPY="$PYTHON is not an executable file"; return 1; }
+  [ "$STRICT" = 1 ] || return 0
+  [[ $PYTHON == "$TRUST_ANCHOR"/* || $TRUST_ANCHOR = / ]] || { BADPY="$PYTHON is outside $TRUST_ANCHOR"; return 1; }
+  while :; do
+    [ ! -L "$p" ] || { BADPY="$p is a symlink"; return 1; }
+    read -r o m <<< "$(fstat "$p")" || { BADPY="cannot stat $p"; return 1; }
+    [ "$o" = "$TRUST_UID" ] || { BADPY="$p is owned by uid $o, not $TRUST_UID"; return 1; }
+    [ $((8#$m & 8#22)) -eq 0 ] || { BADPY="$p is group- or world-writable ($m)"; return 1; }
+    { [ "$p" = "$TRUST_ANCHOR" ] || [ "$p" = / ]; } && return 0
+    p=${p%/*}; [ -n "$p" ] || p=/
+  done
+}
+py_ok || die 2 "refusing to run: python interpreter untrusted: $BADPY"
+
 if [ -L "$BASE/logs" ] || [ -L "$BASE/releases" ] || [ -L "$BASE/tmp" ]; then
   printf 'dex-deployer: refusing to run: a working directory under %s is a symlink\n' "$BASE" >&2; exit 2
 fi
@@ -91,7 +119,7 @@ for d in logs releases tmp; do [ -e "$BASE/$d" ] || mkdir "$BASE/$d"; done
 tree_ok || { printf 'dex-deployer: refusing to run: %s is a symlink, not a real directory, not owned by us, or group/world-writable\n' "$BADPATH" >&2; exit 2; }
 
 API=${DEX_API_URL:-https://api.github.com}; API=${API%/}
-LAUNCHCTL=${DEX_LAUNCHCTL:-launchctl}
+LAUNCHCTL=${DEX_LAUNCHCTL:-/bin/launchctl}
 UA="dex-deployer/1 (+https://github.com/$REPO)"
 LOG=$BASE/logs/deploy.log
 SEEN=$BASE/deploy-seen        # "<sha> <status> <etag>": last head looked at (deployed or rejected: never retried; delete the file to retry)
@@ -164,8 +192,8 @@ health_ok() {
   local spec method url want code
   for spec in "${HEALTH[@]}"; do
     read -r method url want <<< "$spec"
-    if [ "$method" = POST ]; then code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' "$url") || code=000
-    else code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$url") || code=000; fi
+    if [ "$method" = POST ]; then code=$("$CURL" -s -o /dev/null -m 5 -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' "$url") || code=000
+    else code=$("$CURL" -s -o /dev/null -m 5 -w '%{http_code}' "$url") || code=000; fi
     [ "$code" = "$want" ] || { HEALTH_FAIL="$method $url answered $code, wanted $want"; return 1; }
   done
 }
@@ -196,7 +224,7 @@ HAVE_LOCK=1
 say "started"
 if [ "$(id -u)" = 0 ]; then
   [ "$RUN_USER" != root ] || die 2 "refusing to run tests as root: set run_user to the service user"
-  RUNAS=(sudo -n -u "$RUN_USER")
+  RUNAS=("$SUDO" -n -u "$RUN_USER")
 else
   [ "$(id -un)" = "$RUN_USER" ] || die 2 "must run as root or as $RUN_USER"
   RUNAS=(env)
@@ -210,19 +238,19 @@ re "$seen_etag" '^(W/)?"[A-Za-z0-9._-]+"$' || seen_etag=""
 ETAG=""
 hdr=(-H 'Accept: application/vnd.github+json')
 if [ -n "$seen_etag" ]; then hdr[${#hdr[@]}]=-H; hdr[${#hdr[@]}]="If-None-Match: $seen_etag"; fi   # a 304 costs no rate limit
-code=$(curl -sS --max-time 20 -A "$UA" "${hdr[@]}" -D "$WORK/head.h" -o "$WORK/head.json" -w '%{http_code}' "$API/repos/$REPO/commits/$BRANCH" 2>>"$LOG") || code=000
+code=$("$CURL" -sS --max-time 20 -A "$UA" "${hdr[@]}" -D "$WORK/head.h" -o "$WORK/head.json" -w '%{http_code}' "$API/repos/$REPO/commits/$BRANCH" 2>>"$LOG") || code=000
 if [ "$code" = 304 ]; then say "head unchanged"; exit 0; fi
 if [ "$code" != 200 ]; then say "GitHub API answered $code for the head commit"; exit 0; fi       # offline or rate limited: try again later
-sha=$(python3 -I -c 'import json,sys; print(json.load(sys.stdin)["sha"])' < "$WORK/head.json" 2>/dev/null) || sha=""
+sha=$("$PYTHON" -I -c 'import json,sys; print(json.load(sys.stdin)["sha"])' < "$WORK/head.json" 2>/dev/null) || sha=""
 re "$sha" '^[0-9a-f]{40}$' || { log "head commit answer had no sha"; exit 0; }
 ETAG=$(grep -i '^etag:' "$WORK/head.h" | head -n1 | cut -d' ' -f2- | tr -d '\r\n') || ETAG=""
 re "$ETAG" '^(W/)?"[A-Za-z0-9._-]+"$' || ETAG=""
 s7=${sha:0:7}
 if [ "$sha" = "$seen_sha" ]; then say "$s7 already handled ($seen_status)"; exit 0; fi
 
-code=$(curl -sS --max-time 20 -A "$UA" -H 'Accept: application/vnd.github+json' -o "$WORK/ci.json" -w '%{http_code}' "$API/repos/$REPO/commits/$sha/check-runs?per_page=100" 2>>"$LOG") || code=000
+code=$("$CURL" -sS --max-time 20 -A "$UA" -H 'Accept: application/vnd.github+json' -o "$WORK/ci.json" -w '%{http_code}' "$API/repos/$REPO/commits/$sha/check-runs?per_page=100" 2>>"$LOG") || code=000
 if [ "$code" != 200 ]; then say "GitHub API answered $code for check runs"; exit 0; fi
-ci=$(python3 -I -c '
+ci=$("$PYTHON" -I -c '
 import json, sys
 runs = [c for c in json.load(sys.stdin).get("check_runs", []) if c.get("name") == sys.argv[1] and (c.get("app") or {}).get("slug") == "github-actions"]
 if not runs: print("none")
@@ -235,16 +263,16 @@ case $ci in pending|none) say "$s7 CI is $ci"; exit 0;; esac        # not finish
 if [ "$ci" != success ]; then log "skip $s7: CI is $ci"; record_seen "$sha" "skipped-ci-$ci"; exit 0; fi
 
 # ---- 3. tarball for that exact sha ------------------------------------------------------------------------------
-curl -fsSL --max-time 180 --max-filesize 200000000 -A "$UA" -o "$WORK/src.tgz" "$API/repos/$REPO/tarball/$sha" 2>>"$LOG" || { log "download failed for $s7"; exit 0; }
+"$CURL" -fsSL --max-time 180 --max-filesize 200000000 -A "$UA" -o "$WORK/src.tgz" "$API/repos/$REPO/tarball/$sha" 2>>"$LOG" || { log "download failed for $s7"; exit 0; }
 reject_tarball() { log "REJECTED $s7: $1"; record_seen "$sha" rejected-tarball; exit 1; }
-tar -tzf "$WORK/src.tgz" > "$WORK/list.txt" 2>>"$LOG" || reject_tarball "tarball unreadable"
-if tar -tvzf "$WORK/src.tgz" 2>/dev/null | grep -q '^[lh]'; then reject_tarball "tarball contains links"; fi
+"$TAR" -tzf "$WORK/src.tgz" > "$WORK/list.txt" 2>>"$LOG" || reject_tarball "tarball unreadable"
+if "$TAR" -tvzf "$WORK/src.tgz" 2>/dev/null | grep -q '^[lh]'; then reject_tarball "tarball contains links"; fi
 if grep -qE '(^/|(^|/)\.\.(/|$))' "$WORK/list.txt"; then reject_tarball "tarball has unsafe paths"; fi
 top=$(head -n1 "$WORK/list.txt"); top=${top%%/*}
 { re "$top" '^[A-Za-z0-9._-]+$' && [[ $top == *"$s7"* ]]; } || reject_tarball "top dir '$top' does not carry the sha"
 mkdir "$WORK/pristine"
 # the whole tree, minus heavy assets tests never read: tests reach scripts/, PRIVACY.md and docs/ through REPO_ROOT (the release still gets only SRC_SUBDIR)
-tar -xzf "$WORK/src.tgz" -C "$WORK/pristine" --exclude="$top/docs/assets" --exclude="$top/katana-assets" --exclude='*.xcodeproj' --exclude='*.mp4' --exclude='*.zip' 2>>"$LOG" || reject_tarball "tarball cannot be unpacked"
+"$TAR" -xzf "$WORK/src.tgz" -C "$WORK/pristine" --exclude="$top/docs/assets" --exclude="$top/katana-assets" --exclude='*.xcodeproj' --exclude='*.mp4' --exclude='*.zip' 2>>"$LOG" || reject_tarball "tarball cannot be unpacked"
 PRIS=$WORK/pristine/$top
 [ -d "$PRIS/$TEST_DIR" ] || reject_tarball "no $TEST_DIR in tarball"
 { [ -d "$PRIS/$SRC_SUBDIR" ] && has_files "$PRIS/$SRC_SUBDIR"; } || reject_tarball "no $SRC_SUBDIR in tarball"
@@ -256,6 +284,7 @@ if [ -n "$cur" ] && [ -f "$BASE/releases/$cur/.source-sha256" ] && [ "$(cat "$BA
   log "$s7: no change under $SRC_SUBDIR since $cur"; record_seen "$sha" unchanged; exit 0
 fi
 
+# -E -s, not -I: the isolation flags minus "no cwd on sys.path" (the tests import agentvault from the test copy, which is root-owned)
 # ---- 5. test before switching, as the service user, never root -----------------------------------------------------
 # code under test: root-owned, readable by the service user. Its writable state (TMPDIR, HOME) is a separate dir owned by that user.
 mkdir "$WORK/test" "$WORK/state" && cp -R "$PRIS" "$WORK/test/repo"
@@ -264,7 +293,7 @@ chmod 700 "$WORK/state"
 "${RUNAS[@]}" mkdir "$WORK/state/tmp" "$WORK/state/home"
 log "testing $s7 as $RUN_USER"
 tests_ok=1
-( cd "$WORK/test/repo/$TEST_DIR" && run_timeout "$TEST_TIMEOUT" "${RUNAS[@]}" env -i PATH="$PATH" HOME="$WORK/state/home" TMPDIR="$WORK/state/tmp" LANG=en_US.UTF-8 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests ) > "$WORK/test.log" 2>&1 || tests_ok=0
+( cd "$WORK/test/repo/$TEST_DIR" && run_timeout "$TEST_TIMEOUT" "${RUNAS[@]}" env -i PATH="${PYTHON%/*}:$PATH" HOME="$WORK/state/home" TMPDIR="$WORK/state/tmp" LANG=en_US.UTF-8 PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -E -s -m unittest discover -s tests ) > "$WORK/test.log" 2>&1 || tests_ok=0
 if [ "$tests_ok" = 0 ]; then
   log "REJECTED $s7: tests failed (last lines follow)"; tail -n 12 "$WORK/test.log" >> "$LOG"
   record_seen "$sha" rejected-tests; notify "Rejected $s7 on $NAME: tests failed"; exit 1
