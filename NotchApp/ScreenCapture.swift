@@ -1,5 +1,5 @@
 import AppKit
-import ScreenCaptureKit
+@preconcurrency import ScreenCaptureKit   // SCShareableContent is not Sendable on newer SDKs
 
 /// One screenshot of the display the notch lives on, written into the scratch folder where the CLIs can see it.
 struct Shot {
