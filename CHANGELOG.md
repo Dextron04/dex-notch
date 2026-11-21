@@ -8,7 +8,7 @@ The newest version is at the top. Every release is on the [Releases page](https:
 
 ## v0.9.6: Screen answers stay out of your way
 
-*Not released yet*
+*21 November 2026*
 
 **Answers about your screen now appear on the screen.** The notch used to hang down over the page you were asking about. Now, when an answer points at things, the notch folds away as soon as it finishes and each explanation shows as a speech bubble tied to its numbered box. Claude and Codex pick blank space for the bubbles, and Dex Notch moves any that would cover a box, another bubble or the notch. Open the notch again to ask a follow-up: the highlights go away, and the conversation and the same screenshot are still there.
 
