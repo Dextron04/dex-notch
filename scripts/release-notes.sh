@@ -5,8 +5,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 TAG="$1"; NUM="${TAG#v}"
-RAW="https://raw.githubusercontent.com/Dextron04/dex-notch/$TAG"
+RAW="https://github.com/Dextron04/dex-notch/raw/$TAG"   # github.com/raw, not raw.githubusercontent: the repo is private and only this one follows your sign-in
 SECTION="$(awk -v n="$NUM" '/^## /{ if (on) exit; on = ($0 ~ "^## v" n "([: ]|$)") } on' CHANGELOG.md | sed '1d')"
 [ -n "$SECTION" ] || { echo "CHANGELOG.md has no section for $TAG" >&2; exit 1; }
-printf '%s\n' "$SECTION" | sed -E "s#(src=\"|\()docs/assets/#\1$RAW/docs/assets/#g; s#\]\(PRIVACY\.md\)#](https://github.com/Dextron04/dex-notch/blob/master/PRIVACY.md)#g"
+printf '%s\n' "$SECTION" | sed -E "s#(src=\"|href=\"|\()docs/assets/#\1$RAW/docs/assets/#g; s#\]\(PRIVACY\.md\)#](https://github.com/Dextron04/dex-notch/blob/master/PRIVACY.md)#g"
 sed "s/@TAG@/$TAG/g" docs/release-install.md
