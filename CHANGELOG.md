@@ -12,6 +12,10 @@ The newest version is at the top. Every release is on the [Releases page](https:
 
 **Answers about your screen now appear on the screen.** The notch used to hang down over the page you were asking about. Now, when an answer points at things, the notch folds away as soon as it finishes and each explanation shows as a speech bubble tied to its numbered box. Claude and Codex pick blank space for the bubbles, and Dex Notch moves any that would cover a box, another bubble or the notch. Open the notch again to ask a follow-up: the highlights go away, and the conversation and the same screenshot are still there.
 
+<p align="center">
+    <img src="docs/assets/screen-bubbles.png" alt="Four numbered boxes over the steps of a web page, each with a short note in a bubble to the right, in the empty margin." width="720">
+</p>
+
 ## v0.9.5: Ask about your screen, and get both models' best answer
 
 *20 November 2026*
