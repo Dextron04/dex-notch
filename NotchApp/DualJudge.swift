@@ -22,7 +22,7 @@ enum DualJudge {
         return r
     }
     /// The judges never see the screen, only the answers' text. Told to the drafter and the reviewer so the tags that survive are the right ones.
-    static let marksNote = "\n\nThe answers may contain <mark x=\"\" y=\"\" w=\"\" h=\"\">label</mark> tags that point at spots on the user's screenshot. Keep the ones your answer still refers to, copied exactly, at most \(ScreenMarks.maxMarks) in all. Never invent coordinates."
+    static let marksNote = "\n\nThe answers may contain <mark x=\"\" y=\"\" w=\"\" h=\"\" bx=\"\" by=\"\">note</mark> tags that point at spots on the user's screenshot. Keep the ones your answer still refers to, copied exactly (bx and by too), at most \(ScreenMarks.maxMarks) in all. Never invent coordinates."
 
     static func historyText(_ turns: [(role: String, text: String)]) -> String {
         turns.map { "\($0.role == "user" ? "User" : "Assistant"): \($0.text)" }.joined(separator: "\n")

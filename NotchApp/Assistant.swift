@@ -221,9 +221,10 @@ final class Assistant {
         if backend == .gemma, let b = choices.first(where: { $0 != .gemma }) { backend = b }
         Task { if backend != .gemma { _ = await grab() } else { screenProblem = "Screen help needs Claude or Codex." }; open(.prompt) }
     }
-    private func showMarks(_ m: [ScreenMarks.Mark], _ s: Shot) {
+    /// While the answer streams only the boxes show; `final` (the answer is complete) adds the bubbles.
+    private func showMarks(_ m: [ScreenMarks.Mark], _ s: Shot, final: Bool = false) {
         marks = m
-        MarkOverlay.show(m.map { .init(rect: ScreenMarks.toScreen($0.rect, imageSize: s.pixelSize, screenFrame: s.screenFrame), label: $0.label) }, on: s.screenFrame, accent: exchange.backend.accent)
+        MarkOverlay.show(m.map { .init(rect: ScreenMarks.toScreen($0.rect, imageSize: s.pixelSize, screenFrame: s.screenFrame), label: $0.label, bubble: $0.bubble.map { ScreenMarks.toScreen($0, imageSize: s.pixelSize, screenFrame: s.screenFrame) }) }, on: s.screenFrame, accent: exchange.backend.accent, bubbles: final)
     }
 
     func toggle() { if isOpen && mode == .prompt { close() } else { open(.prompt) } }
@@ -235,6 +236,7 @@ final class Assistant {
         mode = m
         if m == .recall { searching = false; recallQuery = ""; page = .chats; refreshRecall(); recallIndex = 0; summary = ProcessInfo.processInfo.environment["NOTCH_DEMO_SUMMARY"] ?? ""; cursor = max(grid.days.count - 1, 0); loadDay() }
         guard !isOpen else { return } // already open in the other mode: just switch content
+        clearMarks()                  // reopening for a follow-up: the highlights and bubbles have done their job (the shot and the chat stay)
         if !busy && AgentStream.isStale(closedAt: closedAt, now: Date()) { reset() } // away a long time: start fresh
         isOpen = true
         onOpenChange?(true)
@@ -406,7 +408,7 @@ final class Assistant {
         if marking, !turns.isEmpty, !raw.isEmpty {      // the answer is complete: show it whole (a trailing "<mark" is text now, not a tag being written)
             let p = ScreenMarks.parse(raw, imageSize: latest?.pixelSize ?? .zero, badges: true)
             turns[turns.count - 1].text = p.clean
-            if let s = latest, p.marks != marks { showMarks(p.marks, s) }
+            if let s = latest { showMarks(p.marks, s, final: true) }
         }
     }
 
@@ -444,7 +446,7 @@ final class Assistant {
         if screen != nil {      // the chosen or revised answer, once: its marks and its badges
             let p = ScreenMarks.parse(out.answer, imageSize: latest?.pixelSize ?? size, badges: true)
             turns[turns.count - 1].text = p.clean
-            if let s = latest, p.marks != marks { showMarks(p.marks, s) }
+            if let s = latest { showMarks(p.marks, s, final: true) }
         } else { turns[turns.count - 1].text = out.answer }
         turns[turns.count - 1].verdict = out.verdict; turns[turns.count - 1].winner = out.winner
     }
@@ -452,10 +454,13 @@ final class Assistant {
     private func finish() {
         defer { persist() }
         runToken = nil
+        let marked = !marks.isEmpty && error == nil
+        if marked, shot == nil, let t = temp { shot = t; temp = nil; seeScreen = true }   // the follow-up keeps the very screenshot the bubbles were drawn on
         ScreenCapture.remove(temp); temp = nil   // after every stage of a Both run, not after the first model
         waiting = false; streaming = false; toolNote = nil; dualStage = nil
         if turns.last?.role == "assistant", turns.last?.text.isEmpty == true, error != nil { turns.removeLast() }
         journalGemmaExchange()
+        if marked { close(keepMarks: true) }     // the notch must not cover what the bubbles explain; reopening it brings the conversation back
     }
 
     /// Gemma has no session log of its own, and Both runs its internal stages unrecorded, so each finished exchange goes to the vault journal (claude/codex runs are already

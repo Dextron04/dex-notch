@@ -15,7 +15,7 @@ enum ScreenTool {
     }
 
     /// Told to the model next to the question, so it knows the tool exists and when not to use it.
-    static let hint = "You have a look_at_screen tool. Call it only when the answer depends on what is on the user's screen right now, never just to check. To point at something it shows, write <mark x=\"\" y=\"\" w=\"\" h=\"\">short label</mark> in that screenshot's pixel coordinates (origin top-left, at most \(ScreenMarks.maxMarks) marks); marks are removed from your text."
+    static let hint = "You have a look_at_screen tool. Call it only when the answer depends on what is on the user's screen right now, never just to check. Coordinates are in the screenshot it returns. " + ScreenMarks.markSyntax
 
     /// Only the CLIs get it (the local model can't see), and only while the setting is on.
     static func offered(_ b: Backend, setting: Bool) -> Bool { b != .gemma && setting }
@@ -54,7 +54,7 @@ enum ScreenTool {
             switch look((params?["arguments"] as? [String: Any])?["reason"] as? String) {
             case .success(let l):
                 out["result"] = ["content": [["type": "image", "data": l.png.base64EncodedString(), "mimeType": "image/png"],
-                                             ["type": "text", "text": "\(l.width)×\(l.height) px. To point at something, write <mark x y w h>label</mark> using pixel coordinates in this image (origin top-left)."]]]
+                                             ["type": "text", "text": "\(l.width)×\(l.height) px. " + ScreenMarks.markSyntax]]]
             case .failure(let e): out["result"] = ["content": [["type": "text", "text": e.message]], "isError": true] as [String: Any]
             }
         default: out["error"] = ["code": -32601, "message": "Method not found"]

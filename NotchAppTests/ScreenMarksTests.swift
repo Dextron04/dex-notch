@@ -46,6 +46,45 @@ final class ScreenMarksTests: XCTestCase {
         XCTAssertEqual(ScreenMarks.parse(code + #" <mark x="1" y="1" w="5" h="5">a</mark>"#, imageSize: size).clean, code)       // and with a mark elsewhere in the answer
         XCTAssertEqual(ScreenMarks.parse("x\n    indented <mark x=\"1\" y=\"1\" w=\"5\" h=\"5\">a</mark> tail", imageSize: size).clean, "x\n    indented tail")
     }
+    func testParsesBubbleAnchorAndNote() {
+        let p = ScreenMarks.parse(#"A <mark bx="600.5" by='300' h="20" w="30" y="10" x="5">Submit the form here.</mark> b <mark x="1" y="1" w="5" h="5" bx="5000" by="1">far</mark> <mark x="1" y="1" w="5" h="5" bx="7">half</mark>"#, imageSize: size)
+        XCTAssertEqual(p.marks.map(\.bubble), [CGPoint(x: 600.5, y: 300), nil, nil])      // off-image or lone anchors are dropped, the mark stays
+        XCTAssertEqual(p.marks[0].label, "Submit the form here.")
+        XCTAssertEqual(p.clean, "A b")
+    }
+    func testBubbleAttrsHiddenWhileStreaming() {
+        XCTAssertEqual(ScreenMarks.parse(#"See <mark x="1" y="2" w="3" h="4" bx="9" by="9">half a no"#, imageSize: size, streaming: true).clean, "See")
+    }
+
+    let screen = CGRect(x: 0, y: 0, width: 1000, height: 600), notch = CGRect(x: 350, y: 0, width: 300, height: 50)
+    func place(_ boxes: [CGRect], _ wanted: [CGPoint?]) -> [CGRect] {
+        ScreenMarks.placeBubbles(boxes: boxes, wanted: wanted, sizes: boxes.map { _ in CGSize(width: 200, height: 60) }, bounds: screen, avoid: [notch])
+    }
+    func testBubbleUsesModelSpotWhenClear() {
+        XCTAssertEqual(place([CGRect(x: 100, y: 200, width: 100, height: 30)], [CGPoint(x: 600, y: 400)]), [CGRect(x: 600, y: 400, width: 200, height: 60)])
+    }
+    func testBubbleFallsBackWhenSpotCoversBoxNotchOrEdge() {
+        let box = CGRect(x: 100, y: 200, width: 100, height: 30)
+        for w in [CGPoint(x: 90, y: 190), CGPoint(x: 400, y: 10), nil] as [CGPoint?] {
+            let r = place([box], [w])[0]
+            XCTAssertFalse(r.intersects(box)); XCTAssertFalse(r.intersects(notch)); XCTAssertTrue(screen.contains(r))
+        }
+        XCTAssertTrue(screen.contains(place([box], [CGPoint(x: 990, y: 590)])[0]))      // runs off the screen: pulled in or moved
+    }
+    func testBubblesAvoidEachOtherAndPreferRoomySide() {
+        let a = CGRect(x: 900, y: 300, width: 80, height: 30), b = CGRect(x: 900, y: 320, width: 80, height: 30)
+        let r = place([a, b], [nil, nil])
+        XCTAssertLessThan(r[0].maxX, a.minX)                 // box hugs the right edge: left side has the room
+        XCTAssertFalse(r[0].intersects(r[1])); XCTAssertFalse(r[1].intersects(a)); XCTAssertFalse(r[0].intersects(b))
+    }
+    func testBubbleSizeGrowsWithNoteButIsCapped() {
+        XCTAssertLessThan(ScreenMarks.bubbleSize("Hi").height, ScreenMarks.bubbleSize(String(repeating: "word ", count: 40)).height)
+        XCTAssertLessThanOrEqual(ScreenMarks.bubbleSize(String(repeating: "x", count: 900)).width, 260)
+    }
+    func testPromptAsksForBlankSpaceBubbles() {
+        let t = ScreenMarks.prompt("q", path: "/p/s.png", size: size, claude: false)
+        for k in ["bx=", "blank", "notch", "one or two"] { XCTAssertTrue(t.contains(k), k) }
+    }
     func testToScreenMapsScaleOriginAndFlip() {
         // 1000x500 px image of a 500x250 pt display at (0,0)
         XCTAssertEqual(ScreenMarks.toScreen(CGRect(x: 100, y: 50, width: 200, height: 100), imageSize: size, screenFrame: CGRect(x: 0, y: 0, width: 500, height: 250)),
