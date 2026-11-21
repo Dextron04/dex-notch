@@ -8,7 +8,7 @@ The newest version is at the top. Every release is on the [Releases page](https:
 
 ## v0.9.5: Ask about your screen, and get both models' best answer
 
-*Not released yet*
+*20 November 2026*
 
 Two things. You can show Claude or Codex your screen and ask about it, and you can ask both models at once and get one answer that keeps the best of each.
 
