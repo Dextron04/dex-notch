@@ -162,7 +162,12 @@ enum AgentStream {
         if !configs.isEmpty { a += ["--mcp-config"] + configs }
         // Ask: look things up only, reading only the scratch folder. Work (`+`): may also edit and run commands (inside the sandbox above), in the scratch and chosen folders.
         let roots = [scratch] + (work ? folder.map { [$0] } ?? [] : [])
-        a += ["--allowedTools"] + roots.map { pathRule("Read", $0) } + (work ? [] : ["WebSearch", "WebFetch"]) + (mcpConfig == nil ? [] : ["mcp__agentvault"]) + (look == nil ? [] : ["mcp__\(ScreenTool.server)"])
+        // ponytail: built in steps; one long `+` chain timed out the type checker on CI's older Xcode
+        var tools: [String] = roots.map { pathRule("Read", $0) }
+        if !work { tools += ["WebSearch", "WebFetch"] }
+        if mcpConfig != nil { tools.append("mcp__agentvault") }
+        if look != nil { tools.append("mcp__\(ScreenTool.server)") }
+        a += ["--allowedTools"] + tools
         if work { a += roots.map { pathRule("Edit", $0) } + ["Bash", "--permission-mode", "acceptEdits", "--settings", claudeSandbox(folder: folder)] }
         a += ["--disallowedTools"] + secretDenyRules + (work ? [] : ["Bash", "Edit", "Write", "NotebookEdit"])
         return a + ["--", prompt] // `--`: variadic flags above must not swallow the prompt, and a leading "-" must not parse as an option
@@ -183,9 +188,13 @@ enum AgentStream {
 
     static func codexArgs(prompt: String, session: String?, work: Bool, folder: String? = nil, image: String? = nil, look: ScreenTool.Launch? = nil) -> [String] {
         // sandbox flags go before `resume`: the subcommand doesn't take them
-        ["exec"] + (look.map(ScreenTool.codexArgs) ?? []) + ["--json", "--skip-git-repo-check", "--sandbox", work ? "workspace-write" : "read-only"]
-            + (work ? folder.map { ["--add-dir", $0] } ?? [] : [])
-            + (session.map { ["resume", $0] } ?? []) + (image.map { ["-i", $0] } ?? []) + ["--", prompt]   // `--`: a prompt starting with "-" is not an option
+        var a: [String] = ["exec"]
+        if let look { a += ScreenTool.codexArgs(look) }
+        a += ["--json", "--skip-git-repo-check", "--sandbox", work ? "workspace-write" : "read-only"]
+        if work, let folder { a += ["--add-dir", folder] }
+        if let session { a += ["resume", session] }
+        if let image { a += ["-i", image] }
+        return a + ["--", prompt]   // `--`: a prompt starting with "-" is not an option
     }
 
     // MARK: stream parsing (one JSON object per line)

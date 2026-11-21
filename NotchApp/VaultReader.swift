@@ -101,8 +101,8 @@ enum VaultReader {
             let k = n.project.isEmpty ? "misc" : n.project
             acc[k, default: (0, 0)].sessions += 1; acc[k, default: (0, 0)].turns += n.turns
         }
-        return acc.map { ProjectStat(name: $0.key, sessions: $0.value.sessions, turns: $0.value.turns) }
-            .sorted { $0.turns != $1.turns ? $0.turns > $1.turns : $0.name < $1.name }.prefix(limit).map { $0 }
+        let stats: [ProjectStat] = acc.map { ProjectStat(name: $0.key, sessions: $0.value.sessions, turns: $0.value.turns) }
+        return Array(stats.sorted { $0.turns != $1.turns ? $0.turns > $1.turns : $0.name < $1.name }.prefix(limit))
     }
 
     /// A short plain-text picture of the vault for the local model: totals, today's sessions, the latest ones. Its own chats are
@@ -114,9 +114,11 @@ enum VaultReader {
         let day = DateFormatter(); day.calendar = calendar; day.timeZone = calendar.timeZone; day.locale = Locale(identifier: "en_US_POSIX")
         func fmt(_ f: String, _ d: Date) -> String { day.dateFormat = f; return day.string(from: d) }
         func item(_ n: Note, withDate: Bool) -> String {
-            "\(n.agent) · \(n.project.isEmpty ? "misc" : n.project) · \(clip(n.title))" + (withDate ? " (\(fmt("MMM d", n.updated)))" : "")
+            let project = n.project.isEmpty ? "misc" : n.project
+            let line = "\(n.agent) · \(project) · \(clip(n.title))"
+            return withDate ? line + " (\(fmt("MMM d", n.updated)))" : line
         }
-        let counts = Dictionary(grouping: all, by: \.agent).map { ($0.key, $0.value.count) }.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0 < $1.0 }
+        let counts: [(String, Int)] = Dictionary(grouping: all, by: \.agent).map { ($0.key, $0.value.count) }.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0 < $1.0 }
         let work = all.filter { $0.agent != "gemma" }.sorted { $0.updated > $1.updated }
         let today = work.filter { calendar.isDate($0.updated, inSameDayAs: now) || calendar.isDate($0.started, inSameDayAs: now) }
         var lines = ["- Date: \(fmt("EEEE, MMMM d, yyyy", now))",
