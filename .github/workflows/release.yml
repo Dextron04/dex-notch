@@ -18,7 +18,13 @@ jobs:
         run: |
           set -o pipefail      # a failing test run must fail the job, not just its last 15 lines
           xcodegen generate
-          xcodebuild test -scheme NotchApp -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO | tail -n 15
+          # The tail keeps the log short; on failure, print every error and failed test with its file and line.
+          xcodebuild test -scheme NotchApp -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log" | tail -n 15 || {
+            echo "::group::Build errors and failed tests"
+            grep -E "error:|: error|failed \(|with [1-9][0-9]* failures?" "$RUNNER_TEMP/xcodebuild.log" | sort -u
+            echo "::endgroup::"
+            exit 1
+          }
       - name: Python tests (recorder, MCP server, connector)
         working-directory: memory
         run: python3 -m unittest discover -s tests
