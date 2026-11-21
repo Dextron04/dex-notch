@@ -113,7 +113,6 @@ private struct MarkLayer: View {
                         RoundedRectangle(cornerRadius: 8).frame(width: r.width + 12, height: r.height + 12).offset(x: r.minX - 6, y: r.minY - 6).blendMode(.destinationOut)
                     }
                 }.compositingGroup())
-            if let first = rects.first { Connector(from: CGPoint(x: frame.width / 2, y: 0), to: CGPoint(x: first.midX, y: first.minY), accent: state.accent, reduce: reduce) }
             ForEach(Array(rects.enumerated()), id: \.offset) { i, r in
                 MarkBox(n: i + 1, rect: r, accent: state.accent, delay: Double(min(rank[i] ?? 0, 5)) * 0.07, reduce: reduce)
             }
@@ -123,19 +122,6 @@ private struct MarkLayer: View {
         }
         .frame(width: frame.width, height: frame.height, alignment: .topLeading)
         .onAppear { withAnimation(.easeOut(duration: 0.35)) { dim = true } }
-    }
-}
-
-/// A faint dotted arc from the notch to the first mark, drawn on once: the notch reaching out.
-private struct Connector: View {
-    let from: CGPoint, to: CGPoint, accent: Color, reduce: Bool
-    @State private var drawn = false
-    var body: some View {
-        Path { p in p.move(to: from); p.addQuadCurve(to: to, control: CGPoint(x: (from.x + to.x) / 2 + (to.x < from.x ? -60 : 60), y: min(from.y, to.y) + abs(to.y - from.y) * 0.35)) }
-            .trim(from: 0, to: reduce || drawn ? 1 : 0)
-            .stroke(accent.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [1, 6]))
-            .opacity(drawn ? 1 : 0)
-            .onAppear { withAnimation(.easeOut(duration: reduce ? 0.2 : 0.6)) { drawn = true } }
     }
 }
 
