@@ -45,7 +45,7 @@ struct NotchView: View {
 
             pill
             if !a.isOpen { AlertView(c: center, notch: notch) }
-            if !a.isOpen { DictationBar(d: Dictation.shared, notch: notch) }
+            if !a.isOpen { DictationBar(state: Dictation.shared.state, notch: notch) }
             if !a.isOpen {
                 NotchStreak(tick: center.streakTick, size: CGSize(width: AlertView.width, height: AlertView.height(notch)))      // a card arrives
                 let reply = CGSize(width: AlertView.replyWidth, height: AlertView.replyHeight(notch))
@@ -367,40 +367,5 @@ private struct ModelAnnounce: View {
         .onAppear { if !reduce { withAnimation(.linear(duration: hold)) { left = 0 } } else { left = 0 } }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Model: \(backend.displayName)\(work ? ", can edit files" : "")")
-    }
-}
-
-/// ⌥V dictation, shown under the closed notch: ember level bars and the words so far, or a short message.
-private struct DictationBar: View {
-    var d: Dictation
-    let notch: CGSize
-    @Environment(\.accessibilityReduceMotion) private var reduce
-
-    var body: some View {
-        Group {
-            switch d.state {
-            case .idle: EmptyView()
-            case .listening(let partial, let level):
-                HStack(spacing: 8) {
-                    HStack(spacing: 2) {
-                        ForEach(0..<4, id: \.self) { i in
-                            Capsule().fill(Ink.ember).frame(width: 2.5, height: 4 + 10 * CGFloat(reduce ? 0.3 : min(1, level * (0.6 + 0.2 * Float(i)))))
-                        }
-                    }.frame(height: 14)
-                    Text(partial.isEmpty ? "Listening…" : partial).lineLimit(1).truncationMode(.head)
-                }
-                .animation(reduce ? nil : .easeOut(duration: 0.08), value: level)
-            case .message(let m): Text(m).lineLimit(1)
-            }
-        }
-        .font(.system(size: 11, weight: .medium)).foregroundStyle(Ink.text)
-        .padding(.horizontal, 12).frame(height: d.state == .idle ? 0 : 26)
-        .frame(maxWidth: 320)
-        .background(.black, in: Capsule())
-        .fixedSize()
-        .padding(.top, notch.height + 6)
-        .opacity(d.state == .idle ? 0 : 1)
-        .animation(reduce ? nil : .smooth(duration: 0.2), value: d.state == .idle)
-        .allowsHitTesting(false)
     }
 }
