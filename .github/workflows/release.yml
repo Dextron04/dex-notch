@@ -8,7 +8,7 @@ on:
 permissions: { contents: read }      # least privilege by default; only the publish job below may write
 jobs:
   test:      # nothing ships unless both suites pass; no secrets in this job
-    runs-on: macos-15
+    runs-on: macos-26   # macos-26: the SpeechAnalyzer dictation engine needs the macOS 26 SDK (older toolchains still compile via #if compiler)
     permissions: { contents: read }
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -31,7 +31,7 @@ jobs:
 
   dmg:
     needs: test
-    runs-on: macos-15
+    runs-on: macos-26
     permissions: { contents: read }
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

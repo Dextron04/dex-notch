@@ -24,6 +24,9 @@ final class Dictation {
     private var session = 0                  // bumped per press; stale callbacks and timers compare against it
     private var latest = ""
     private var clear: Task<Void, Never>?
+    private var analyzer: (end: () -> Void, cancel: () -> Void)?   // the macOS 26 engine, when it is the one running
+    /// "EN", "HI": the language the next dictation will use. Observable, shown in the listening bar.
+    private(set) var currentLanguageCode = DictationLogic.code(for: DictationLogic.stored(at: Settings.defaultURL).primary)
     private var prompted = false             // ask for Accessibility once per launch
 
     /// False when a session is already running (the caller must then not stop it).
@@ -51,6 +54,7 @@ final class Dictation {
         let mine = session
         teardownAudio()
         request?.endAudio()
+        analyzer?.end()
         // the final result usually lands within a moment; don't wait on it forever
         Task { try? await Task.sleep(for: .seconds(1.5)); finish(mine) }
     }
@@ -62,6 +66,53 @@ final class Dictation {
 
     private func begin(_ mine: Int) {
         let v = DictationLogic.voice(at: Settings.defaultURL)
+        #if compiler(>=6.2)
+        if #available(macOS 26, *), SpeechTranscriber.isAvailable {      // better than SFSpeechRecognizer for every language it supports, English included
+            Task {
+                if let loc = await SpeechTranscriber.supportedLocale(equivalentTo: v.locale) { await beginAnalyzer(loc, mine) }
+                else if held, session == mine { beginClassic(v, mine) }
+            }
+            return
+        }
+        #endif
+        beginClassic(v, mine)
+    }
+
+    #if compiler(>=6.2)
+    @available(macOS 26, *)
+    private func beginAnalyzer(_ loc: Locale, _ mine: Int) async {
+        guard held, session == mine else { return }
+        let key = VoiceLanguages.key(loc)
+        guard (await SpeechTranscriber.installedLocales).contains(where: { VoiceLanguages.key($0) == key }) else {
+            guard held, session == mine else { return }
+            held = false
+            VoiceLanguages.shared.download(loc.identifier(.bcp47))      // the model comes down once; audio never leaves the Mac
+            let name = loc.language.languageCode.flatMap { Locale.current.localizedString(forLanguageCode: $0.identifier) } ?? loc.identifier
+            return say("Downloading \(name)… open Settings to see progress")
+        }
+        do {
+            try await VoiceLanguages.shared.reserve(loc)
+            let eng = AVAudioEngine()
+            let input = eng.inputNode
+            let format = input.outputFormat(forBus: 0)
+            guard format.sampleRate > 0, format.channelCount > 0 else { held = false; return say("No microphone found") }   // installTap throws on a 0 Hz format
+            let run = try await AnalyzerRun.make(locale: loc, input: format, mine)
+            guard held, session == mine else { run.cancel(); return }      // released while the model loaded: the mic never opens
+            input.installTap(onBus: 0, bufferSize: 1024, format: format, block: run.tapBlock(mine))
+            do { try eng.start() } catch { input.removeTap(onBus: 0); run.cancel(); held = false; return say("Couldn't open the microphone") }
+            engine = eng; analyzer = (run.end, run.cancel)
+            state = .listening(partial: "", level: 0)
+            if target == .ask { assistant?.voiceBegan() }
+            Task { try? await Task.sleep(for: .seconds(60)); if held, session == mine { stop() } }   // release never arrived
+        } catch {
+            guard session == mine else { return }
+            held = false; say("Couldn't start dictation")
+        }
+    }
+    #endif
+
+    private func beginClassic(_ v: (locale: Locale, allowServer: Bool), _ mine: Int) {
+        guard held, session == mine else { return }
         guard let rec = SFSpeechRecognizer(locale: v.locale), rec.isAvailable else { held = false; return say("Dictation isn't available right now") }
         if !rec.supportsOnDeviceRecognition && !v.allowServer {
             held = false
@@ -90,12 +141,16 @@ final class Dictation {
         nonisolated(unsafe) let req = req
         return { buf, _ in
             req.append(buf)
-            guard let ch = buf.floatChannelData?[0], buf.frameLength > 0 else { return }
-            var sum: Float = 0
-            for i in 0..<Int(buf.frameLength) { sum += ch[i] * ch[i] }
-            let level = min(1, (sum / Float(buf.frameLength)).squareRoot() * 8)
+            guard let level = Dictation.level(buf) else { return }
             Task { @MainActor in Dictation.shared.setLevel(level, mine) }
         }
+    }
+
+    nonisolated static func level(_ buf: AVAudioPCMBuffer) -> Float? {
+        guard let ch = buf.floatChannelData?[0], buf.frameLength > 0 else { return nil }
+        var sum: Float = 0
+        for i in 0..<Int(buf.frameLength) { sum += ch[i] * ch[i] }
+        return min(1, (sum / Float(buf.frameLength)).squareRoot() * 8)
     }
 
     nonisolated private static func resultHandler(_ mine: Int) -> @Sendable (SFSpeechRecognitionResult?, Error?) -> Void {
@@ -105,13 +160,13 @@ final class Dictation {
         }
     }
 
-    private func setLevel(_ l: Float, _ mine: Int) {
+    func setLevel(_ l: Float, _ mine: Int) {
         guard mine == session, case .listening(let p, _) = state else { return }
         state = .listening(partial: p, level: l)
         if target == .ask, held { assistant?.voiceLevel(l) }
     }
 
-    private func heard(_ text: String?, final: Bool, _ mine: Int) {
+    func heard(_ text: String?, final: Bool, _ mine: Int) {
         guard mine == session else { return }
         if let text { latest = text }
         if held, case .listening(_, let l) = state { state = .listening(partial: latest, level: l) }
@@ -127,8 +182,9 @@ final class Dictation {
 
     /// Runs once per session (from the final result or the timeout, whichever is first).
     private func finish(_ mine: Int) {
-        guard mine == session, !held, task != nil || request != nil else { return }
+        guard mine == session, !held, task != nil || request != nil || analyzer != nil else { return }
         task?.cancel(); task = nil; request = nil
+        analyzer?.cancel(); analyzer = nil
         teardownAudio()
         let text = DictationLogic.cleaned(latest)
         latest = ""
@@ -140,8 +196,30 @@ final class Dictation {
 
     private func say(_ s: String) {
         if target == .ask { state = .idle; assistant?.voiceFailed(s); return }
+        banner(s)
+    }
+
+    private func banner(_ s: String) {
         state = .message(s)
+        clear?.cancel()
         clear = Task { try? await Task.sleep(for: .seconds(2.5)); if !Task.isCancelled { state = .idle } }
+    }
+
+    // MARK: language
+
+    func refreshLanguage() {
+        currentLanguageCode = DictationLogic.code(for: DictationLogic.stored(at: Settings.defaultURL).primary)
+        VoiceLanguages.shared.reload()
+    }
+
+    /// ⌥⇧V: the next language in the quick-switch set, saved to settings.json. Ignored while a dictation is running.
+    func cycleLanguage() {
+        guard !held else { return }
+        let s = DictationLogic.stored(at: Settings.defaultURL)
+        guard let next = DictationLogic.next(after: s.primary, in: s.list), s.list.count > 1 else { return banner("Add languages in Settings, Voice") }
+        do { try DictationLogic.setPrimary(at: Settings.defaultURL, next) } catch { return banner("Couldn't save the language") }
+        refreshLanguage()
+        banner("Language: \(VoiceLanguages.name(next))")
     }
 
     // MARK: paste

@@ -78,6 +78,7 @@
 		AFD6723CE12FD706B2F1BB5F /* DictationLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58BB4112A72F3ED313A54D47 /* DictationLogic.swift */; };
 		B099E16A32014D0B4AEB986E /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 51A7B2DD66A95BA97994F08A /* Sparkle */; };
 		B0E8F6D04051DF78F4E9C917 /* SVGPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99408511A3D90560197E556F /* SVGPath.swift */; };
+		B5FFFDE8384442D927A06AE6 /* DictationAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD114EE923AC2783EE69C5D4 /* DictationAnalyzer.swift */; };
 		BBAE32CD0DA114C2AE0286D4 /* ScreenCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CBBFE06DBCF2FCC5FD5C7E /* ScreenCapture.swift */; };
 		BFF5DE6C28BCA61791F88A08 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */; };
 		C0AB99F9582D5BB8EDC30270 /* DictationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 325889CC13A29F9F50CCBE1D /* DictationView.swift */; };
@@ -91,6 +92,7 @@
 		DBEE7E9BC8319DCAC4FCFA1D /* AddonsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 837603D3A7FE79211CF92BE4 /* AddonsTests.swift */; };
 		E0583583599F95A4BB860466 /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D6FACDD9417F0189139076 /* Account.swift */; };
 		E07EEF3C06EADD40BE52F384 /* NotchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9C2957FECE5F9A6B9434D3 /* NotchApp.swift */; };
+		E38C393C0DB2632361C1A127 /* VoiceLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8C9230B70FE355564E4D592 /* VoiceLanguages.swift */; };
 		E3ADAE4DD1240F04D154E5CD /* VaultReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C1CFA4B2FABB2083C5E8F5 /* VaultReaderTests.swift */; };
 		E63B2AF16E49E360BBFAD95D /* ReplyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA1BFB9DA2701025378F6A5 /* ReplyView.swift */; };
 		E703B3CA52F3E90860D67B7C /* AddonCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 461189366EBDE3A440C7E728 /* AddonCenter.swift */; };
@@ -170,7 +172,9 @@
 		E8544183AD3EF18DC864B247 /* Addons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Addons.swift; sourceTree = "<group>"; };
 		F4BFA1F0DAEA9B84D65B834D /* ConnectionMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionMonitor.swift; sourceTree = "<group>"; };
 		F5DE5AEC6077BF0580C62802 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
+		F8C9230B70FE355564E4D592 /* VoiceLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceLanguages.swift; sourceTree = "<group>"; };
 		FAFEB42AAC288E06CF082D9F /* ScreenToolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenToolTests.swift; sourceTree = "<group>"; };
+		FD114EE923AC2783EE69C5D4 /* DictationAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationAnalyzer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -214,6 +218,7 @@
 				F4BFA1F0DAEA9B84D65B834D /* ConnectionMonitor.swift */,
 				9F216985AFA23BC8E9805806 /* ConversationStore.swift */,
 				D8F3106BE5A172F840440EC3 /* Dictation.swift */,
+				FD114EE923AC2783EE69C5D4 /* DictationAnalyzer.swift */,
 				58BB4112A72F3ED313A54D47 /* DictationLogic.swift */,
 				325889CC13A29F9F50CCBE1D /* DictationView.swift */,
 				6DF7D52391A25626A30D8C8B /* DualJudge.swift */,
@@ -245,6 +250,7 @@
 				04FED0FDAE6B5FC7FE0D0983 /* SetupView.swift */,
 				99408511A3D90560197E556F /* SVGPath.swift */,
 				1699F9A9CD5771ED2F953B05 /* VaultReader.swift */,
+				F8C9230B70FE355564E4D592 /* VoiceLanguages.swift */,
 				3ED3A72A153FD60EEF8E9E06 /* WhatsNewView.swift */,
 			);
 			path = NotchApp;
@@ -469,6 +475,7 @@
 				07975AD6716BA1ACDE01E2E5 /* ConnectionMonitor.swift in Sources */,
 				9D7DA6C3F8755AD1BA023406 /* ConversationStore.swift in Sources */,
 				9B8EE9403C24BED1588ADA99 /* Dictation.swift in Sources */,
+				B5FFFDE8384442D927A06AE6 /* DictationAnalyzer.swift in Sources */,
 				62016BB15FE617B86B61023C /* DictationLogic.swift in Sources */,
 				C0AB99F9582D5BB8EDC30270 /* DictationView.swift in Sources */,
 				80D02B2BEDB19300A282F223 /* DualJudge.swift in Sources */,
@@ -499,6 +506,7 @@
 				84C5DC1B9737D7A5558EE39A /* Settings.swift in Sources */,
 				A48F6F5CAD79AB60BD5BB30C /* SetupView.swift in Sources */,
 				33A991DD0C8D532FDD7C271B /* VaultReader.swift in Sources */,
+				E38C393C0DB2632361C1A127 /* VoiceLanguages.swift in Sources */,
 				86BB296C647833D918FA33E1 /* WhatsNewView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

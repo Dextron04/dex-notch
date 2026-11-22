@@ -65,6 +65,8 @@ struct DictationBar: View {
         HStack(spacing: 8) {
             Wave(level: level, still: reduce, live: phase == .listening).frame(width: 54, height: 20)
             words.frame(width: Self.wordsW, height: 16)
+            Text(Dictation.shared.currentLanguageCode)       // fixed width: never nudges the words
+                .font(.system(size: 9, weight: .semibold)).foregroundStyle(Ink.dim).frame(width: 18)
         }
         .scaleEffect(collapsed ? 0.08 : 1).opacity(collapsed ? 0 : 1).blur(radius: collapsed ? 3 : 0)
         .animation(.easeIn(duration: 0.2), value: collapsed)

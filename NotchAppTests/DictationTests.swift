@@ -31,3 +31,36 @@ final class DictationTests: XCTestCase {
         XCTAssertFalse(k.thresholdPassed())                            // timer firing after release does nothing
     }
 }
+
+final class DictationLanguageTests: XCTestCase {
+    func testLanguagesPrimaryFirstDedupedMax3() {
+        XCTAssertEqual(DictationLogic.languages(primary: "hi-IN", list: ["en-US", "hi_IN", "fr-FR", "de-DE"]), ["hi-IN", "en-US", "fr-FR"])
+        XCTAssertEqual(DictationLogic.languages(primary: nil, list: ["", " en-us ", "EN-us"]), ["en-us"])
+        XCTAssertEqual(DictationLogic.languages(primary: "en_US", list: []), ["en-US"])
+    }
+
+    func testNextWraps() {
+        let l = ["en-US", "hi-IN", "fr-FR"]
+        XCTAssertEqual(DictationLogic.next(after: "en-US", in: l), "hi-IN")
+        XCTAssertEqual(DictationLogic.next(after: "fr-FR", in: l), "en-US")
+        XCTAssertEqual(DictationLogic.next(after: "ja-JP", in: l), "en-US")
+        XCTAssertNil(DictationLogic.next(after: "en-US", in: []))
+        XCTAssertEqual(DictationLogic.code(for: "hi_IN"), "HI")
+    }
+
+    func testStoredAndSaveKeepOtherKeys() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("lang-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data(#"{"default":"claude","voice":{"locale":"hi-IN","languages":["hi-IN","en-US","fr-FR"],"allow_apple_server":true}}"#.utf8).write(to: url)
+        let s = DictationLogic.stored(at: url)
+        XCTAssertEqual(s.primary, "hi-IN"); XCTAssertEqual(s.list, ["hi-IN", "en-US", "fr-FR"])
+        try DictationLogic.setPrimary(at: url, "en-US")                       // cycling keeps the list order
+        XCTAssertEqual(DictationLogic.stored(at: url).list, ["hi-IN", "en-US", "fr-FR"])
+        XCTAssertEqual(DictationLogic.next(after: "en-US", in: DictationLogic.stored(at: url).list), "fr-FR")
+        try DictationLogic.save(at: url, languages: ["fr-FR"])
+        let root = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+        let v = root["voice"] as! [String: Any]
+        XCTAssertEqual(root["default"] as? String, "claude"); XCTAssertEqual(v["locale"] as? String, "fr-FR")
+        XCTAssertNil(v["languages"]); XCTAssertEqual(v["allow_apple_server"] as? Bool, true)
+    }
+}

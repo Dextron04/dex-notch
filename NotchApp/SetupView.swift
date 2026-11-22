@@ -121,15 +121,15 @@ final class SetupModel {
 }
 
 enum SetupPane: String, CaseIterable, Identifiable {
-    case welcome = "Welcome", models = "Models", folders = "Folders", mail = "Mail", phone = "iPhone", memory = "Memory", updates = "Updates", finish = "All set"
+    case welcome = "Welcome", models = "Models", folders = "Folders", mail = "Mail", phone = "iPhone", memory = "Memory", voice = "Voice", updates = "Updates", finish = "All set"
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .welcome: "hand.wave"; case .models: "sparkles"; case .folders: "folder"; case .mail: "envelope"
-        case .phone: "iphone"; case .memory: "brain.head.profile"; case .updates: "arrow.down.circle"; case .finish: "checkmark.seal"
+        case .phone: "iphone"; case .memory: "brain.head.profile"; case .voice: "mic"; case .updates: "arrow.down.circle"; case .finish: "checkmark.seal"
         }
     }
-    static let settings: [SetupPane] = [.models, .folders, .mail, .phone, .memory, .updates]
+    static let settings: [SetupPane] = [.models, .folders, .mail, .phone, .memory, .voice, .updates]
     static let guided: [SetupPane] = [.welcome, .models, .folders, .mail, .phone, .finish]       // the first-run walk-through, in order
 }
 
@@ -226,6 +226,7 @@ struct SetupView: View {
         case .mail: mailPane
         case .phone: phonePane
         case .memory: memoryPane
+        case .voice: voicePane
         case .updates: updatesPane
         case .finish: finishPane
         }
@@ -739,6 +740,43 @@ struct SetupView: View {
     }
 
     // MARK: updates
+
+    private var voicePane: some View {
+        let v = VoiceLanguages.shared
+        let slots = ["Main language", "Also switch to", "Also switch to"]
+        return VStack(alignment: .leading, spacing: 0) {
+            header("Voice", "Hold ⌥V to dictate, or ⌥Space to ask out loud. Dex Notch hears one language at a time and does not guess, so pick yours here and press ⌥⇧V to switch between up to three.")
+            card {
+                ForEach(0..<min(v.selected.count + 1, DictationLogic.maxLanguages), id: \.self) { i in
+                    let id = i < v.selected.count ? v.selected[i] : nil
+                    row(title: slots[i], detail: id.map { detail(v.status($0)) } ?? "Optional.",
+                        lead: { Image(systemName: i == 0 ? "mic" : "character.bubble").font(.system(size: 16)).foregroundStyle(Ink.dim) },
+                        trail: {
+                            HStack(spacing: 14) {
+                                if let id, case .download = v.status(id) { link("Download") { v.download(id) } }
+                                Picker("", selection: Binding(get: { id ?? "" }, set: { v.set(slot: i, $0.isEmpty ? nil : $0) })) {
+                                    if i > 0 { Text("None").tag("") }
+                                    ForEach(v.options.filter { o in o.id == id || !v.selected.contains { $0.lowercased() == o.id.lowercased() } }, id: \.id) { Text($0.name).tag($0.id) }
+                                }.labelsHidden().pickerStyle(.menu).frame(maxWidth: 220)
+                            }
+                        })
+                }
+            }
+            if let p = v.problem { Text(p).font(.system(size: 13)).foregroundStyle(Ink.emberDeep).padding(.top, 14) }
+            Text("Everything is recognized on this Mac. Another language's model downloads once, the first time you use it, and Apple keeps it in system storage.")
+                .font(.system(size: 13)).foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true).padding(.top, 18)
+        }
+        .task { v.reload(); await v.refresh() }
+    }
+
+    private func detail(_ s: VoiceLanguages.Status) -> String {
+        switch s {
+        case .installed: "Installed"
+        case .download: "Not downloaded yet"
+        case .downloading(let p): "Downloading… \(Int(p * 100))%"
+        case .unavailable: "Not available offline"
+        }
+    }
 
     private var updatesPane: some View {
         let u = AppUpdater.shared
