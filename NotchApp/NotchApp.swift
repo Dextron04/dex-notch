@@ -69,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Hotkey(id: 1, keyCode: kVK_Space, modifiers: optionKey) { [assistant] in assistant.toggle() },
             Hotkey(id: 2, keyCode: kVK_Space, modifiers: optionKey | shiftKey) { [assistant] in assistant.toggleRecall() },
             Hotkey(id: 3, keyCode: kVK_ANSI_S, modifiers: optionKey | cmdKey) { [assistant] in assistant.screenHotkey() },
+            Hotkey(id: 4, keyCode: kVK_ANSI_V, modifiers: optionKey, action: { Dictation.shared.start() }, onRelease: { Dictation.shared.stop() }),   // hold to dictate (id 3 is the screen hotkey)
         ]
         assistant.connect()
         assistant.startScreenBridge()

@@ -6,6 +6,10 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## Unreleased
+
+**Hold ⌥V anywhere to dictate.** Speak while you hold the keys, let go, and your words are pasted into whatever you were typing in. The notch shows what it hears while you talk. Nothing is rewritten, and it never presses Return. It uses your Mac's built-in speech recognition, on this Mac, and the microphone is on only while you hold the keys. The first time, macOS asks for microphone, speech and Accessibility access; without Accessibility the text is copied instead.
+
 ## v0.9.6: Screen answers stay out of your way
 
 *21 November 2026*
