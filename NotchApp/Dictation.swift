@@ -23,6 +23,7 @@ final class Dictation {
 
     func start() {
         guard !held else { return }
+        finish(session)      // a fast re-press: paste the previous utterance now instead of dropping it
         held = true; session += 1; latest = ""
         let mine = session
         clear?.cancel()
@@ -44,7 +45,7 @@ final class Dictation {
         Task { try? await Task.sleep(for: .seconds(1.5)); finish(mine) }
     }
 
-    private static func authorized() async -> Bool {
+    nonisolated private static func authorized() async -> Bool {
         guard await AVCaptureDevice.requestAccess(for: .audio) else { return false }
         return await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0 == .authorized) } }
     }
@@ -63,7 +64,20 @@ final class Dictation {
         let eng = AVAudioEngine()
         let input = eng.inputNode
         let format = input.outputFormat(forBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { buf, _ in
+        guard format.sampleRate > 0, format.channelCount > 0 else { held = false; return say("No microphone found") }   // installTap throws on a 0 Hz format
+        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.tapBlock(req, mine))
+        do { try eng.start() } catch { input.removeTap(onBus: 0); held = false; return say("Couldn't open the microphone") }
+        engine = eng; request = req
+        state = .listening(partial: "", level: 0)
+        task = rec.recognitionTask(with: req, resultHandler: Self.resultHandler(mine))
+        Task { try? await Task.sleep(for: .seconds(60)); if held, session == mine { stop() } }   // release never arrived
+    }
+
+    // Built nonisolated: a closure written inside a @MainActor method inherits main-actor isolation, and Swift 6 traps
+    // when AVFoundation (realtime audio thread) or Speech (its own queue) calls it.
+    nonisolated private static func tapBlock(_ req: SFSpeechAudioBufferRecognitionRequest, _ mine: Int) -> @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void {
+        nonisolated(unsafe) let req = req
+        return { buf, _ in
             req.append(buf)
             guard let ch = buf.floatChannelData?[0], buf.frameLength > 0 else { return }
             var sum: Float = 0
@@ -71,14 +85,13 @@ final class Dictation {
             let level = min(1, (sum / Float(buf.frameLength)).squareRoot() * 8)
             Task { @MainActor in Dictation.shared.setLevel(level, mine) }
         }
-        do { try eng.start() } catch { input.removeTap(onBus: 0); held = false; return say("Couldn't open the microphone") }
-        engine = eng; request = req
-        state = .listening(partial: "", level: 0)
-        task = rec.recognitionTask(with: req) { result, error in
+    }
+
+    nonisolated private static func resultHandler(_ mine: Int) -> @Sendable (SFSpeechRecognitionResult?, Error?) -> Void {
+        { result, error in
             let text = result?.bestTranscription.formattedString, final = (result?.isFinal ?? false) || error != nil
             Task { @MainActor in Dictation.shared.heard(text, final: final, mine) }
         }
-        Task { try? await Task.sleep(for: .seconds(60)); if held, session == mine { stop() } }   // release never arrived
     }
 
     private func setLevel(_ l: Float, _ mine: Int) {
