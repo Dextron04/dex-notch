@@ -267,10 +267,17 @@ final class Assistant {
     var voiceLevel: Float = 0      // smoothed: fast attack, slow release
     var sentTick = 0               // bumps when a spoken question has been sent (the ember send motion)
     private var voiceBase = ""     // whatever was already typed; the spoken words follow it
+    private var voiceWrote = ""    // the last text the transcript put in the field; anything else there is the user typing
+    private var voiceYielded = false // the user typed while listening: the transcript stops writing and release won't send
 
     private func voiceText(_ spoken: String) -> String { voiceBase.isEmpty ? spoken : spoken.isEmpty ? voiceBase : voiceBase + " " + spoken }
-    func voiceBegan() { voiceBase = draft; listening = true; voiceLevel = 0; error = nil }
-    func voiceHeard(_ partial: String) { if listening { draft = voiceText(partial) } }
+    func voiceBegan() { voiceBase = draft; voiceWrote = draft; voiceYielded = false; listening = true; voiceLevel = 0; error = nil }
+    func voiceHeard(_ partial: String) {
+        guard listening else { return }
+        if draft != voiceWrote { voiceYielded = true }   // the user's keys win over the transcript
+        guard !voiceYielded else { return }
+        voiceWrote = voiceText(partial); draft = voiceWrote
+    }
     func voiceLevel(_ l: Float) { let t = Float(pow(Double(l), 0.7)); voiceLevel += (t - voiceLevel) * (t > voiceLevel ? 0.7 : 0.18) }
     func voiceFailed(_ message: String) { if listening { draft = voiceBase }; listening = false; voiceLevel = 0; error = message }
     /// Release: send what was heard exactly as typing it and pressing Return would. Nothing heard: the notch stays open, field focused.
@@ -278,13 +285,13 @@ final class Assistant {
     func voiceEnded(_ text: String?) {
         guard listening else { return }
         listening = false; voiceLevel = 0
+        if draft != voiceWrote { voiceYielded = true }
+        if voiceYielded { return }                        // they took over by typing: leave their text, don't send
         guard let text else { draft = voiceBase; return }
         if !isOpen { open(.prompt) }
         draft = voiceText(text)
         guard !busy else { return }
-        let n = turns.count
         send()
-        if turns.count > n { sentTick += 1 }
     }
 
     // MARK: ask
@@ -304,6 +311,7 @@ final class Assistant {
         let b = r.backend
         exchange = (b, Date())
         draft = ""; error = nil; toolNote = nil; recalled = []; screenProblem = nil; clearMarks()
+        sentTick += 1                                                                // typed or spoken: one shared send motion
         turns.append(Turn(role: "user", text: r.prompt))
         turns.append(Turn(role: "assistant", text: ""))
         waiting = true
