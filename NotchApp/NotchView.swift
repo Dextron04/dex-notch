@@ -276,7 +276,7 @@ struct NotchView: View {
                 }
                 .animation(reduce ? .easeOut(duration: 0.15) : .smooth(duration: 0.25), value: a.listening)
             }
-            .frame(minHeight: 24)
+            .frame(height: 24)
             .padding(.bottom, 14)
         }
         .padding(.horizontal, 30)
@@ -380,7 +380,7 @@ struct NotchView: View {
     }
 }
 
-/// The send key. Dim when empty, ember (with a small pop) when there is something to send, a slow breath while an answer is on its way.
+/// The send key. Dim when empty, ember (quiet 0.15 s crossfade, no pop) when there is something to send, a slow breath while an answer is on its way.
 private struct ReturnGlyph: View {
     let ready: Bool, busy: Bool, reduce: Bool
     var body: some View {
@@ -390,10 +390,7 @@ private struct ReturnGlyph: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(ready && !busy ? Ink.ember : Ink.dim.opacity(0.5))
                 .opacity(busy ? breath : 1)
-                .shadow(color: Ink.ember.opacity(ready && !busy && !reduce ? 0.6 : 0), radius: 4)
-                .keyframeAnimator(initialValue: 1.0, trigger: ready) { v, s in v.scaleEffect(s) } keyframes: { _ in
-                    if ready && !reduce { LinearKeyframe(0.85, duration: 0.001); SpringKeyframe(1, duration: 0.35, spring: .bouncy) } else { LinearKeyframe(1, duration: 0.001) }
-                }
+                .frame(width: 20, height: 24)   // fixed slot: nothing here moves with a keystroke
                 .animation(.easeOut(duration: 0.15), value: ready)
         }
     }
