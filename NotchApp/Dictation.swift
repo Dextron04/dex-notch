@@ -12,6 +12,11 @@ final class Dictation {
     enum State: Equatable { case idle, listening(partial: String, level: Float), message(String) }
     private(set) var state: State = .idle
 
+    /// Where the words go: pasted into the frontmost app, or asked of the assistant (the notch is open; the clipboard is never touched).
+    enum Target { case paste, ask }
+    private var target: Target = .paste
+    weak var assistant: Assistant?
+
     private var engine: AVAudioEngine?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
@@ -21,9 +26,12 @@ final class Dictation {
     private var clear: Task<Void, Never>?
     private var prompted = false             // ask for Accessibility once per launch
 
-    func start() {
-        guard !held else { return }
-        finish(session)      // a fast re-press: paste the previous utterance now instead of dropping it
+    /// False when a session is already running (the caller must then not stop it).
+    @discardableResult
+    func start(_ to: Target = .paste) -> Bool {
+        guard !held else { return false }
+        finish(session)      // a fast re-press: deliver the previous utterance now (to its own target) instead of dropping it
+        target = to
         held = true; session += 1; latest = ""
         let mine = session
         clear?.cancel()
@@ -32,12 +40,14 @@ final class Dictation {
             guard held, session == mine else { return }   // released while the permission sheet was up
             begin(mine)
         }
+        return true
     }
 
     func stop() {
         guard held else { return }
         held = false
         guard engine != nil else { state = .idle; return }
+        if target == .ask { assistant?.voiceLevel = 0 }
         let mine = session
         teardownAudio()
         request?.endAudio()
@@ -69,6 +79,7 @@ final class Dictation {
         do { try eng.start() } catch { input.removeTap(onBus: 0); held = false; return say("Couldn't open the microphone") }
         engine = eng; request = req
         state = .listening(partial: "", level: 0)
+        if target == .ask { assistant?.voiceBegan() }
         task = rec.recognitionTask(with: req, resultHandler: Self.resultHandler(mine))
         Task { try? await Task.sleep(for: .seconds(60)); if held, session == mine { stop() } }   // release never arrived
     }
@@ -97,12 +108,14 @@ final class Dictation {
     private func setLevel(_ l: Float, _ mine: Int) {
         guard mine == session, case .listening(let p, _) = state else { return }
         state = .listening(partial: p, level: l)
+        if target == .ask, held { assistant?.voiceLevel(l) }
     }
 
     private func heard(_ text: String?, final: Bool, _ mine: Int) {
         guard mine == session else { return }
         if let text { latest = text }
         if held, case .listening(_, let l) = state { state = .listening(partial: latest, level: l) }
+        if target == .ask, text != nil { assistant?.voiceHeard(latest) }   // the words become the prompt text, in place
         if final && !held { finish(mine) }
     }
 
@@ -119,12 +132,14 @@ final class Dictation {
         teardownAudio()
         let text = DictationLogic.cleaned(latest)
         latest = ""
-        guard let text else { state = .idle; return }
         state = .idle
+        if target == .ask { assistant?.voiceEnded(text); return }   // nil (nothing heard) leaves the notch open and focused
+        guard let text else { return }
         paste(text)
     }
 
     private func say(_ s: String) {
+        if target == .ask { state = .idle; assistant?.voiceFailed(s); return }
         state = .message(s)
         clear = Task { try? await Task.sleep(for: .seconds(2.5)); if !Task.isCancelled { state = .idle } }
     }

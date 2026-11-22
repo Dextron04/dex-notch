@@ -10,6 +10,8 @@ The newest version is at the top. Every release is on the [Releases page](https:
 
 **Hold ⌥V anywhere to dictate.** Speak while you hold the keys, let go, and your words are pasted into whatever you were typing in. The notch shows what it hears while you talk. Nothing is rewritten, and it never presses Return. It uses your Mac's built-in speech recognition, on this Mac, and the microphone is on only while you hold the keys. The first time, macOS asks for microphone, speech and Accessibility access; without Accessibility the text is copied instead.
 
+**Hold ⌥Space to ask out loud.** A quick tap still opens and closes the notch. Hold it a moment longer and the notch opens and listens: your words appear in the question field as you speak, and when you let go they are sent to whichever model is active, as if you had typed them and pressed Return. If the notch is already open, holding ⌥V does the same instead of pasting into another app. If nothing was heard, nothing is sent. If it is still answering, your words wait in the field.
+
 ## v0.9.6: Screen answers stay out of your way
 
 *21 November 2026*

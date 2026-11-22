@@ -18,3 +18,22 @@ enum DictationLogic {
         return (id.map { Locale(identifier: $0) } ?? .current, (v?["allow_apple_server"] as? Bool) == true)
     }
 }
+
+/// One key, two meanings: a quick tap and a hold. The caller starts a threshold timer on `press`, calls `thresholdPassed` when it fires,
+/// and acts on `release`. Autorepeat presses are ignored.
+struct TapOrHold {
+    static let threshold: TimeInterval = 0.25
+    enum Release { case tap, endHold, ignored }
+    private var down = false
+    private var holding = false
+
+    mutating func press() -> Bool { if down { return false }; down = true; holding = false; return true }
+    /// True once, if the key is still down: the hold begins.
+    mutating func thresholdPassed() -> Bool { guard down, !holding else { return false }; holding = true; return true }
+    mutating func release() -> Release {
+        guard down else { return .ignored }
+        down = false
+        defer { holding = false }
+        return holding ? .endHold : .tap
+    }
+}

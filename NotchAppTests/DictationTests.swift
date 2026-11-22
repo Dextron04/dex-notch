@@ -20,4 +20,14 @@ final class DictationTests: XCTestCase {
         let v = DictationLogic.voice(at: url)
         XCTAssertEqual(v.locale.identifier, "fr-FR"); XCTAssertTrue(v.allowServer)
     }
+
+    func testTapOrHold() {
+        var k = TapOrHold()
+        XCTAssertTrue(k.press()); XCTAssertFalse(k.press())            // autorepeat ignored
+        XCTAssertEqual(k.release(), .tap)                              // released before the threshold
+        XCTAssertEqual(k.release(), .ignored)
+        XCTAssertTrue(k.press()); XCTAssertTrue(k.thresholdPassed()); XCTAssertFalse(k.thresholdPassed())
+        XCTAssertEqual(k.release(), .endHold)
+        XCTAssertFalse(k.thresholdPassed())                            // timer firing after release does nothing
+    }
 }

@@ -131,7 +131,7 @@ struct DictationBar: View {
 }
 
 /// Eleven ember bars: centre-weighted, breathing with the smoothed level, with a faint shimmer in silence.
-private struct Wave: View {
+struct Wave: View {
     let level: Float
     let still: Bool
     let live: Bool

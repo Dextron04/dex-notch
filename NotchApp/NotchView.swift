@@ -26,6 +26,7 @@ struct NotchView: View {
     @State private var announceTask: Task<Void, Never>?
     private static let announceHold: Double = 1.6
     @State private var contentH: CGFloat = 0
+    @State private var showGlint = false
 
     private let openW: CGFloat = 560
     private let inputH: CGFloat = 52
@@ -58,6 +59,7 @@ struct NotchView: View {
         .onChange(of: a.isOpen) { if a.isOpen { center.assistantOpened() } else { center.assistantClosed(); announceTask?.cancel(); announced = nil } }
         .onChange(of: a.backend) { focused = true; announce() }
         .onChange(of: a.work) { announce() }
+        .onChange(of: a.sentTick) { showGlint = true; Task { try? await Task.sleep(for: .milliseconds(450)); showGlint = false } }
         .onChange(of: a.busy) { if !a.busy && a.isOpen { focused = true } } // field is disabled while answering
         .task(id: [a.isOpen ? 1 : 0, a.mode == .prompt ? 1 : 0]) { if a.isOpen && a.mode == .prompt { try? await Task.sleep(for: .milliseconds(120)); focused = true } } // also when switching recall → prompt while open
     }
@@ -67,7 +69,12 @@ struct NotchView: View {
             .fill(.black)
             .frame(width: a.isOpen ? openW : notch.width, height: pillH)
             .overlay(alignment: .top) { content }
-            .overlay(alignment: .bottom) { if a.isOpen && a.mode == .prompt && a.busy && a.waiting { EmberSweep().transition(.opacity) } }
+            .overlay(alignment: .bottom) {
+                ZStack(alignment: .bottom) {
+                    if a.isOpen && a.mode == .prompt && a.busy && a.waiting { EmberSweep().transition(.opacity) }
+                    if showGlint && !reduce { SendGlint() }      // a spoken question leaving: one ember pass, then the thinking sweep takes over
+                }
+            }
             .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: a.isOpen ? 26 : 10, bottomTrailingRadius: a.isOpen ? 26 : 10))
             .animation(.spring(duration: 0.5, bounce: 0.22), value: a.isOpen)
             .animation(.smooth(duration: 0.28), value: pillH)
@@ -191,7 +198,7 @@ struct NotchView: View {
     private var inputRow: some View {
         HStack(spacing: 10) {
             TextField("", text: $a.draft,
-                      prompt: Text(a.needsSetup ? "Install claude or codex to begin" : a.backend == .gemma ? (hasAnswer ? "Follow up…" : "Ask anything") : (a.work && !hasAnswer ? "Ask \(a.backend.rawValue) · ⌘F folder" : "Ask \(a.backend.rawValue)…")).foregroundStyle(Ink.dim))
+                      prompt: Text(a.listening ? "Listening…" : a.needsSetup ? "Install claude or codex to begin" : a.backend == .gemma ? (hasAnswer ? "Follow up…" : "Ask anything") : (a.work && !hasAnswer ? "Ask \(a.backend.rawValue) · ⌘F folder" : "Ask \(a.backend.rawValue)…")).foregroundStyle(Ink.dim))
                 .textFieldStyle(.plain)
                 .font(.system(size: 19))
                 .foregroundStyle(Ink.text)
@@ -210,10 +217,18 @@ struct NotchView: View {
                     .transition(reduce ? .opacity : .modifier(active: Slide(x: 12, opacity: 0, blur: 5), identity: Slide(x: 0, opacity: 1, blur: 0)))
             }
             eyeChip
-            Image(systemName: "return")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(a.draft.isEmpty && !a.seeScreen ? Ink.dim.opacity(0.5) : Ink.ember)
-                .animation(.easeOut(duration: 0.15), value: a.draft.isEmpty && !a.seeScreen)
+            ZStack {
+                if a.listening {
+                    Wave(level: a.voiceLevel, still: reduce, live: true).frame(width: 54, height: 20).transition(.opacity)
+                } else {
+                    Image(systemName: "return")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(a.draft.isEmpty && !a.seeScreen ? Ink.dim.opacity(0.5) : Ink.ember)
+                        .animation(.easeOut(duration: 0.15), value: a.draft.isEmpty && !a.seeScreen)
+                        .transition(.opacity)
+                }
+            }
+            .animation(reduce ? .easeOut(duration: 0.15) : .smooth(duration: 0.25), value: a.listening)
         }
         .padding(.horizontal, 30)
         .frame(height: inputH)
@@ -334,6 +349,24 @@ private struct EmberSweep: View {
             .frame(height: 2)
         }
         .allowsHitTesting(false)
+    }
+}
+
+/// One ember pass along the pill's bottom edge when a spoken question is sent; the thinking sweep picks up from there.
+private struct SendGlint: View {
+    @State private var go = false
+    var body: some View {
+        GeometryReader { g in
+            let w = g.size.width * 0.34
+            Capsule()
+                .fill(LinearGradient(colors: [.clear, Ink.ember, Ink.emberDeep.opacity(0.9), .clear], startPoint: .leading, endPoint: .trailing))
+                .frame(width: w, height: 2.5)
+                .offset(x: go ? g.size.width : -w)
+                .blur(radius: 0.6)
+        }
+        .frame(height: 2.5)
+        .allowsHitTesting(false)
+        .onAppear { withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.38)) { go = true } }
     }
 }
 

@@ -61,16 +61,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AccountGate.shared.launch()        // starts the app, once the server confirms this Mac's account
     }
 
+    // ⌥Space: a quick tap toggles the notch (on release); holding past the threshold opens it and listens, release sends.
+    private var space = TapOrHold()
+    private var spaceTimer: Task<Void, Never>?
+    private var spaceAsking = false
+
+    private func spacePressed() {
+        guard space.press() else { return }
+        spaceTimer?.cancel()
+        spaceTimer = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(TapOrHold.threshold))
+            guard !Task.isCancelled, let self, self.space.thresholdPassed() else { return }
+            self.assistant.open(.prompt)
+            self.spaceAsking = Dictation.shared.start(.ask)
+        }
+    }
+
+    private func spaceReleased() {
+        spaceTimer?.cancel()
+        switch space.release() {
+        case .tap: assistant.toggle()
+        case .endHold: if spaceAsking { Dictation.shared.stop() }; spaceAsking = false
+        case .ignored: break
+        }
+    }
+
     private func startApp() {
         ScreenCapture.sweep()      // a screenshot left by a crash
         notch = NotchWindow(assistant: assistant)
         notch?.show()
         hotkeys = [
-            Hotkey(id: 1, keyCode: kVK_Space, modifiers: optionKey) { [assistant] in assistant.toggle() },
+            Hotkey(id: 1, keyCode: kVK_Space, modifiers: optionKey, action: { [weak self] in self?.spacePressed() }, onRelease: { [weak self] in self?.spaceReleased() }),   // tap toggles, hold asks by voice
             Hotkey(id: 2, keyCode: kVK_Space, modifiers: optionKey | shiftKey) { [assistant] in assistant.toggleRecall() },
             Hotkey(id: 3, keyCode: kVK_ANSI_S, modifiers: optionKey | cmdKey) { [assistant] in assistant.screenHotkey() },
-            Hotkey(id: 4, keyCode: kVK_ANSI_V, modifiers: optionKey, action: { Dictation.shared.start() }, onRelease: { Dictation.shared.stop() }),   // hold to dictate (id 3 is the screen hotkey)
+            Hotkey(id: 4, keyCode: kVK_ANSI_V, modifiers: optionKey, action: { [assistant] in Dictation.shared.start(assistant.isOpen && assistant.mode == .prompt ? .ask : .paste) }, onRelease: { Dictation.shared.stop() }),   // hold to dictate (id 3 is the screen hotkey)
         ]
+        Dictation.shared.assistant = assistant
         assistant.connect()
         assistant.startScreenBridge()
         AddonCenter.shared.start(assistant: assistant)
