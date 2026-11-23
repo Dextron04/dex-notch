@@ -23,6 +23,7 @@ struct NotchApp: App {
                 if let v = updater.readyVersion { Button("Restart to update to \(v)") { updater.restartNow() } }
             } else {
             Button("Ask…  ⌥Space") { delegate.assistant.toggle() }
+            Button("Ask by voice  hold ⌥Space") {}.disabled(true)
             Button("Ask about my screen…  ⌥⌘S") { delegate.assistant.screenHotkey() }
             Button("Recall…  ⌥⇧Space") { delegate.assistant.toggleRecall() }
             if !center.needsReconnect.isEmpty { Button("Reconnect Gmail (\(center.needsReconnect.count))…") { center.reconnectAll() } }
@@ -61,15 +62,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AccountGate.shared.launch()        // starts the app, once the server confirms this Mac's account
     }
 
+    // ⌥Space: a quick tap toggles the notch (on release); holding past the threshold opens it and listens, release sends.
+    private var space = TapOrHold()
+    private var spaceTimer: Task<Void, Never>?
+    private var spaceAsking = false
+
+    private func spacePressed() {
+        guard space.press() else { return }
+        spaceTimer?.cancel()
+        guard DictationLogic.enabled(at: Settings.defaultURL) else { return }      // voice off: a hold is just a slow tap (no timer, no mic)
+        spaceTimer = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(TapOrHold.threshold))
+            guard !Task.isCancelled, let self, self.space.thresholdPassed() else { return }
+            self.spaceAsking = Dictation.shared.start()
+            if self.spaceAsking { self.assistant.open(.prompt) }
+        }
+    }
+
+    private func spaceReleased() {
+        spaceTimer?.cancel()
+        switch space.release() {
+        case .tap: assistant.toggle()
+        case .endHold: if spaceAsking { Dictation.shared.stop() }; spaceAsking = false
+        case .ignored: break
+        }
+    }
+
     private func startApp() {
         ScreenCapture.sweep()      // a screenshot left by a crash
         notch = NotchWindow(assistant: assistant)
         notch?.show()
         hotkeys = [
-            Hotkey(id: 1, keyCode: kVK_Space, modifiers: optionKey) { [assistant] in assistant.toggle() },
+            Hotkey(id: 1, keyCode: kVK_Space, modifiers: optionKey, action: { [weak self] in self?.spacePressed() }, onRelease: { [weak self] in self?.spaceReleased() }),   // tap toggles, hold asks by voice
             Hotkey(id: 2, keyCode: kVK_Space, modifiers: optionKey | shiftKey) { [assistant] in assistant.toggleRecall() },
             Hotkey(id: 3, keyCode: kVK_ANSI_S, modifiers: optionKey | cmdKey) { [assistant] in assistant.screenHotkey() },
         ]
+        Dictation.shared.assistant = assistant
+        Task { await VoiceLanguages.shared.refresh() }      // which models are installed; nothing downloads until you ask
         assistant.connect()
         assistant.startScreenBridge()
         AddonCenter.shared.start(assistant: assistant)

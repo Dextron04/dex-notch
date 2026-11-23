@@ -102,6 +102,8 @@ Don't have `claude` or `codex` yet? The notch tells you what to install and wait
   <br><sub><b>Answers with receipts.</b> Code gets its own block with a copy button. When the local model drew on your memory, a line under the answer names the notes it used.</sub>
 </p>
 
+**Ask out loud.** Hold `⌥Space` instead of tapping it, say your question, let go, and it is sent. Recognition runs on your Mac, the microphone is open only while you hold the key, and you can switch the whole thing off in Settings → Voice. See [PRIVACY.md](PRIVACY.md#voice-hold-space-to-ask).
+
 ### Recall
 
 Press `⌥⇧ Space` to see what you and your agents have been doing.
@@ -240,6 +242,9 @@ The settings window writes `~/Library/Application Support/NotchApp/settings.json
 | `addons.phone_alerts` | `true` shows iPhone notifications at the notch (see [iPhone notifications](#iphone-notifications)). Off by default. Also a switch in Settings → iPhone. |
 | `addons.microsoft` | `client_id` of your own Microsoft application for Outlook sign-in (see [Outlook](#outlook-and-microsoft-365)). Release builds carry their own. |
 | `addons.gmail` | `client_id` and `client_secret` of your own Google client. Only needed when building from source; release builds carry their own. |
+| `voice.enabled` | `false` turns hold-⌥Space voice off (a hold then acts like a tap and the microphone is never used). Also the switch in Settings → Voice. |
+| `voice.locale` / `voice.languages` | The language voice listens for (for example `en-US`, `hi-IN`, or `mul-IN` for Hinglish) and up to three to switch between with the chip in the notch. Also set in Settings → Voice. |
+| `voice.allow_apple_server` | `true` lets macOS before 26 use Apple's servers for a language with no offline model. Off by default. |
 | `hosted.host` | The hosted Dex memory server this Mac is linked to. Written when you sign in; point it at another server to self-host. The device token is never in this file: it lives in your Keychain. |
 | `hosted.upload` | `false` stops the recorder uploading conversations to your account. Leave it out for the default, `true`. Also **Keep my conversations in my account** in Settings → Memory. |
 

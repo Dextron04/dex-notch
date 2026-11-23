@@ -261,6 +261,47 @@ final class Assistant {
 
     private func reset() { dropShot(); screenProblem = nil; turns = []; draft = ""; error = nil; backend = AgentStream.defaultBackend(choices: choices, preferred: preferred) ?? .claude; work = false; folder = workspaceDefault; sessions = [:]; toolNote = nil; dualStage = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; journaled = 0; persist() }
 
+    // MARK: voice ask (driven by Dictation with its `.ask` target)
+
+    var listening = false          // the mic is open for a question
+    var voiceLevel: Float = 0      // smoothed: fast attack, slow release
+    var sentTick = 0               // bumps when a spoken question has been sent (the ember send motion)
+    private var voiceBase = ""     // whatever was already typed; the spoken words follow it
+    private var voiceWrote = ""    // the last text the transcript put in the field; anything else there is the user typing
+    private var voiceYielded = false // the user typed while listening: the transcript stops writing and release won't send
+
+    private func voiceText(_ spoken: String) -> String { voiceBase.isEmpty ? spoken : spoken.isEmpty ? voiceBase : voiceBase + " " + spoken }
+    func voiceBegan() { voiceBase = draft; voiceWrote = draft; voiceYielded = false; listening = true; voiceLevel = 0; error = nil; voiceMsg = nil }
+    func voiceHeard(_ partial: String) {
+        guard listening else { return }
+        if draft != voiceWrote { voiceYielded = true }   // the user's keys win over the transcript
+        guard !voiceYielded else { return }
+        voiceWrote = voiceText(partial); draft = voiceWrote
+    }
+    func voiceLevel(_ l: Float) { let t = Float(pow(Double(l), 0.7)); voiceLevel += (t - voiceLevel) * (t > voiceLevel ? 0.7 : 0.18) }
+    func voiceFailed(_ message: String) { if listening, draft == voiceWrote { draft = voiceBase }; listening = false; voiceLevel = 0; voiceNote(message) }   // not `error`: that would replace the last answer on screen until the next send
+    /// A short line in the input row's placeholder (the transcript is empty before the first answer, so `error` alone would never show).
+    var voiceMsg: String?
+    private var voiceMsgTask: Task<Void, Never>?
+    func voiceNote(_ message: String) {
+        voiceMsg = message
+        voiceMsgTask?.cancel()
+        voiceMsgTask = Task { try? await Task.sleep(for: .seconds(6)); if !Task.isCancelled { voiceMsg = nil } }
+    }
+    /// Release: send what was heard exactly as typing it and pressing Return would. Nothing heard: the notch stays open, field focused.
+    /// Busy answering: typing is disabled then, so the words wait in the field instead of being sent or lost.
+    func voiceEnded(_ text: String?) {
+        guard listening else { return }
+        listening = false; voiceLevel = 0
+        if draft != voiceWrote { voiceYielded = true }
+        if voiceYielded { return }                        // they took over by typing: leave their text, don't send
+        guard let text else { draft = voiceBase; return }
+        draft = voiceText(text)
+        guard isOpen else { return }                      // Esc mid-hold: the words wait in the draft, nothing is sent or reopened
+        guard !busy else { return }
+        send()
+    }
+
     // MARK: ask
 
     func send() {
@@ -278,6 +319,7 @@ final class Assistant {
         let b = r.backend
         exchange = (b, Date())
         draft = ""; error = nil; toolNote = nil; recalled = []; screenProblem = nil; clearMarks()
+        sentTick += 1                                                                // typed or spoken: one shared send motion
         turns.append(Turn(role: "user", text: r.prompt))
         turns.append(Turn(role: "assistant", text: ""))
         waiting = true

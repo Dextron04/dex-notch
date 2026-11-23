@@ -5,7 +5,7 @@ on:
 permissions: { contents: read }
 jobs:
   test:
-    runs-on: macos-15
+    runs-on: macos-26   # macos-26: the SpeechAnalyzer dictation engine needs the macOS 26 SDK (older toolchains still compile via #if compiler)
     steps:
       - uses: actions/checkout@v4
       - name: Install XcodeGen

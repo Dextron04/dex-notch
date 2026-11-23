@@ -8,6 +8,11 @@ enum Ink {
     static let dim = Color(red: 0.95, green: 0.92, blue: 0.87).opacity(0.52)
 }
 
+private struct FieldHKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
 private struct HeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
@@ -26,16 +31,24 @@ struct NotchView: View {
     @State private var announceTask: Task<Void, Never>?
     private static let announceHold: Double = 1.6
     @State private var contentH: CGFloat = 0
+    @State private var showGlint = false
+    @State private var fieldH: CGFloat = 0          // measured height of the prompt field: grows a line at a time, 1…4 lines
+    @State private var keyTick = 0                  // bumps per typed keystroke: drives the edge glow
+    @State private var keyPeak = 0.5                // glow strength for that keystroke, from typing rhythm
+    @State private var lastKey = Date.distantPast
+    @State private var lastTyped = ""               // what was in the field just before it was sent
+    @State private var ghost: String?               // that text, lifting away as it becomes the question
 
     private let openW: CGFloat = 560
     private let inputH: CGFloat = 52
+    private var rowH: CGFloat { max(inputH, fieldH.rounded(.up) + 28) }   // 14 pt above and below the text
     private var hasAnswer: Bool { !a.turns.isEmpty }
     private static let setupH: CGFloat = 168
     private var bodyH: CGFloat { a.needsSetup ? Self.setupH : hasAnswer ? min((contentH / 8).rounded(.up) * 8, NotchWindow.maxBody) : 0 }
     private var recallH: CGFloat { notch.height + 6 + RecallView.bodyHeight(a) + 12 }
     private var pillH: CGFloat {
         guard a.isOpen else { return notch.height }
-        return a.mode == .recall ? recallH : notch.height + 6 + bodyH + inputH + 12
+        return a.mode == .recall ? recallH : notch.height + 6 + bodyH + rowH + 12
     }
 
     var body: some View {
@@ -56,9 +69,16 @@ struct NotchView: View {
         .onKeyPress(.escape) { if center.notesOpen { center.closeNotes() } else if center.replyOpen { center.collapseReply() } else { a.close() }; return .handled }
         .onChange(of: a.isOpen) { if a.isOpen { center.assistantOpened() } else { center.assistantClosed(); announceTask?.cancel(); announced = nil } }
         .onChange(of: a.backend) { focused = true; announce() }
+        .onChange(of: a.draft) { typed() }
         .onChange(of: a.work) { announce() }
-        .onChange(of: a.busy) { if !a.busy && a.isOpen { focused = true } } // field is disabled while answering
-        .task(id: [a.isOpen ? 1 : 0, a.mode == .prompt ? 1 : 0]) { if a.isOpen && a.mode == .prompt { try? await Task.sleep(for: .milliseconds(120)); focused = true } } // also when switching recall → prompt while open
+        .onChange(of: a.sentTick) {
+            showGlint = true
+            if !reduce, !lastTyped.isEmpty { ghost = lastTyped }
+            lastTyped = ""      // an empty-field send (eye armed) must not lift the previous question again
+            Task { try? await Task.sleep(for: .milliseconds(450)); showGlint = false; ghost = nil }
+        }
+        // focus the moment the notch opens (no sleep: the first keystrokes land in the field); one runloop tick later in case SwiftUI hadn't built it yet
+        .task(id: [a.isOpen ? 1 : 0, a.mode == .prompt ? 1 : 0]) { if a.isOpen && a.mode == .prompt { focused = true; await Task.yield(); focused = true } } // also when switching recall → prompt while open
     }
 
     private var pill: some View {
@@ -66,7 +86,12 @@ struct NotchView: View {
             .fill(.black)
             .frame(width: a.isOpen ? openW : notch.width, height: pillH)
             .overlay(alignment: .top) { content }
-            .overlay(alignment: .bottom) { if a.isOpen && a.mode == .prompt && a.busy && a.waiting { EmberSweep().transition(.opacity) } }
+            .overlay(alignment: .bottom) {
+                ZStack(alignment: .bottom) {
+                    if a.isOpen && a.mode == .prompt && a.busy && a.waiting { EmberSweep().transition(.opacity) }
+                    if showGlint && !reduce { SendGlint() }      // a spoken question leaving: one ember pass, then the thinking sweep takes over
+                }
+            }
             .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: a.isOpen ? 26 : 10, bottomTrailingRadius: a.isOpen ? 26 : 10))
             .animation(.spring(duration: 0.5, bounce: 0.22), value: a.isOpen)
             .animation(.smooth(duration: 0.28), value: pillH)
@@ -74,21 +99,22 @@ struct NotchView: View {
 
     private var content: some View {
         VStack(spacing: 0) {
-            wings.frame(height: notch.height)
+            wings.frame(height: notch.height).blur(radius: settle)
             if a.mode == .recall {
-                RecallView(a: a).padding(.top, 6)
+                RecallView(a: a).padding(.top, 6).blur(radius: settle)
             } else {
-                if a.needsSetup { setupCard.frame(height: bodyH).padding(.top, 6) }
-                else if hasAnswer { transcript.frame(height: bodyH).padding(.top, 6) }
+                if a.needsSetup { setupCard.frame(height: bodyH).padding(.top, 6).blur(radius: settle) }
+                else if hasAnswer { transcript.frame(height: bodyH).padding(.top, 6).blur(radius: settle) }
                 inputRow.padding(.top, hasAnswer || a.needsSetup ? 0 : 6)
             }
         }
         .frame(width: openW)
-        // content arrives after the shell has opened, leaves before it closes
+        // content arrives just after the shell starts opening (the input row never blurs, so it is typeable at once), leaves before it closes
         .opacity(a.isOpen ? 1 : 0)
-        .blur(radius: a.isOpen ? 0 : 8)
-        .animation(.easeOut(duration: a.isOpen ? 0.3 : 0.12).delay(a.isOpen ? 0.14 : 0), value: a.isOpen)
+        .animation(.easeOut(duration: a.isOpen ? 0.22 : 0.12).delay(a.isOpen ? 0.07 : 0), value: a.isOpen)
     }
+
+    private var settle: CGFloat { a.isOpen || reduce ? 0 : 8 }
 
     // MARK: wings — status flanking the hardware notch
 
@@ -187,40 +213,112 @@ struct NotchView: View {
 
     // MARK: input
 
+    private var placeholder: String {
+        a.listening ? "Listening…" : a.voiceMsg != nil ? a.voiceMsg! : a.needsSetup ? "Install claude or codex to begin" : a.backend == .gemma ? (hasAnswer ? "Follow up…" : "Ask anything") : (a.work && !hasAnswer ? "Ask \(a.backend.rawValue) · ⌘F folder" : "Ask \(a.backend.rawValue)…")
+    }
+
+    /// Per typed keystroke: strength from rhythm (fast typing glows harder), then the edge glow plays once and dies. Nothing runs while idle.
+    private func typed() {
+        guard !a.draft.isEmpty else { return }
+        lastTyped = a.draft
+        guard !a.listening, !reduce else { return }
+        let dt = Date().timeIntervalSince(lastKey); lastKey = Date()
+        keyPeak = dt < 0.12 ? 1 : dt < 0.3 ? 0.7 : 0.45
+        keyTick += 1
+    }
+
     private var inputRow: some View {
-        HStack(spacing: 10) {
-            TextField("", text: $a.draft,
-                      prompt: Text(a.needsSetup ? "Install claude or codex to begin" : a.backend == .gemma ? (hasAnswer ? "Follow up…" : "Ask anything") : (a.work && !hasAnswer ? "Ask \(a.backend.rawValue) · ⌘F folder" : "Ask \(a.backend.rawValue)…")).foregroundStyle(Ink.dim))
+        let ready = !a.draft.isEmpty || a.seeScreen
+        return HStack(alignment: .bottom, spacing: 10) {
+            TextField("", text: $a.draft, axis: .vertical)
+                .lineLimit(1...4)
                 .textFieldStyle(.plain)
                 .font(.system(size: 19))
-                .foregroundStyle(Ink.text)
+                .foregroundStyle(a.listening ? Ink.text.opacity(0.85) : Ink.text)
                 .tint(Ink.ember)
-                .focused($focused)
-                .disabled(a.busy)
-                .onSubmit { a.send() }
-            if hasAnswer && !a.busy {
-                Button { a.newConversation() } label: {
-                    Image(systemName: "square.and.pencil").font(.system(size: 12, weight: .regular)).foregroundStyle(Ink.dim).padding(6).contentShape(Rectangle())
+                .focused($focused)          // stays enabled while answering: draft the follow-up, Return waits
+                .onSubmit { a.send() }      // Return: SwiftUI respects marked (half-composed IME) text; send() ignores it while busy
+                .onKeyPress(.return, phases: .down) { k in
+                    // ⇧↩ newline at the caret (⌥↩ is the field's own). Everything else, and IME composition, falls through to onSubmit.
+                    guard k.modifiers.contains(.shift), let tv = NSApp.keyWindow?.firstResponder as? NSTextView, !tv.hasMarkedText() else { return .ignored }
+                    tv.insertNewlineIgnoringFieldEditor(nil); return .handled
                 }
-                .buttonStyle(.plain).help("New conversation  ⌘N").accessibilityLabel("New conversation")
+                .background(GeometryReader { Color.clear.preference(key: FieldHKey.self, value: $0.size.height) })
+                .onPreferenceChange(FieldHKey.self) { if $0 > 0, $0 != fieldH { fieldH = $0 } }
+                .overlay(alignment: .topLeading) {
+                    ZStack(alignment: .topLeading) {
+                        if a.draft.isEmpty {
+                            Text(placeholder).font(.system(size: 19)).foregroundStyle(Ink.dim).lineLimit(1).id(placeholder).transition(.opacity)
+                        }
+                        if let g = ghost { GhostText(text: g) }
+                    }
+                    .animation(.easeOut(duration: 0.18), value: placeholder)
+                    .allowsHitTesting(false)
+                }
+                .padding(.vertical, 14)
+            HStack(spacing: 10) {
+                if hasAnswer && !a.busy {
+                    Button { a.newConversation() } label: {
+                        Image(systemName: "square.and.pencil").font(.system(size: 12, weight: .regular)).foregroundStyle(Ink.dim).padding(6).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).help("New conversation  ⌘N").accessibilityLabel("New conversation")
+                }
+                if let b = announced {
+                    ModelAnnounce(backend: b, work: a.work, hold: Self.announceHold, reduce: reduce).id(announceTick)
+                        .transition(reduce ? .opacity : .modifier(active: Slide(x: 12, opacity: 0, blur: 5), identity: Slide(x: 0, opacity: 1, blur: 0)))
+                }
+                langChip
+                eyeChip
+                ZStack {
+                    if a.listening {
+                        Wave(level: a.voiceLevel, still: reduce).frame(width: 54, height: 20).transition(.opacity)
+                    } else {
+                        ReturnGlyph(ready: ready, busy: a.busy, reduce: reduce).transition(.opacity)
+                    }
+                }
+                .animation(reduce ? .easeOut(duration: 0.15) : .smooth(duration: 0.25), value: a.listening)
             }
-            if let b = announced {
-                ModelAnnounce(backend: b, work: a.work, hold: Self.announceHold, reduce: reduce).id(announceTick)
-                    .transition(reduce ? .opacity : .modifier(active: Slide(x: 12, opacity: 0, blur: 5), identity: Slide(x: 0, opacity: 1, blur: 0)))
-            }
-            eyeChip
-            Image(systemName: "return")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(a.draft.isEmpty && !a.seeScreen ? Ink.dim.opacity(0.5) : Ink.ember)
-                .animation(.easeOut(duration: 0.15), value: a.draft.isEmpty && !a.seeScreen)
+            .frame(height: 24)
+            .padding(.bottom, 14)
         }
         .padding(.horizontal, 30)
-        .frame(height: inputH)
+        .frame(height: rowH)
         .background(
             // hairline, not a box
             Rectangle().fill(Ink.text.opacity(hasAnswer ? 0.08 : 0)).frame(height: 1).padding(.horizontal, 26),
             alignment: .top)
+        .background(alignment: .bottom) { edgeGlow(on: !a.draft.isEmpty && !a.busy) }
         .background(Button("") { copy() }.keyboardShortcut("c", modifiers: [.command, .shift]).opacity(0).allowsHitTesting(false))
+    }
+
+    /// An ember line under the field: draws out from the centre when there is something to send, and flares a little with each key.
+    private func edgeGlow(on: Bool) -> some View {
+        Capsule()
+            .fill(LinearGradient(colors: [.clear, Ink.ember, .clear], startPoint: .leading, endPoint: .trailing))
+            .frame(height: 1.5)
+            .padding(.horizontal, 30)
+            .scaleEffect(x: on ? 1 : 0.2)
+            .opacity(on ? 0.22 : 0)
+            .keyframeAnimator(initialValue: 0.0, trigger: keyTick) { v, f in v.opacity(1).brightness(0).shadow(color: Ink.ember.opacity(f * 0.8), radius: 5).overlay { Capsule().fill(Ink.ember).frame(height: 1.5).padding(.horizontal, 30).opacity(f * 0.8) } } keyframes: { _ in
+                LinearKeyframe(keyPeak, duration: 0.04)
+                CubicKeyframe(0, duration: 0.26)
+            }
+            .padding(.bottom, 6)
+            .animation(reduce ? .easeOut(duration: 0.15) : .spring(duration: 0.4, bounce: 0.15), value: on)
+            .allowsHitTesting(false)
+    }
+
+    /// The voice language: "EN", "HI", "HG". Click cycles the quick-switch set. A fixed slot, so nothing beside it moves; blank with one language.
+    private var langChip: some View {
+        let show = VoiceLanguages.shared.selected.count >= 2 || a.listening
+        return Button { Dictation.shared.cycleLanguage() } label: {
+            Text(Dictation.shared.currentLanguageCode).font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(a.listening ? Ink.ember : Ink.dim)
+                .frame(width: 26, height: 24).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .opacity(show ? 1 : 0).allowsHitTesting(show && !a.listening)
+        .help("Voice language · click to switch").accessibilityLabel("Voice language \(Dictation.shared.currentLanguageCode), click to switch").accessibilityHidden(!show)
     }
 
     /// The eye. Idle: dim outline. Armed: ember, filled, with the shot beside it (springs in from the right). Capturing: a quick blink.
@@ -297,6 +395,58 @@ struct NotchView: View {
     }
 }
 
+/// Eleven ember bars: centre-weighted, breathing with the smoothed level, with a faint shimmer in silence.
+struct Wave: View {
+    let level: Float
+    let still: Bool
+
+    var body: some View {
+        // only on screen while listening, so an idle app draws no frames
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still)) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate
+            Canvas { ctx, size in
+                let n = 11, pitch: CGFloat = 5, w: CGFloat = 2.5
+                let x0 = (size.width - CGFloat(n - 1) * pitch - w) / 2
+                for i in 0..<n {
+                    let env = 1 - 0.5 * abs(Double(i) - 5) / 5
+                    let wob = still ? 0.7 : 0.5 + 0.5 * sin(t * 7 + Double(i) * 0.9)
+                    let amp = min(1, 0.1 * (still ? 0 : 0.5 + 0.5 * sin(t * 2.2 + Double(i) * 0.6)) + Double(level) * env * (0.55 + 0.45 * wob))
+                    let h = 3 + (size.height - 3) * amp
+                    let r = CGRect(x: x0 + CGFloat(i) * pitch, y: (size.height - h) / 2, width: w, height: h)
+                    ctx.fill(Path(roundedRect: r, cornerRadius: w / 2), with: .color(Ink.ember.opacity(0.5 + 0.5 * amp)))
+                }
+            }
+        }
+    }
+}
+
+/// The send key. Dim when empty, ember (quiet 0.15 s crossfade, no pop) when there is something to send, a slow breath while an answer is on its way.
+private struct ReturnGlyph: View {
+    let ready: Bool, busy: Bool, reduce: Bool
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 20, paused: !busy || reduce)) { ctx in
+            let breath = busy && !reduce ? 0.3 + 0.2 * (0.5 + 0.5 * sin(ctx.date.timeIntervalSinceReferenceDate * 2.6)) : 1
+            Image(systemName: "return")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(ready && !busy ? Ink.ember : Ink.dim.opacity(0.5))
+                .opacity(busy ? breath : 1)
+                .frame(width: 20, height: 24)   // fixed slot: nothing here moves with a keystroke
+                .animation(.easeOut(duration: 0.15), value: ready)
+        }
+    }
+}
+
+/// The sent text, lifting off the field as it becomes the question.
+private struct GhostText: View {
+    let text: String
+    @State private var go = false
+    var body: some View {
+        Text(text).font(.system(size: 19)).foregroundStyle(Ink.text).lineLimit(4)
+            .offset(y: go ? -6 : 0).opacity(go ? 0 : 1)
+            .onAppear { withAnimation(.easeOut(duration: 0.2)) { go = true } }
+    }
+}
+
 private struct Ping { var s = 1.0, o = 0.0 }
 
 /// Breathing status dot: steady ember when ready, slow pulse while working, grey when offline.
@@ -333,6 +483,24 @@ private struct EmberSweep: View {
             .frame(height: 2)
         }
         .allowsHitTesting(false)
+    }
+}
+
+/// One ember pass along the pill's bottom edge when a spoken question is sent; the thinking sweep picks up from there.
+private struct SendGlint: View {
+    @State private var go = false
+    var body: some View {
+        GeometryReader { g in
+            let w = g.size.width * 0.34
+            Capsule()
+                .fill(LinearGradient(colors: [.clear, Ink.ember, Ink.emberDeep.opacity(0.9), .clear], startPoint: .leading, endPoint: .trailing))
+                .frame(width: w, height: 2.5)
+                .offset(x: go ? g.size.width : -w)
+                .blur(radius: 0.6)
+        }
+        .frame(height: 2.5)
+        .allowsHitTesting(false)
+        .onAppear { withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.38)) { go = true } }
     }
 }
 
