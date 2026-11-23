@@ -232,6 +232,7 @@ struct NotchView: View {
         return HStack(alignment: .bottom, spacing: 10) {
             TextField("", text: $a.draft, axis: .vertical)
                 .lineLimit(1...4)
+                .fixedSize(horizontal: false, vertical: true)      // the row's fixed height is proposed back to the field: without this it never reports more than one line and the new line is clipped
                 .textFieldStyle(.plain)
                 .font(.system(size: 19))
                 .foregroundStyle(a.listening ? Ink.text.opacity(0.85) : Ink.text)

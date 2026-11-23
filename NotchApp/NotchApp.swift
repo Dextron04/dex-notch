@@ -119,6 +119,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let p = ProcessInfo.processInfo.environment["NOTCH_OPEN_SETTINGS"], !p.isEmpty {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [assistant] in SetupWindow.shared.show(assistant: assistant) }
         }
+        #if DEBUG
+        // NOTCH_DEMO_DRAFT=<text> opens the notch with that text in the field (\n is a newline): layout checks
+        if let d = ProcessInfo.processInfo.environment["NOTCH_DEMO_DRAFT"], !d.isEmpty {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [assistant] in assistant.open(.prompt); assistant.draft = d.replacingOccurrences(of: "\\n", with: "\n") }
+        }
+        #endif
         // rebuild on display changes (plug/unplug, resolution)
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
