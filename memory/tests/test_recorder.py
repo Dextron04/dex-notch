@@ -165,6 +165,16 @@ class RecorderTests(unittest.TestCase):
         (note,) = list(self.vault.glob("Sessions/*/*/*.md"))
         self.assertEqual(note.parent.name, "2026-11"); self.assertIn("notch", note.name)
 
+    def test_notch_launched_sessions_are_not_recorded(self):
+        home = "/Users/x/Library/Application Support/NotchApp/scratch"
+        for cwd in (home, "/private/var/folders/ab/T/DexNotch-run-1234"):
+            self.f.write_text(jl(*[dict(x, cwd=cwd) for x in (u("secret q"), a("secret a"))]))
+            self.assertEqual(recorder.tick(self.vault, self.cc())["new_turns"], 0)
+            self.f.unlink(); (self.vault / ".recorder" / "state.json").unlink()
+        self.assertEqual(self.turns_in_notes(), 0)
+        self.f.write_text(jl(u("q"), a("a")))  # an ordinary cwd is still recorded
+        self.assertEqual(recorder.tick(self.vault, self.cc())["new_turns"], 2)
+
     def test_large_file_streamed(self):
         blob = "x" * 50_000
         with open(self.f, "w") as fh:

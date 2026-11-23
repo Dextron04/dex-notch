@@ -19,6 +19,12 @@ def _merge(old: Optional[dict], new: Optional[SessionMeta]) -> Optional[dict]:
         elif v: out[k] = v
     return out
 
+def is_notch_private(cwd: str) -> bool:
+    """Sessions the notch launches run in its scratch folder or a throwaway DexNotch-run-* dir. Notch chats stay local unless
+    the user saves one to the vault, so every adapter's sessions from there are dropped in one place (the notch journal has no cwd)."""
+    c = (cwd or "").rstrip("/") + "/"
+    return "/Library/Application Support/NotchApp/" in c or "/DexNotch-run-" in c
+
 class StateError(Exception):
     pass
 
@@ -70,6 +76,7 @@ def _tick(vault: Path, adapters: List[Adapter], state_path: Optional[Path], rec:
                 stats["files"] += 1
                 meta, turns, off = ad.parse(path, st["offset"] if st else 0)
                 merged = _merge(st["meta"] if st else None, meta)
+                if merged and is_notch_private(merged.get("cwd", "")): turns = []  # consumed, never written
                 added = 0
                 if merged and turns:
                     # identity (project/cwd/started => note path) is fixed by the first chunk that has turns, never by header-only chunks
