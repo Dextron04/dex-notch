@@ -24,6 +24,7 @@
 		23B64ECBB548D9A23A57FD34 /* AgentRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F1487592A6A941D9CB95947 /* AgentRunner.swift */; };
 		2452662E03B5DE52879166A7 /* ReplySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B63938FF0CDB184A70CB883 /* ReplySession.swift */; };
 		2660C2F1962F132008848A83 /* RecorderLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = D891818290A45CF95E1F7353 /* RecorderLogic.swift */; };
+		275EC4130591B1D0EEB515B6 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE08DB783BC23C9C97B5A853 /* HistoryView.swift */; };
 		2919017C0DB6467DFB086C5B /* ScreenTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ABBBE174D6328954CEF70E1 /* ScreenTool.swift */; };
 		2F9D4C587D08A0A859566F25 /* SettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA22C6E41EAD33D9E8DD129E /* SettingsTests.swift */; };
 		3079D52787E1306738598D32 /* AccountGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E309A3BA024DFCF5E80FEA3 /* AccountGate.swift */; };
@@ -35,6 +36,7 @@
 		36E06C405D9DE3811D0D8107 /* SecurityHardeningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3A0540F48DFF4F8A00E753 /* SecurityHardeningTests.swift */; };
 		3DAB1EE2139C1FD0BE520C84 /* JournalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 930E261BCB82A59819B0A2A3 /* JournalTests.swift */; };
 		41396688D0553BBE1B3ED41A /* Changelog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE2273ED4887AF61DC376B5 /* Changelog.swift */; };
+		428067F71AD930C8074B632F /* HistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC66641D00255B5475B28A7 /* HistoryStoreTests.swift */; };
 		4589E5F5759E858CC57E6466 /* Journal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582019F4D21E660A42477FFC /* Journal.swift */; };
 		4A4B2C1CD6B0D56399BDCE80 /* ScreenMarksTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3D8A79FB7776A9B09D98036 /* ScreenMarksTests.swift */; };
 		50C799904FBE799B42C449D1 /* SVGPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99408511A3D90560197E556F /* SVGPath.swift */; };
@@ -120,6 +122,7 @@
 		34B56D0B5E24A59E4A23F196 /* RecallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecallView.swift; sourceTree = "<group>"; };
 		3B7D87E48BF594612257808A /* ConversationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStoreTests.swift; sourceTree = "<group>"; };
 		3ED3A72A153FD60EEF8E9E06 /* WhatsNewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewView.swift; sourceTree = "<group>"; };
+		3FC66641D00255B5475B28A7 /* HistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryStoreTests.swift; sourceTree = "<group>"; };
 		4238EE4D607071C2DC49564E /* ConnectionLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionLogic.swift; sourceTree = "<group>"; };
 		461189366EBDE3A440C7E728 /* AddonCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddonCenter.swift; sourceTree = "<group>"; };
 		4B63938FF0CDB184A70CB883 /* ReplySession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplySession.swift; sourceTree = "<group>"; };
@@ -155,6 +158,7 @@
 		AF0DFD7E45777FAF0F57E13D /* DictationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationTests.swift; sourceTree = "<group>"; };
 		B4CBD5204758A52DD991B3D4 /* NotchApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NotchApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA22C6E41EAD33D9E8DD129E /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
+		BE08DB783BC23C9C97B5A853 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		C2D6FACDD9417F0189139076 /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		C2E728D5AB400774BF5A65DF /* Reminders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reminders.swift; sourceTree = "<group>"; };
 		CE562AE9C74255701B08F531 /* AnswerBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerBody.swift; sourceTree = "<group>"; };
@@ -221,6 +225,7 @@
 				6DF7D52391A25626A30D8C8B /* DualJudge.swift */,
 				88ACFBCE79212F6384821091 /* DualStageView.swift */,
 				2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */,
+				BE08DB783BC23C9C97B5A853 /* HistoryView.swift */,
 				01C444F1096C79018A64B462 /* Hotkey.swift */,
 				7E9B5AA03F38C0E8CEEF866E /* Info.plist */,
 				582019F4D21E660A42477FFC /* Journal.swift */,
@@ -265,6 +270,7 @@
 				AF0DFD7E45777FAF0F57E13D /* DictationTests.swift */,
 				8C075D60EE2601DEFE639496 /* DualJudgeTests.swift */,
 				2D31B10BCA190AE471459BF5 /* DualScreenTests.swift */,
+				3FC66641D00255B5475B28A7 /* HistoryStoreTests.swift */,
 				930E261BCB82A59819B0A2A3 /* JournalTests.swift */,
 				E3FDC75598EA2E996BF9FAE8 /* KeychainStoreTests.swift */,
 				A884A661AF58B421AD45E9F3 /* PureLogicTests.swift */,
@@ -427,6 +433,7 @@
 				5D9D60706B813FC48B186E50 /* DualJudgeTests.swift in Sources */,
 				334B84EDCF0C092186CC49A2 /* DualScreenTests.swift in Sources */,
 				54586C4F2DAA8DE93B04E8E4 /* Gmail.swift in Sources */,
+				428067F71AD930C8074B632F /* HistoryStoreTests.swift in Sources */,
 				4589E5F5759E858CC57E6466 /* Journal.swift in Sources */,
 				3DAB1EE2139C1FD0BE520C84 /* JournalTests.swift in Sources */,
 				359D34323BEAC44A4AC0AF5C /* KeychainStore.swift in Sources */,
@@ -477,6 +484,7 @@
 				80D02B2BEDB19300A282F223 /* DualJudge.swift in Sources */,
 				8B6BECB551BDDF74F33429F4 /* DualStageView.swift in Sources */,
 				0999A29BFF7BFEF67D4DB6DD /* Gmail.swift in Sources */,
+				275EC4130591B1D0EEB515B6 /* HistoryView.swift in Sources */,
 				CB95895D7A39CCCEEF6EAD02 /* Hotkey.swift in Sources */,
 				8180508E708118CF50F0B557 /* Journal.swift in Sources */,
 				BFF5DE6C28BCA61791F88A08 /* KeychainStore.swift in Sources */,

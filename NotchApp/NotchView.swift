@@ -46,8 +46,10 @@ struct NotchView: View {
     private static let setupH: CGFloat = 168
     private var bodyH: CGFloat { a.needsSetup ? Self.setupH : hasAnswer ? min((contentH / 8).rounded(.up) * 8, NotchWindow.maxBody) : 0 }
     private var recallH: CGFloat { notch.height + 6 + RecallView.bodyHeight(a) + 12 }
+    private var historyH: CGFloat { notch.height + 6 + HistoryView.bodyHeight(a) + 12 }
     private var pillH: CGFloat {
         guard a.isOpen else { return notch.height }
+        if a.mode == .history { return historyH }
         return a.mode == .recall ? recallH : notch.height + 6 + bodyH + rowH + 12
     }
 
@@ -100,7 +102,9 @@ struct NotchView: View {
     private var content: some View {
         VStack(spacing: 0) {
             wings.frame(height: notch.height).blur(radius: settle)
-            if a.mode == .recall {
+            if a.mode == .history {
+                HistoryView(a: a).padding(.top, 6).blur(radius: settle).transition(.opacity.combined(with: .offset(y: 6)))
+            } else if a.mode == .recall {
                 RecallView(a: a).padding(.top, 6).blur(radius: settle)
             } else {
                 if a.needsSetup { setupCard.frame(height: bodyH).padding(.top, 6).blur(radius: settle) }
@@ -109,6 +113,7 @@ struct NotchView: View {
             }
         }
         .frame(width: openW)
+        .animation(reduce ? nil : .smooth(duration: 0.3), value: a.mode)
         // content arrives just after the shell starts opening (the input row never blurs, so it is typeable at once), leaves before it closes
         .opacity(a.isOpen ? 1 : 0)
         .animation(.easeOut(duration: a.isOpen ? 0.22 : 0.12).delay(a.isOpen ? 0.07 : 0), value: a.isOpen)
@@ -121,7 +126,7 @@ struct NotchView: View {
     private var wings: some View {
         HStack(spacing: 0) {
             HStack(spacing: 8) {
-                StatusDot(link: a.mode == .recall ? (a.snapshot.recorderOK ? .ready : .offline) : (a.backend == .gemma ? a.link : .ready), busy: a.busy || a.summarizing)
+                StatusDot(link: a.mode == .history ? .ready : a.mode == .recall ? (a.snapshot.recorderOK ? .ready : .offline) : (a.backend == .gemma ? a.link : .ready), busy: a.busy || a.summarizing)
                 Text(statusText).font(.system(size: 11, weight: .medium)).tracking(0.3).foregroundStyle(Ink.dim)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -140,6 +145,7 @@ struct NotchView: View {
     }
 
     private var statusText: String {
+        if a.mode == .history { return "history · on this Mac" }
         if a.mode == .recall { return a.snapshot.recorderOK ? "recorder · running" : "recorder · not running" }
         if let p = a.screenProblem { return p }
         if a.needsSetup { return "setup needed" }
@@ -193,6 +199,7 @@ struct NotchView: View {
                             Text("from your vault · " + a.recalled.prefix(3).joined(separator: " · "))
                                 .font(.system(size: 11)).foregroundStyle(Ink.dim).lineLimit(2)
                         }
+                        if !a.busy { vaultLine }
                     }
                     Color.clear.frame(height: 1).id("end")
                 }
@@ -209,6 +216,26 @@ struct NotchView: View {
                                          .init(color: .black, location: 0.94), .init(color: .clear, location: 1)],
                                  startPoint: .top, endPoint: .bottom))
         }
+    }
+
+    /// Under a finished answer: save this chat to the vault (it stays on this Mac otherwise), and the way into history.
+    private var vaultLine: some View {
+        HStack(spacing: 14) {
+            Button { a.saveToVault() } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: a.vaultSaved ? "checkmark" : "tray.and.arrow.down").font(.system(size: 10.5, weight: .semibold))
+                        .symbolEffect(.bounce, value: reduce ? 0 : a.vaultTick)
+                    Text(a.vaultSaved ? "Saved to vault" : a.vaultTurns > 0 ? "Save new turns to vault" : "Save to vault")
+                    if !a.vaultSaved { Text("⌘S").foregroundStyle(Ink.text.opacity(0.75)) }
+                }
+                .foregroundStyle(a.vaultSaved ? Ink.ember : Ink.dim).contentShape(Rectangle())
+                .animation(reduce ? nil : .smooth(duration: 0.25), value: a.vaultSaved)
+            }
+            .buttonStyle(.plain).disabled(a.vaultSaved).help("Chats stay on this Mac unless you save them to your vault")
+            Button { a.toggleHistory() } label: { HStack(spacing: 5) { Text("⌘Y").foregroundStyle(Ink.text.opacity(0.75)); Text("history") }.foregroundStyle(Ink.dim) }
+                .buttonStyle(.plain)
+        }
+        .font(.system(size: 11, weight: .medium)).tracking(0.3).padding(.top, 2)
     }
 
     // MARK: input

@@ -25,6 +25,7 @@ struct NotchApp: App {
             Button("Ask…  ⌥Space") { delegate.assistant.toggle() }
             Button("Ask by voice  hold ⌥Space") {}.disabled(true)
             Button("Ask about my screen…  ⌥⌘S") { delegate.assistant.screenHotkey() }
+            Button("History…  ⌘Y") { delegate.assistant.toggleHistory() }
             Button("Recall…  ⌥⇧Space") { delegate.assistant.toggleRecall() }
             if !center.needsReconnect.isEmpty { Button("Reconnect Gmail (\(center.needsReconnect.count))…") { center.reconnectAll() } }
             if let v = updater.readyVersion { Button("Restart to update to \(v)") { updater.restartNow() } }
