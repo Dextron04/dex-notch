@@ -22,7 +22,6 @@ final class VoiceLanguages {
     private var failed: [String: String] = [:]
     private var queue = DownloadQueue()
     private var runner: Task<Void, Never>?
-    private var current: String?
     private var cancelled = false
     private var activeProgress: Progress?
     private(set) var problem: String?
@@ -67,6 +66,7 @@ final class VoiceLanguages {
         var l = selected
         if let id { if slot < l.count { l[slot] = id } else { l.append(id) } } else if slot > 0, slot < l.count { l.remove(at: slot) }
         let new = DictationLogic.languages(primary: nil, list: l)
+        for gone in selected where !new.contains(where: { $0.lowercased() == gone.lowercased() }) { cancel(gone) }   // removed while queued or downloading: stop, don't fetch what nobody asked for
         do { try DictationLogic.save(at: Settings.defaultURL, languages: new); problem = nil } catch { problem = "Couldn't save settings.json." }
         reload(); Dictation.shared.refreshLanguage()
         Task {
@@ -160,6 +160,7 @@ final class VoiceLanguages {
                 guard let loc = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: id)) else { throw CocoaError(.featureUnsupported) }
                 step = "reserve"
                 try await reserve(loc)
+                if cancelled { break }                                  // cancelled while reserving: before the download starts
                 step = "download"
                 let t = SpeechTranscriber(locale: loc, transcriptionOptions: [], reportingOptions: [], attributeOptions: [])
                 if let req = try await AssetInventory.assetInstallationRequest(supporting: [t]) {
