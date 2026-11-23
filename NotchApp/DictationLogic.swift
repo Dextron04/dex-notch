@@ -96,6 +96,54 @@ enum DictationLogic {
     }
 }
 
+// MARK: model downloads (pure: the queue, the error wording, the reserve limit, what older macOS lacks)
+
+/// Downloads run one at a time, in the order they were asked for. A language is never queued twice.
+struct DownloadQueue: Equatable {
+    private(set) var items: [String] = []
+    private static func k(_ id: String) -> String { DictationLogic.normalized(id).lowercased() }
+    func contains(_ id: String) -> Bool { items.contains { Self.k($0) == Self.k(id) } }
+    mutating func add(_ id: String) { if !contains(id) { items.append(id) } }
+    mutating func remove(_ id: String) { items.removeAll { Self.k($0) == Self.k(id) } }
+    mutating func pop() -> String? { items.isEmpty ? nil : items.removeFirst() }
+}
+
+enum ReserveDecision: Equatable { case ok, release([String]), full(Int) }
+
+extension DictationLogic {
+    /// The macOS 26 engine keeps at most `max` languages reserved. Already holding it, or room left: fine. Otherwise release only as many
+    /// reserved languages outside `keep` as needed (first reserved first); if that can't make room, it is full.
+    static func reserveDecision(reserved: [String], keep: Set<String>, wanted: String, max: Int) -> ReserveDecision {
+        let w = wanted.lowercased()
+        if reserved.contains(where: { $0.lowercased() == w }) || reserved.count < max { return .ok }
+        let need = reserved.count - max + 1
+        let spare = reserved.filter { !keep.contains($0.lowercased()) && $0.lowercased() != w }
+        return spare.count >= need ? .release(Array(spare.prefix(need))) : .full(max)
+    }
+
+    static func reserveFullMessage(_ max: Int) -> String { "Your Mac can keep \(max) voice languages for Dex Notch. Remove one to add another." }
+
+    /// A human line for a failed download. The technical detail goes to the log, not here.
+    static func downloadMessage(domain: String, code: Int, name: String) -> String {
+        let offline = [-1009, -1005, -1001, -1004, -1018, -1020]       // not connected, connection lost, timed out, can't connect, roaming off, data off
+        if domain == NSURLErrorDomain, offline.contains(code) { return "No internet connection. Try again when you're online." }
+        return "Couldn't download \(name) (\(code)). Try again."
+    }
+
+    /// Languages Apple's macOS 26 engine can do that the older engine can't do on this Mac. A short hand-kept list (checked against
+    /// SpeechTranscriber.supportedLocales and the old engine's on-device set); anything missing here just isn't tagged.
+    static let needsMacOS26: Set<String> = ["hi-in", "mul-in", "ur-in", "bn-in", "ta-in", "te-in", "mr-in", "gu-in", "kn-in", "ml-in", "pa-in",
+                                            "de-de", "fr-fr", "es-es", "es-mx", "it-it", "pt-br", "ja-jp", "ko-kr", "zh-cn", "zh-tw", "yue-cn"]
+    static func needsMacOS26(_ id: String) -> Bool { needsMacOS26.contains(normalized(id).lowercased()) }
+
+    /// What to use when the stored language can't run here: itself if it can, else English (en-US first), else the first one that can.
+    static func fallback(for wanted: String, available: [String]) -> String? {
+        let w = normalized(wanted).lowercased()
+        if let hit = available.first(where: { normalized($0).lowercased() == w }) { return hit }
+        return available.first { normalized($0).lowercased() == "en-us" } ?? available.first { normalized($0).lowercased().hasPrefix("en") } ?? available.first
+    }
+}
+
 /// One key, two meanings: a quick tap and a hold. The caller starts a threshold timer on `press`, calls `thresholdPassed` when it fires,
 /// and acts on `release`. Autorepeat presses are ignored. If a release is ever lost, a press more than `stale` seconds after the last one
 /// counts as fresh, so the key can't stay dead.

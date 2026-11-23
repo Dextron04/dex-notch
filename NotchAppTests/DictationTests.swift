@@ -94,3 +94,35 @@ final class DictationLanguageTests: XCTestCase {
         XCTAssertNil(v["languages"]); XCTAssertEqual(v["allow_apple_server"] as? Bool, true)
     }
 }
+
+final class VoiceDownloadTests: XCTestCase {
+    func testQueueOrderAndNoDuplicates() {
+        var q = DownloadQueue()
+        q.add("hi-IN"); q.add("fr_FR"); q.add("HI-in")
+        XCTAssertEqual(q.items, ["hi-IN", "fr_FR"]); XCTAssertTrue(q.contains("fr-FR"))
+        XCTAssertEqual(q.pop(), "hi-IN"); q.remove("fr-FR")
+        XCTAssertNil(q.pop())
+    }
+
+    func testDownloadMessageByDomainAndCode() {
+        XCTAssertEqual(DictationLogic.downloadMessage(domain: NSURLErrorDomain, code: -1009, name: "Hindi"), "No internet connection. Try again when you're online.")
+        XCTAssertEqual(DictationLogic.downloadMessage(domain: "SFSpeechErrorDomain", code: 7, name: "Hindi"), "Couldn't download Hindi (7). Try again.")
+        XCTAssertEqual(DictationLogic.downloadMessage(domain: NSCocoaErrorDomain, code: -1009, name: "Hindi"), "Couldn't download Hindi (-1009). Try again.")
+    }
+
+    func testReserveDecision() {
+        let keep: Set<String> = ["en-us", "hi-in"]
+        XCTAssertEqual(DictationLogic.reserveDecision(reserved: ["en-US", "hi-IN"], keep: keep, wanted: "hi-IN", max: 2), .ok)       // already held
+        XCTAssertEqual(DictationLogic.reserveDecision(reserved: ["en-US"], keep: keep, wanted: "hi-IN", max: 2), .ok)                 // room
+        XCTAssertEqual(DictationLogic.reserveDecision(reserved: ["en-US", "fr-FR"], keep: keep, wanted: "hi-IN", max: 2), .release(["fr-FR"]))
+        XCTAssertEqual(DictationLogic.reserveDecision(reserved: ["en-US", "hi-IN"], keep: keep, wanted: "ja-JP", max: 2), .full(2))
+    }
+
+    func testFallbackAndMacOS26List() {
+        XCTAssertEqual(DictationLogic.fallback(for: "hi-IN", available: ["fr-FR", "en-US"]), "en-US")
+        XCTAssertEqual(DictationLogic.fallback(for: "fr_FR", available: ["fr-FR", "en-US"]), "fr-FR")
+        XCTAssertEqual(DictationLogic.fallback(for: "hi-IN", available: ["fr-FR", "en-GB"]), "en-GB")
+        XCTAssertNil(DictationLogic.fallback(for: "hi-IN", available: []))
+        XCTAssertTrue(DictationLogic.needsMacOS26("hi_IN")); XCTAssertTrue(DictationLogic.needsMacOS26("mul-IN")); XCTAssertFalse(DictationLogic.needsMacOS26("en-US"))
+    }
+}

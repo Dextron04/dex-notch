@@ -17,6 +17,7 @@ final class Dictation {
     private var held = false                 // the key is down (autorepeat presses are ignored while this is true)
     private var session = 0                  // bumped per press; stale callbacks and timers compare against it
     private var latest = ""
+    private var saidFallback = Set<String>()     // languages already announced as replaced this launch
     private var analyzer: (end: () -> Void, cancel: () -> Void)?   // the macOS 26 engine, when it is the one running
     /// "EN", "HI": the language the next dictation will use. Observable, shown in the notch's language chip.
     private(set) var currentLanguageCode = DictationLogic.code(for: DictationLogic.stored(at: Settings.defaultURL).primary)
@@ -93,7 +94,7 @@ final class Dictation {
             guard held, session == mine else { return }
             held = false
             let id = loc.identifier(.bcp47)
-            if let p = VoiceLanguages.shared.problem { VoiceLanguages.shared.clearProblem(); return say(p) }   // the last download failed: say why, the next try downloads again
+            if let p = VoiceLanguages.shared.takeFailure(id) { return say(p) }   // the last download failed: say why, the next try downloads again
             VoiceLanguages.shared.download(id)      // the model comes down once; audio never leaves the Mac
             assistant?.voiceNote("Downloading \(VoiceLanguages.shortName(id))…")
             return
@@ -111,6 +112,9 @@ final class Dictation {
             engine = eng; analyzer = (run.end, run.cancel)
             assistant?.voiceBegan()
             Task { try? await Task.sleep(for: .seconds(60)); if held, session == mine { stop() } }   // release never arrived
+        } catch let e as VoiceLanguages.ReserveFull {
+            guard session == mine else { return }
+            held = false; say(e.message)
         } catch {
             Self.log.error("analyzer start failed: \(error.localizedDescription, privacy: .public)")
             guard session == mine else { return }
@@ -121,12 +125,22 @@ final class Dictation {
 
     private func beginClassic(_ v: (locale: Locale, allowServer: Bool), _ mine: Int) {
         guard held, session == mine else { return }
-        guard let rec = SFSpeechRecognizer(locale: v.locale), rec.isAvailable else { held = false; return say("Dictation isn't available right now") }
-        if !rec.supportsOnDeviceRecognition && !v.allowServer {
-            held = false
-            let name = Locale.current.localizedString(forIdentifier: v.locale.identifier) ?? v.locale.identifier
-            return say("\(name) isn't available offline on this Mac")
+        var locale = v.locale
+        if !v.allowServer, !(SFSpeechRecognizer(locale: locale)?.supportsOnDeviceRecognition ?? false) {
+            // the stored language can't run here (synced settings, an older macOS): use the best one that can, and say so once
+            let id = DictationLogic.normalized(locale.identifier(.bcp47))
+            let usable = VoiceLanguages.legacy().0.map { DictationLogic.normalized($0.identifier(.bcp47)) }
+            guard let alt = DictationLogic.fallback(for: id, available: usable) else {
+                held = false
+                return say("\(VoiceLanguages.shortName(id)) isn't available offline on this Mac")
+            }
+            if saidFallback.insert(id.lowercased()).inserted {
+                let why = DictationLogic.needsMacOS26(id) && !VoiceLanguages.modern ? "needs macOS 26 or later" : "isn't available on this Mac"
+                assistant?.voiceNote("\(VoiceLanguages.shortName(id)) \(why). Using \(VoiceLanguages.shortName(alt)).")
+            }
+            locale = Locale(identifier: alt)
         }
+        guard let rec = SFSpeechRecognizer(locale: locale), rec.isAvailable else { held = false; return say("Dictation isn't available right now") }
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
         req.requiresOnDeviceRecognition = rec.supportsOnDeviceRecognition   // only false when the person opted in

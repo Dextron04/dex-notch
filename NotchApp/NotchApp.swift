@@ -98,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Hotkey(id: 3, keyCode: kVK_ANSI_S, modifiers: optionKey | cmdKey) { [assistant] in assistant.screenHotkey() },
         ]
         Dictation.shared.assistant = assistant
+        Task { await VoiceLanguages.shared.refresh() }      // which models are installed; nothing downloads until you ask
         assistant.connect()
         assistant.startScreenBridge()
         AddonCenter.shared.start(assistant: assistant)

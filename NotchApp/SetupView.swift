@@ -748,6 +748,7 @@ struct SetupView: View {
         let slots = ["Main language", "Also switch to", "Also switch to"]
         return VStack(alignment: .leading, spacing: 0) {
             header("Voice", "Hold ⌥Space and speak to ask. Dex Notch hears one language at a time and does not guess, so pick yours here, then switch between up to three with the small language chip in the notch. Language choice and Hinglish need macOS 26 or later.")
+            if !VoiceLanguages.modern { olderMacNotice(v) }
             card {
                 row(title: "Ask by voice", detail: voiceOn ? "On. Hold ⌥Space, speak, let go." : "Off. Holding ⌥Space works like a tap, and the microphone is never used.",
                     lead: { Image(systemName: "waveform").font(.system(size: 16)).foregroundStyle(Ink.dim) },
@@ -757,33 +758,51 @@ struct SetupView: View {
                     trail: { if !voiceAllowed { link("Allow now") { Task { voiceAllowed = await Dictation.requestPermissions() } } } })
                 ForEach(0..<min(v.selected.count + 1, DictationLogic.maxLanguages), id: \.self) { i in
                     let id = i < v.selected.count ? v.selected[i] : nil
-                    row(title: slots[i], detail: id.map { detail(v.status($0)) } ?? "Optional.",
+                    row(title: slots[i], detail: id.map { detail(v.status($0), $0, v) } ?? "Optional.",
                         lead: { Image(systemName: i == 0 ? "mic" : "character.bubble").font(.system(size: 16)).foregroundStyle(Ink.dim) },
                         trail: {
                             HStack(spacing: 14) {
-                                if let id, case .download = v.status(id) { link("Download") { v.download(id) } }
+                                if let id {
+                                    switch v.status(id) {
+                                    case .download: link("Download") { v.download(id) }
+                                    case .queued, .downloading: link("Cancel", dim: true) { v.cancel(id) }
+                                    case .failed: link("Retry") { v.download(id) }
+                                    default: EmptyView()
+                                    }
+                                }
                                 Picker("", selection: Binding(get: { id ?? "" }, set: { v.set(slot: i, $0.isEmpty ? nil : $0) })) {
                                     if i > 0 { Text("None").tag("") }
-                                    ForEach(v.options.filter { o in o.id == id || !v.selected.contains { $0.lowercased() == o.id.lowercased() } }, id: \.id) { Text($0.name).tag($0.id) }
+                                    ForEach(v.options.filter { o in o.id == id || !v.selected.contains { $0.lowercased() == o.id.lowercased() } }, id: \.id) { Text($0.locked ? "\($0.name) · macOS 26+" : $0.name).tag($0.id).disabled($0.locked) }
                                 }.labelsHidden().pickerStyle(.menu).frame(maxWidth: 220)
                             }
                         })
                 }
             }
-            if let p = v.problem { Text(p).font(.system(size: 13)).foregroundStyle(Ink.emberDeep).padding(.top, 14) }
+            if v.missing.count >= 2 { HStack { Spacer(); link("Download all") { v.downloadAll() } }.padding(.top, 12) }
+            if let p = v.problem, !v.selected.contains(where: { if case .failed = v.status($0) { true } else { false } }) { Text(p).font(.system(size: 13)).foregroundStyle(Ink.emberDeep).padding(.top, 14) }
             Text("Everything is recognized on this Mac. Another language's model downloads once, the first time you use it, and Apple keeps it in system storage.")
                 .font(.system(size: 13)).foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true).padding(.top, 18)
         }
         .task { v.reload(); voiceAllowed = Dictation.permissionGranted; await v.refresh() }
     }
 
-    private func detail(_ s: VoiceLanguages.Status) -> String {
+    private func detail(_ s: VoiceLanguages.Status, _ id: String, _ v: VoiceLanguages) -> String {
         switch s {
         case .installed: "Installed"
         case .download: "Not downloaded yet"
-        case .downloading(let p): "Downloading… \(Int(p * 100))%"
-        case .unavailable: "Not available offline"
+        case .queued: "Queued"
+        case .downloading(let p): "\(VoiceLanguages.shortName(id)) · \(v.detail[DictationLogic.normalized(id).lowercased()] ?? "\(Int(p * 100))%")"
+        case .failed(let m): m
+        case .unavailable: VoiceLanguages.modern ? "Not available on this Mac" : DictationLogic.needsMacOS26(id) ? "Needs macOS 26 or later" : "Not available offline"
         }
+    }
+
+    /// One calm line for Macs before 26: what they are missing, and what they can do.
+    private func olderMacNotice(_ v: VoiceLanguages) -> some View {
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        let works = v.options.filter { !$0.locked && v.status($0.id) != .unavailable }.map(\.name)
+        return Text("You're on macOS \(os.majorVersion).\(os.minorVersion). More languages, including Hindi and Hinglish, need macOS 26 or later. On this Mac voice works in: \(works.isEmpty ? "English" : works.joined(separator: ", ")).")
+            .font(.system(size: 13.5)).foregroundStyle(Ink.dim).lineSpacing(3).fixedSize(horizontal: false, vertical: true).padding(.bottom, 16)
     }
 
     private var updatesPane: some View {
