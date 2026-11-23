@@ -93,6 +93,7 @@ If your notes aren't in `~/Vault`, add `--vault /your/folder` to the first comma
 ## Everyday use
 
 - **`⌥ Space`** opens the notch to ask a question; **`⌥ ⇧ Space`** opens recall of your past conversations.
+- **Hold `⌥ Space`** to ask out loud: speak, let go, and it is sent. The first time, macOS asks to allow the **microphone** (or press **Allow now** in Settings → Voice). On macOS 26 or later each language downloads once, when you add it. Everything is recognized on your Mac.
 - Reminders you ask an assistant for ("remind me to call mum at 9") appear at the notch.
 - Optional alerts for Gmail, Outlook and iPhone notifications are in Settings. See the [README](../README.md).
 - Updates arrive in the background; the menu bar mark gets a dot when one is ready to restart into.
@@ -106,6 +107,7 @@ If your notes aren't in `~/Vault`, add `--vault /your/folder` to the first comma
 | The welcome window never moves on | Check the code on the page matches, and that you pressed **Add this Mac**. The code expires after 10 minutes: press **Start over**. |
 | Dex Notch returns to the sign-in window | The server no longer recognises this Mac (you removed it, or locked your vault after linking it). Sign in again; nothing is lost. |
 | Nothing is uploading | Settings → Memory → **Record my conversations** must say *Recording*. Also check that **Keep my conversations in my account** is on. |
+| Holding `⌥ Space` doesn't listen | Settings → Voice: **Ask by voice** must be on and the microphone allowed (System Settings → Privacy & Security → Microphone). |
 | "Needs Python" | Run `xcode-select --install`, then press **Start recording**. |
 | Claude or ChatGPT says unauthorized or asks you to sign in again | Press **Connect** again in Settings → Memory, or remove the old Dex connector in the assistant first. Connectors added before you locked your vault must be re-added once. |
 | Codex or Claude Code says "registration failed" or "redirect_uri not allowed" | Update to Dex Notch 0.9.1 and make sure the server is current: earlier servers refused the local sign-in these tools use. |

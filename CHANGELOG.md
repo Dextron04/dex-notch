@@ -6,9 +6,25 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
-## Unreleased
+## v0.9.7: Ask out loud
 
-**Ask out loud.** A quick tap of ⌥Space still opens and closes the notch. Hold it a moment longer and the notch opens and listens: your words appear in the question field as you speak, and when you let go they are sent to the model you have chosen, as if you had typed them and pressed Return. If nothing was heard, nothing is sent; if it is still answering, your words wait in the field. Everything is recognized on this Mac: the microphone is on only while you hold the key, and your voice is never stored or sent anywhere. On macOS 26 and later you can choose your language, add up to two more, and use Hinglish (Hindi and English in one sentence). A small language chip in the notch switches between them, and Settings, under Voice, has the downloads, the on and off switch and the microphone permission. Dex Notch does not guess the language you are speaking, so it uses the one you picked; a language's model downloads once, the first time you need it. Downloads start as soon as you add a language, one at a time, with progress and a Cancel button. On older macOS versions voice works in the languages your Mac can already do offline, and Settings shows which languages need macOS 26.
+*23 November 2026*
+
+**Ask out loud.** A quick tap of ⌥Space still opens and closes the notch, but it now acts when you let go of the key, so a hold can tell itself apart from a tap. Hold it a moment longer and the notch opens and listens: your words appear in the question field as you speak, and when you let go they are sent to the model you have chosen, as if you had typed them and pressed Return. If nothing was heard, nothing is sent; if it is still answering, your words wait in the field. Everything is recognized on this Mac: the microphone is on only while you hold the key, and your voice is never stored or sent anywhere.
+
+<p align="center">
+    <img src="docs/assets/voice-listening.gif" alt="The open notch while listening: the words 'what's on my calendar tomorrow' in the question field, a small EN language chip, and a row of bars that rises and falls with the voice." width="600">
+</p>
+
+<p align="center"><a href="docs/assets/voice-listening.mp4">Watch it as a video (MP4)</a></p>
+
+**Languages.** On macOS 26 and later you can choose your language, add up to two more, and use Hinglish (Hindi and English in one sentence). A small language chip in the notch switches between them. Dex Notch does not guess the language you are speaking, so it uses the one you picked. Each language downloads once, as soon as you add it, one at a time, with progress and a Cancel button. On older macOS versions voice works in the languages your Mac can already do offline, and Settings shows which languages need macOS 26.
+
+<p align="center">
+    <img src="docs/assets/settings-voice.png" alt="Dex Notch Settings on the Voice page: a switch for Ask by voice, the microphone permission with an Allow now button, and menus for your main language and a second language." width="640">
+</p>
+
+**What you need to do.** The first time you hold ⌥Space, macOS asks to allow the microphone: say yes (or press Allow now in Settings, under Voice). On macOS 26 and later, a language's model downloads once, the first time you need it. You can switch voice off at any time in Settings, under Voice.
 
 **Typing feels better too.** The notch is ready to type the instant it opens, the question field grows up to four lines (⇧↩ adds a line, and Return still respects Hindi, Japanese and Chinese input as you compose), and a sent question gets one soft ember pass along the edge. You can draft a follow-up while an answer is still coming.
 
