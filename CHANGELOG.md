@@ -12,7 +12,17 @@ The newest version is at the top. Every release is on the [Releases page](https:
 
 **Every chat is kept, and only on your Mac.** Anything you ask the notch is now saved locally, one private file per conversation. Press ⌘Y (or choose History… in the menu bar) to see them, newest first and grouped by Today, Yesterday, Previous 7 days and Older. Type to search titles and every message. ↑ and ↓ move, Return picks the chat back up exactly where you left it (your draft too, and Claude and Codex carry on the same session), ⌘⌫ twice deletes one, and Esc goes back to the chat.
 
+<p align="center">
+    <img src="docs/assets/history.gif" alt="The History view in the notch: conversations grouped under Today, Yesterday, Previous 7 days and Older. Arrow keys move the highlight down two rows, then Return reopens that chat." width="600">
+</p>
+
+<p align="center"><a href="docs/assets/history.mp4">Watch it as a video (MP4)</a></p>
+
 **Nothing reaches your vault unless you say so.** Chats with Claude and Codex that the notch starts are no longer recorded, and Gemma chats are no longer added to your vault by themselves. Press ⌘S under an answer to save the whole conversation to your vault; save again later and only the new turns are added.
+
+<p align="center">
+    <img src="docs/assets/save-to-vault.png" alt="A finished answer in the notch with a Save to vault ⌘S line and a ⌘Y history shortcut under it." width="600">
+</p>
 
 ## v0.9.7: Ask out loud
 
