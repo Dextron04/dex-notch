@@ -8,7 +8,11 @@ Runs on the mini as `in.dextron04.agentvault-hosted` (port 8766, `https://vault.
 Automatic: the mini pulls master and deploys when CI is green, tests it as `_dexhosted`, switches `/var/dexhosted-deploy/current`, health-checks and rolls back by itself. See [deploy-pipeline.md](deploy-pipeline.md) (install, pause, hand rollback, logs). Watch it with `sudo tail -f /var/dexhosted-deploy/logs/deploy.log`.
 
 ### Emergency manual deploy (fallback)
-Pause the deployer first (`sudo touch /var/dexhosted-deploy/deploy-paused`) so it does not switch `current` underneath you, and resume after. The steps below are the old pre-isolation ones (plain `app` directory). With the pipeline installed, create a `-manual` release instead (step 4 of [.claude/skills/dex-deploy/SKILL.md](../.claude/skills/dex-deploy/SKILL.md)).
+Pause the deployer first (`sudo touch /var/dexhosted-deploy/deploy-paused`) so it does not switch `current` underneath you, and resume after. The steps below are the old pre-isolation ones (plain `app` directory). With the pipeline installed, create a `-manual` release instead, from code staged in `/tmp/dex-deploy`:
+
+```
+R=releases/$(date -u +%Y%m%dT%H%M%SZ)-manual && sudo mkdir /var/dexhosted-deploy/$R && sudo rsync -a /tmp/dex-deploy/ /var/dexhosted-deploy/$R/ && sudo chown -R root:wheel /var/dexhosted-deploy/$R && sudo chmod -R go-w /var/dexhosted-deploy/$R && sudo ln -sfn $R /var/dexhosted-deploy/.cur && sudo mv -fh /var/dexhosted-deploy/.cur /var/dexhosted-deploy/current && sudo launchctl kickstart -k system/in.dextron04.agentvault-hosted
+```
 ```
 cd memory
 ssh mac-agent 'cp -R ~/agentvault-hosted/app ~/agentvault-hosted/app.bak-$(date +%Y%m%d%H%M%S)'

@@ -8,3 +8,6 @@ NotchApp/Info.plist
 .superpowers/
 __pycache__/
 *.pyc
+
+# internal agent skills (ops runbooks); kept locally, not published
+.claude/skills/
