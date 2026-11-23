@@ -1,6 +1,6 @@
-"""The notch app's own Gemma chats: ~/Library/Application Support/NotchApp/journal/<conversation-id>.jsonl, one JSON object per
-line {"v":1,"conv","role":"user|assistant","text","ts","model"}, appended by the app after each finished answer.
-(Claude/Codex questions asked from the notch are recorded by those CLIs' own logs, so only Gemma needs a journal.)"""
+"""Notch chats the user chose to save to the vault: ~/Library/Application Support/NotchApp/journal/<conversation-id>.jsonl, one JSON
+object per line {"v":1,"conv","role":"user|assistant","text","ts","model"}, appended by the app only when the user presses "Save to vault".
+Notch chats are otherwise local only: the recorder skips the Claude/Codex sessions the notch launches (see recorder.is_notch_private)."""
 import os
 from pathlib import Path
 from typing import Iterator

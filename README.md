@@ -138,7 +138,7 @@ Press `⌥⇧ Space` to see what you and your agents have been doing.
 | **Two models, two answers, no tiebreak.** | Press `⇥` to **Both** (or start with `@both`) when Claude and Codex are both installed. Each answers; each judges the other; the preferred model drafts a hybrid with the best of both, and the other reviews it. About 20 seconds and six CLI runs per question, always read-only. |
 | **A local model that makes things up about your own work.** | Before each local-model answer the notch searches your vault, hands the model the best snippets, and names the notes it used. |
 | **"Can it run code?" without giving a model your machine.** | `+` turns on edit rights *and* a shell, inside an OS sandbox: no network, and writes only to a scratch folder plus the folders you chose. |
-| **Click away, lose the chat.** | The conversation survives closing the notch, quitting and restarting. It starts fresh after 30 idle minutes or on `⌘N`. |
+| **Click away, lose the chat.** | The conversation survives closing the notch, quitting and restarting, and every chat stays in history (`⌘Y`). It starts fresh after 30 idle minutes or on `⌘N`. |
 | **Transcripts are full of secrets.** | Redaction runs before anything is written: provider keys, bearer tokens, URL credentials, `password=`-style assignments. |
 | **ChatGPT and Claude.ai can't see any of it.** | A remote MCP connector with real OAuth gives their web and phone apps read access, plus a `remember` tool to save a chat on request. |
 | **You can't see your own AI habits.** | The recall view: last chats, a per-agent heatmap, and a projects ranking. |
@@ -173,6 +173,8 @@ Press `⌥⇧ Space` to see what you and your agents have been doing.
 | `⌘E` | allow edits and sandboxed commands (Claude, Codex) |
 | `⌘F` | cycle the folder edit runs may write to (your scratch sandbox, then each folder you allowed) |
 | `⌘N` | new conversation |
+| `⌘Y` | history: every chat, kept on this Mac. `↩` resumes one, `⌘⌫` twice deletes it |
+| `⌘S` | save this conversation to your vault (chats stay local until you do) |
 | `⇧⌘C` | copy the answer |
 | `esc` | close. The chat stays. |
 
@@ -345,7 +347,7 @@ Updating is [Sparkle](https://sparkle-project.org) (MIT licence). A release atta
 
 - Edit runs cannot fall back to an unsandboxed shell.
 - Only folders you allowed can be granted, one at a time, and each is re-checked right before a run.
-- Private files (saved conversation, the local model's journal, OAuth state) are mode `600`. The token lives in the Keychain.
+- Private files (saved conversation, chat history, the vault journal, OAuth state) are mode `600`. The token lives in the Keychain.
 - The remote connector uses OAuth 2.1 with PKCE (S256 only), a redirect-host allow-list, hashed token storage, and a per-client lockout after five wrong passphrases.
 
 ---
@@ -466,8 +468,9 @@ NotchApp/                 SwiftUI + AppKit menu-bar agent
   ReplySession.swift        one reply in progress: the draft, your edits, the questions about the email
   ReplyView.swift           the reply panel: draft, Ask tab, Send with Undo, Save draft
   AnswerBody.swift          renders a model answer: prose, and code blocks with light highlighting
-  ConversationStore.swift   the open conversation in one small private file, so a quit or a crash loses nothing (tested)
-  Journal.swift             the local model's own private journal (tested)
+  ConversationStore.swift   the open conversation in one small private file, plus one file per chat for history (tested)
+  Journal.swift             the journal a chat is written to when you save it to the vault (tested)
+  HistoryView.swift         ⌘Y: browse, search and resume old chats
   KeychainStore.swift       the local model's token, through Apple's `security` tool (tested)
   Changelog.swift           turns CHANGELOG.md into what the What's new panel shows (tested)
   WhatsNewView.swift        the What's new page, with the screenshots, GIFs and videos

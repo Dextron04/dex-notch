@@ -30,7 +30,7 @@ final class Assistant {
 
     struct Turn { var role: String; var text: String; var verdict: String? = nil; var winner: Backend? = nil }
 
-    enum Mode { case prompt, recall }
+    enum Mode { case prompt, recall, history }
     enum RecallPage: Int, CaseIterable {
         case chats, activity, projects
         var label: String { ["Last chats", "Activity", "Projects"][rawValue] }
@@ -90,11 +90,23 @@ final class Assistant {
     private let storeURL: URL
     private let settingsURL: URL
     private var convID = UUID().uuidString
-    private var journaled = 0                         // turns already written to the vault journal
+    private var created = Date()                      // first and latest activity of this conversation (history order)
+    private var activity = Date()
+    private(set) var vaultTurns = 0                   // turns already saved to the vault on request
+    private let historyDir: URL
+    var vaultSaved: Bool { vaultTurns > 0 && vaultTurns >= turns.count }   // everything said so far is in the vault
+    var vaultTick = 0                                 // bumps on each save: the confirmation mark animates
+    // history view state
+    var history: [SavedConversation] = []
+    var historyQuery = "" { didSet { historyIndex = 0; pendingDelete = nil } }
+    var historyIndex = 0
+    var pendingDelete: String?                        // first ⌘⌫ arms, the second deletes
+    var historyShown: [SavedConversation] { history.filter { HistoryStore.matches($0, historyQuery) } }
+    var openID: String { convID }
     private var exchange: (backend: Backend, askedAt: Date) = (.claude, Date())
 
-    init(storeURL: URL = ConversationStore.defaultURL, settingsURL: URL = Settings.defaultURL) {
-        self.storeURL = storeURL; self.settingsURL = settingsURL
+    init(storeURL: URL = ConversationStore.defaultURL, settingsURL: URL = Settings.defaultURL, historyDir: URL = HistoryStore.defaultDir) {
+        self.storeURL = storeURL; self.settingsURL = settingsURL; self.historyDir = historyDir
         loadSettings(); restore(); refreshAvailability()
     }
 
@@ -145,18 +157,22 @@ final class Assistant {
     func persist() {
         let c = SavedConversation(id: convID, turns: turns.map { SavedTurn(role: $0.role, text: $0.text, verdict: $0.verdict, winner: $0.winner) }, backend: backend, work: work, folder: folder,
                                   sessions: Dictionary(uniqueKeysWithValues: sessions.map { ($0.key.rawValue, $0.value) }),
-                                  draft: draft, recalled: recalled, closedAt: closedAt ?? Date())
+                                  draft: draft, recalled: recalled, closedAt: closedAt ?? Date(), createdAt: created, updatedAt: activity, vaultTurns: vaultTurns)
         try? ConversationStore.save(c, to: storeURL) // best effort: a full disk must never break the notch
+        try? HistoryStore.save(c, in: historyDir)    // every conversation is kept on this Mac (never in the vault unless saved)
     }
 
-    private func restore() {
-        guard let c = ConversationStore.load(from: storeURL) else { return }
+    private func restore() { if let c = ConversationStore.load(from: storeURL) { apply(c) } }
+
+    /// Makes a saved conversation the live one (the app's own restore, and resuming from history).
+    private func apply(_ c: SavedConversation) {
         turns = c.turns.map { Turn(role: $0.role, text: $0.text, verdict: $0.verdict, winner: $0.winner) }
         backend = c.backend; work = c.work; recalled = c.recalled
         folder = c.folder.map { $0.hasPrefix("/") ? $0 : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent($0).path }  // older saves stored just "Desktop"
         sessions = Dictionary(uniqueKeysWithValues: c.sessions.compactMap { k, v in Backend(rawValue: k).map { ($0, v) } })
         closedAt = c.closedAt
-        convID = c.id ?? convID; journaled = turns.count // restored turns were journaled when they happened
+        convID = c.id ?? convID; vaultTurns = c.vaultTurns ?? 0
+        created = c.createdAt ?? c.activity; activity = c.activity == .distantPast ? Date() : c.activity
         draft = c.draft
     }
 
@@ -228,12 +244,14 @@ final class Assistant {
     }
 
     func toggle() { if isOpen && mode == .prompt { close() } else { open(.prompt) } }
+    func toggleHistory() { if isOpen && mode == .history { mode = .prompt } else { open(.history) } }
     func toggleRecall() { if isOpen && mode == .recall { close() } else { open(.recall) } }
 
     func open(_ m: Mode = .prompt) {
         NSLog("NotchApp: open %@ (already open: %d)", m == .prompt ? "ask" : "recall", isOpen ? 1 : 0)
         if isOpen && mode == m { return }
         mode = m
+        if m == .history { refreshHistory(); historyQuery = ""; historyIndex = 0; pendingDelete = nil }
         if m == .recall { searching = false; recallQuery = ""; page = .chats; refreshRecall(); recallIndex = 0; summary = ProcessInfo.processInfo.environment["NOTCH_DEMO_SUMMARY"] ?? ""; cursor = max(grid.days.count - 1, 0); loadDay() }
         guard !isOpen else { return } // already open in the other mode: just switch content
         clearMarks()                  // reopening for a follow-up: the highlights and bubbles have done their job (the shot and the chat stay)
@@ -259,7 +277,7 @@ final class Assistant {
     /// ⌘N / the new-chat button: drop the conversation (and stop a running answer) on purpose.
     func newConversation() { task?.cancel(); reset() }
 
-    private func reset() { dropShot(); screenProblem = nil; turns = []; draft = ""; error = nil; backend = AgentStream.defaultBackend(choices: choices, preferred: preferred) ?? .claude; work = false; folder = workspaceDefault; sessions = [:]; toolNote = nil; dualStage = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; journaled = 0; persist() }
+    private func reset() { dropShot(); screenProblem = nil; turns = []; draft = ""; error = nil; backend = AgentStream.defaultBackend(choices: choices, preferred: preferred) ?? .claude; work = false; folder = workspaceDefault; sessions = [:]; toolNote = nil; dualStage = nil; recalled = []; waiting = false; streaming = false; summary = ""; summarizing = false; convID = UUID().uuidString; created = Date(); activity = created; vaultTurns = 0; persist() }
 
     // MARK: voice ask (driven by Dictation with its `.ask` target)
 
@@ -317,7 +335,7 @@ final class Assistant {
             r.folder = Settings.normalizeFolder(f, home: home) { var d: ObjCBool = false; return FileManager.default.fileExists(atPath: $0, isDirectory: &d) && d.boolValue }
         }
         let b = r.backend
-        exchange = (b, Date())
+        exchange = (b, Date()); activity = Date()
         draft = ""; error = nil; toolNote = nil; recalled = []; screenProblem = nil; clearMarks()
         sentTick += 1                                                                // typed or spoken: one shared send motion
         turns.append(Turn(role: "user", text: r.prompt))
@@ -501,19 +519,48 @@ final class Assistant {
         ScreenCapture.remove(temp); temp = nil   // after every stage of a Both run, not after the first model
         waiting = false; streaming = false; toolNote = nil; dualStage = nil
         if turns.last?.role == "assistant", turns.last?.text.isEmpty == true, error != nil { turns.removeLast() }
-        journalGemmaExchange()
+        activity = Date()
         if marked { close(keepMarks: true) }     // the notch must not cover what the bubbles explain; reopening it brings the conversation back
     }
 
-    /// Gemma has no session log of its own, and Both runs its internal stages unrecorded, so each finished exchange goes to the vault journal (claude/codex runs are already
-    /// recorded from their own logs). Skipped on errors and cancels: only a complete question + answer is worth remembering.
-    private func journalGemmaExchange() {
-        defer { journaled = turns.count }
-        guard exchange.backend == .gemma || exchange.backend == .both, error == nil, turns.count > journaled, turns.count >= 2,
-              turns[turns.count - 1].role == "assistant", !turns[turns.count - 1].text.isEmpty, turns[turns.count - 2].role == "user" else { return }
-        try? Journal.append([JournalEntry(role: "user", text: turns[turns.count - 2].text, ts: exchange.askedAt),
-                             JournalEntry(role: "assistant", text: turns[turns.count - 1].text, ts: Date())],
-                            conv: convID, model: exchange.backend == .both ? "both" : "gemma", to: Journal.defaultDir) // best effort: never block the notch on disk trouble
+    // MARK: vault (only when asked)
+
+    /// ⌘S: appends this conversation to the vault journal, once; saving again adds only the turns said since. The recorder turns it into a note.
+    func saveToVault() {
+        let done = turns.filter { !$0.text.isEmpty }
+        guard !busy, done.count > vaultTurns else { return }
+        let span = activity.timeIntervalSince(created)   // turns carry no clock: spread them over the conversation, in order
+        let entries = done.enumerated().dropFirst(vaultTurns).map { i, t in
+            JournalEntry(role: t.role, text: t.text, ts: created.addingTimeInterval(done.count > 1 ? span * Double(i) / Double(done.count - 1) : 0)) }
+        do { try Journal.append(Array(entries), conv: convID, model: backend.rawValue, to: Journal.defaultDir) }
+        catch { screenProblem = "Couldn't save to the vault."; return }
+        vaultTurns = done.count; vaultTick += 1; persist()
+    }
+
+    // MARK: history
+
+    func refreshHistory() { history = HistoryStore.list(in: historyDir); historyIndex = min(historyIndex, max(historyShown.count - 1, 0)) }
+    func moveHistory(_ d: Int) { pendingDelete = nil; historyIndex = min(max(historyIndex + d, 0), max(historyShown.count - 1, 0)) }
+
+    /// Brings an old conversation back as the live one. The one on screen is already in history, so nothing is lost; CLI session ids come back so follow-ups continue.
+    func resume(_ id: String) {
+        guard let c = HistoryStore.load(id, in: historyDir) else { refreshHistory(); return }
+        if id == convID { withAnimation(.smooth(duration: 0.3)) { mode = .prompt }; return }
+        task?.cancel(); persist()
+        dropShot(); screenProblem = nil; error = nil; toolNote = nil; dualStage = nil; waiting = false; streaming = false
+        withAnimation(.smooth(duration: 0.3)) { apply(c); mode = .prompt }
+        closedAt = Date(); persist()
+    }
+
+    /// ⌘⌫ twice: the first press arms the row ("again to delete"), the second deletes it. Deleting the open conversation starts a fresh one.
+    func deleteSelectedHistory() {
+        guard historyShown.indices.contains(historyIndex) else { return }
+        let id = historyShown[historyIndex].id ?? ""
+        guard pendingDelete == id else { pendingDelete = id; return }
+        pendingDelete = nil
+        if id == convID { newConversation() }
+        HistoryStore.delete(id, in: historyDir)
+        withAnimation(.smooth(duration: 0.25)) { refreshHistory() }
     }
 
     struct Failure: Error, LocalizedError { let msg: String; init(_ m: String) { msg = m }; var errorDescription: String? { msg } }

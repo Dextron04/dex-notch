@@ -69,6 +69,25 @@ final class NotchWindow {
                 if assistant.mode == .prompt, code == 45, flags.contains(.command), flags.intersection([.option, .control]).isEmpty {
                     assistant.newConversation(); return true     // ⌘N
                 }
+                if code == 16, flags.contains(.command), flags.intersection([.option, .control]).isEmpty {
+                    assistant.toggleHistory(); return true       // ⌘Y
+                }
+                if assistant.mode == .prompt, code == 1, flags.contains(.command), flags.intersection([.option, .control]).isEmpty {
+                    assistant.saveToVault(); return true         // ⌘S
+                }
+                if assistant.mode == .history {   // the search field holds focus; everything else is handled here (not while an IME is composing)
+                    if (NSApp.keyWindow?.firstResponder as? NSTextView)?.hasMarkedText() == true { return false }
+                    switch code {
+                    case 126: assistant.moveHistory(-1)
+                    case 125: assistant.moveHistory(1)
+                    case 36, 76: if let id = assistant.historyShown.indices.contains(assistant.historyIndex) ? assistant.historyShown[assistant.historyIndex].id : nil { assistant.resume(id) }
+                    case 51 where flags.contains(.command): assistant.deleteSelectedHistory()   // ⌘⌫
+                    case 53:                                                                     // esc: clear the search first, then back to the chat
+                        if !assistant.historyQuery.isEmpty { assistant.historyQuery = "" } else { withAnimation(.smooth(duration: 0.3)) { assistant.mode = .prompt } }
+                    default: if assistant.pendingDelete != nil, flags.intersection([.command]).isEmpty { assistant.pendingDelete = nil }; return false
+                    }
+                    return true
+                }
                 if assistant.mode == .prompt {   // model dial: ⇥ / ⇧⇥ cycle, ⌘1–⌘4 jump, ⌘E toggles edit rights
                     guard !assistant.busy else { return false }
                     let cmd = flags.contains(.command) && flags.intersection([.option, .control]).isEmpty
