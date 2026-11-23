@@ -36,6 +36,20 @@ final class DictationTests: XCTestCase {
     }
 }
 
+final class VoiceSwitchTests: XCTestCase {
+    func testEnabledDefaultsOnAndKeepsOtherKeys() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("sw-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertTrue(DictationLogic.enabled(at: url))                       // no file
+        try Data(#"{"voice":{"locale":"hi-IN"}}"#.utf8).write(to: url)
+        XCTAssertTrue(DictationLogic.enabled(at: url))
+        try DictationLogic.setEnabled(at: url, false)
+        XCTAssertFalse(DictationLogic.enabled(at: url)); XCTAssertEqual(DictationLogic.stored(at: url).primary, "hi-IN")
+        try DictationLogic.setEnabled(at: url, true)
+        XCTAssertTrue(DictationLogic.enabled(at: url))
+    }
+}
+
 final class DictationLanguageTests: XCTestCase {
     func testLanguagesPrimaryFirstDedupedMax3() {
         XCTAssertEqual(DictationLogic.languages(primary: "hi-IN", list: ["en-US", "hi_IN", "fr-FR", "de-DE"]), ["hi-IN", "en-US", "fr-FR"])

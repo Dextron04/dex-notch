@@ -130,7 +130,7 @@ enum SetupPane: String, CaseIterable, Identifiable {
         }
     }
     static let settings: [SetupPane] = [.models, .folders, .mail, .phone, .memory, .voice, .updates]
-    static let guided: [SetupPane] = [.welcome, .models, .folders, .mail, .phone, .finish]       // the first-run walk-through, in order
+    static let guided: [SetupPane] = [.welcome, .models, .folders, .mail, .phone, .voice, .finish]       // the first-run walk-through, in order
 }
 
 /// One quiet window: a rail to pick the pane, one pane at a time, plain rows divided by hairlines. Same ink and ember as the notch.
@@ -138,6 +138,8 @@ struct SetupView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     static let width: CGFloat = 780
     @Bindable var m: SetupModel
+    @State private var voiceOn = DictationLogic.enabled(at: Settings.defaultURL)
+    @State private var voiceAllowed = Dictation.permissionGranted
     var height: CGFloat = 600
     var guided = false              // first run: Back / Continue through every step instead of Save / Cancel
     var done: () -> Void
@@ -747,6 +749,12 @@ struct SetupView: View {
         return VStack(alignment: .leading, spacing: 0) {
             header("Voice", "Hold ⌥Space and speak to ask. Dex Notch hears one language at a time and does not guess, so pick yours here, then switch between up to three with the small language chip in the notch. Language choice and Hinglish need macOS 26 or later.")
             card {
+                row(title: "Ask by voice", detail: voiceOn ? "On. Hold ⌥Space, speak, let go." : "Off. Holding ⌥Space works like a tap, and the microphone is never used.",
+                    lead: { Image(systemName: "waveform").font(.system(size: 16)).foregroundStyle(Ink.dim) },
+                    trail: { Toggle("", isOn: Binding(get: { voiceOn }, set: { on in voiceOn = on; try? DictationLogic.setEnabled(at: Settings.defaultURL, on) })).labelsHidden().toggleStyle(.switch) })
+                row(title: "Microphone", detail: voiceAllowed ? "Allowed. It is on only while you hold ⌥Space." : "Not allowed yet. macOS asks the first time you hold ⌥Space, or you can allow it now.",
+                    lead: { Image(systemName: voiceAllowed ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 17)).foregroundStyle(voiceAllowed ? Ink.ember : Ink.dim) },
+                    trail: { if !voiceAllowed { link("Allow now") { Task { voiceAllowed = await Dictation.requestPermissions() } } } })
                 ForEach(0..<min(v.selected.count + 1, DictationLogic.maxLanguages), id: \.self) { i in
                     let id = i < v.selected.count ? v.selected[i] : nil
                     row(title: slots[i], detail: id.map { detail(v.status($0)) } ?? "Optional.",
@@ -766,7 +774,7 @@ struct SetupView: View {
             Text("Everything is recognized on this Mac. Another language's model downloads once, the first time you use it, and Apple keeps it in system storage.")
                 .font(.system(size: 13)).foregroundStyle(Ink.dim).fixedSize(horizontal: false, vertical: true).padding(.top, 18)
         }
-        .task { v.reload(); await v.refresh() }
+        .task { v.reload(); voiceAllowed = Dictation.permissionGranted; await v.refresh() }
     }
 
     private func detail(_ s: VoiceLanguages.Status) -> String {

@@ -102,6 +102,8 @@ Don't have `claude` or `codex` yet? The notch tells you what to install and wait
   <br><sub><b>Answers with receipts.</b> Code gets its own block with a copy button. When the local model drew on your memory, a line under the answer names the notes it used.</sub>
 </p>
 
+**Ask out loud.** Hold `⌥Space` instead of tapping it, say your question, let go, and it is sent. Recognition runs on your Mac, the microphone is open only while you hold the key, and you can switch the whole thing off in Settings → Voice. See [PRIVACY.md](PRIVACY.md#voice-hold-space-to-ask).
+
 ### Recall
 
 Press `⌥⇧ Space` to see what you and your agents have been doing.

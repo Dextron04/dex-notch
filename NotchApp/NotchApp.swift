@@ -23,6 +23,7 @@ struct NotchApp: App {
                 if let v = updater.readyVersion { Button("Restart to update to \(v)") { updater.restartNow() } }
             } else {
             Button("Ask…  ⌥Space") { delegate.assistant.toggle() }
+            Button("Ask by voice  hold ⌥Space") {}.disabled(true)
             Button("Ask about my screen…  ⌥⌘S") { delegate.assistant.screenHotkey() }
             Button("Recall…  ⌥⇧Space") { delegate.assistant.toggleRecall() }
             if !center.needsReconnect.isEmpty { Button("Reconnect Gmail (\(center.needsReconnect.count))…") { center.reconnectAll() } }
@@ -69,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func spacePressed() {
         guard space.press() else { return }
         spaceTimer?.cancel()
+        guard DictationLogic.enabled(at: Settings.defaultURL) else { return }      // voice off: a hold is just a slow tap (no timer, no mic)
         spaceTimer = Task { [weak self] in
             try? await Task.sleep(for: .seconds(TapOrHold.threshold))
             guard !Task.isCancelled, let self, self.space.thresholdPassed() else { return }

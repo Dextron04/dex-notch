@@ -36,6 +36,15 @@ If you switch it on:
 - **Where it goes:** nowhere. There is no AI model and no network request involved. Notification text stays on your Mac.
 - **Turning it off:** the switch in Settings → iPhone. Remove Full Disk Access for Dex Notch in System Settings if you no longer want the permission at all.
 
+## Voice (hold ⌥Space to ask)
+
+- **The microphone is open only while you hold ⌥Space.** Letting go closes it. Switch voice off in Settings → Voice and a hold behaves like a tap: the microphone is never used.
+- **Audio is never stored or sent anywhere by Dex Notch.** It is not saved to disk and it does not go to Dex Notch, to the AI model you picked, or to any server of ours.
+- **Recognition runs on your Mac,** using Apple's on-device speech engine. The language models download once from Apple and live in system storage that macOS manages.
+- **One opt-in exception:** on macOS before 26, a language with no offline model can use Apple's servers only if you set `"allow_apple_server": true` in the `voice` section of `settings.json`. It is off unless you add it.
+- **What you say becomes text in the question field,** and when you let go it is sent as a prompt exactly like typed text, so it goes to the model you chose and is covered by the same notes as anything you type.
+- macOS asks for microphone access (and, on macOS before 26, Speech Recognition) the first time. You can withdraw either in System Settings → Privacy & Security.
+
 ## Hosted memory (optional, off until you connect it)
 
 An optional Dex account keeps your recorded AI conversations on a server so Claude and ChatGPT can search them from anywhere. Nothing is uploaded unless you sign in to a Dex account in the welcome window and leave **Keep my AI conversations in my account** on (change it in Settings → Memory).

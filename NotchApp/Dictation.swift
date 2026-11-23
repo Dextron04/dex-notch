@@ -51,12 +51,18 @@ final class Dictation {
     }
 
     /// The macOS 26 engine (SpeechAnalyzer) is a system asset: the SDK has no authorization API for it, only the microphone is asked for.
-    private static var usesAnalyzer: Bool {
+    static var usesAnalyzer: Bool {
         #if compiler(>=6.2)
         if #available(macOS 26, *) { return SpeechTranscriber.isAvailable }
         #endif
         return false
     }
+
+    /// What the setup step shows: microphone, and speech recognition too unless the macOS 26 engine is in use.
+    static var permissionGranted: Bool {
+        AVCaptureDevice.authorizationStatus(for: .audio) == .authorized && (usesAnalyzer || SFSpeechRecognizer.authorizationStatus() == .authorized)
+    }
+    static func requestPermissions() async -> Bool { await authorized(speech: !usesAnalyzer) }
 
     nonisolated private static func authorized(speech: Bool) async -> Bool {
         guard await AVCaptureDevice.requestAccess(for: .audio) else { return false }

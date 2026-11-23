@@ -15,6 +15,19 @@ enum DictationLogic {
         return (id.map { Locale(identifier: $0) } ?? .current, (v?["allow_apple_server"] as? Bool) == true)
     }
 
+    /// settings.json: `"voice": { "enabled": false }` turns the hold-to-ask key off (a hold then behaves like a tap). On by default.
+    static func enabled(at url: URL) -> Bool {
+        let v = (try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["voice"] as? [String: Any]
+        return (v?["enabled"] as? Bool) != false
+    }
+    static func setEnabled(at url: URL, _ on: Bool) throws {
+        try Settings.mutate(at: url) { root in
+            var v = root["voice"] as? [String: Any] ?? [:]
+            if on { v.removeValue(forKey: "enabled") } else { v["enabled"] = false }
+            if v.isEmpty { root.removeValue(forKey: "voice") } else { root["voice"] = v }
+        }
+    }
+
     // MARK: languages  (settings.json: "voice": { "locale": "hi-IN", "languages": ["en-US", "hi-IN"] }, at most 3, no auto-detect)
 
     static let maxLanguages = 3
