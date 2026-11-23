@@ -48,8 +48,8 @@ targets:
         GoogleClientID: "$(GOOGLE_CLIENT_ID)"          # injected by the release build from CI secrets; empty in a plain checkout
         GoogleClientSecret: "$(GOOGLE_CLIENT_SECRET)"
         MicrosoftClientID: "$(MICROSOFT_CLIENT_ID)"    # same idea: the Outlook sign-in, injected by CI; empty in a plain checkout
-        NSMicrophoneUsageDescription: "Dex Notch listens only while you hold ⌥V, to turn your voice into text."
-        NSSpeechRecognitionUsageDescription: "Dex Notch turns what you say while holding ⌥V into text, on this Mac."
+        NSMicrophoneUsageDescription: "Dex Notch listens only while you hold ⌥Space, to turn your question into text."
+        NSSpeechRecognitionUsageDescription: "Dex Notch turns what you say while holding ⌥Space into text, on this Mac."
         SUFeedURL: "$(SPARKLE_FEED_URL)"               # where updates are announced; a release attaches appcast.xml
         SUPublicEDKey: "$(SPARKLE_PUBLIC_KEY)"          # updates must be signed by the matching private key (a CI secret)
         SUEnableAutomaticChecks: true

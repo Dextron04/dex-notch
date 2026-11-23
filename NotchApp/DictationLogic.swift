@@ -2,14 +2,11 @@ import Foundation
 
 /// The pure half of dictation (no Speech, no AppKit), so it can be tested.
 enum DictationLogic {
-    /// Trimmed transcript, or nil when there is nothing worth pasting.
+    /// Trimmed transcript, or nil when there is nothing worth asking.
     static func cleaned(_ raw: String) -> String? {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         return t.isEmpty ? nil : t
     }
-
-    /// Put the old clipboard back only if nobody (the user, another app) has written to it since we did.
-    static func shouldRestore(setCount: Int, currentCount: Int) -> Bool { setCount == currentCount }
 
     /// settings.json: `"voice": { "locale": "en-US", "allow_apple_server": false }`, both optional.
     static func voice(at url: URL) -> (locale: Locale, allowServer: Bool) {
@@ -51,7 +48,7 @@ enum DictationLogic {
     static let hinglish = "mul-IN"
     static func isHinglish(_ id: String) -> Bool { normalized(id).lowercased() == hinglish.lowercased() }
 
-    /// "hi-IN" -> "HI", the chip in the listening bar. Hinglish is "HG" (the chip is 18 pt wide).
+    /// "hi-IN" -> "HI", the language chip. Hinglish is "HG".
     static func code(for id: String) -> String {
         isHinglish(id) ? "HG" : String(normalized(id).split(separator: "-").first ?? "").uppercased()
     }
@@ -76,7 +73,7 @@ enum DictationLogic {
         }
     }
 
-    /// Only the primary changes (⌥⇧V); the saved list and its order stay put so cycling keeps going round.
+    /// Only the primary changes (the chip); the saved list and its order stay put so cycling keeps going round.
     static func setPrimary(at url: URL, _ id: String) throws {
         try Settings.mutate(at: url) { root in
             var v = root["voice"] as? [String: Any] ?? [:]

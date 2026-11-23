@@ -58,7 +58,6 @@ struct NotchView: View {
 
             pill
             if !a.isOpen { AlertView(c: center, notch: notch) }
-            if !a.isOpen { DictationBar(state: Dictation.shared.state, notch: notch) }
             if !a.isOpen {
                 NotchStreak(tick: center.streakTick, size: CGSize(width: AlertView.width, height: AlertView.height(notch)))      // a card arrives
                 let reply = CGSize(width: AlertView.replyWidth, height: AlertView.replyHeight(notch))
@@ -266,6 +265,7 @@ struct NotchView: View {
                     ModelAnnounce(backend: b, work: a.work, hold: Self.announceHold, reduce: reduce).id(announceTick)
                         .transition(reduce ? .opacity : .modifier(active: Slide(x: 12, opacity: 0, blur: 5), identity: Slide(x: 0, opacity: 1, blur: 0)))
                 }
+                langChip
                 eyeChip
                 ZStack {
                     if a.listening {
@@ -304,6 +304,19 @@ struct NotchView: View {
             .padding(.bottom, 6)
             .animation(reduce ? .easeOut(duration: 0.15) : .spring(duration: 0.4, bounce: 0.15), value: on)
             .allowsHitTesting(false)
+    }
+
+    /// The voice language: "EN", "HI", "HG". Click cycles the quick-switch set. A fixed slot, so nothing beside it moves; blank with one language.
+    private var langChip: some View {
+        let show = VoiceLanguages.shared.selected.count >= 2 || a.listening
+        return Button { Dictation.shared.cycleLanguage() } label: {
+            Text(Dictation.shared.currentLanguageCode).font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(a.listening ? Ink.ember : Ink.dim)
+                .frame(width: 26, height: 24).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .opacity(show ? 1 : 0).allowsHitTesting(show && !a.listening)
+        .help("Voice language · click to switch").accessibilityLabel("Voice language \(Dictation.shared.currentLanguageCode), click to switch").accessibilityHidden(!show)
     }
 
     /// The eye. Idle: dim outline. Armed: ember, filled, with the shot beside it (springs in from the right). Capturing: a quick blink.
@@ -377,6 +390,32 @@ struct NotchView: View {
     private func copy() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(a.answer, forType: .string)
+    }
+}
+
+/// Eleven ember bars: centre-weighted, breathing with the smoothed level, with a faint shimmer in silence.
+struct Wave: View {
+    let level: Float
+    let still: Bool
+    let live: Bool
+
+    var body: some View {
+        // paused whenever nothing is listening, so an idle app draws no frames
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !live || still)) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate
+            Canvas { ctx, size in
+                let n = 11, pitch: CGFloat = 5, w: CGFloat = 2.5
+                let x0 = (size.width - CGFloat(n - 1) * pitch - w) / 2
+                for i in 0..<n {
+                    let env = 1 - 0.5 * abs(Double(i) - 5) / 5
+                    let wob = still ? 0.7 : 0.5 + 0.5 * sin(t * 7 + Double(i) * 0.9)
+                    let amp = min(1, 0.1 * (still ? 0 : 0.5 + 0.5 * sin(t * 2.2 + Double(i) * 0.6)) + Double(level) * env * (0.55 + 0.45 * wob))
+                    let h = 3 + (size.height - 3) * amp
+                    let r = CGRect(x: x0 + CGFloat(i) * pitch, y: (size.height - h) / 2, width: w, height: h)
+                    ctx.fill(Path(roundedRect: r, cornerRadius: w / 2), with: .color(Ink.ember.opacity(0.5 + 0.5 * amp)))
+                }
+            }
+        }
     }
 }
 

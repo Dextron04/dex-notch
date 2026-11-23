@@ -7,11 +7,6 @@ final class DictationTests: XCTestCase {
         XCTAssertEqual(DictationLogic.cleaned("  hello there \n"), "hello there")
     }
 
-    func testRestoreOnlyIfClipboardUntouched() {
-        XCTAssertTrue(DictationLogic.shouldRestore(setCount: 7, currentCount: 7))
-        XCTAssertFalse(DictationLogic.shouldRestore(setCount: 7, currentCount: 8))
-    }
-
     func testVoiceSettings() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: url) }

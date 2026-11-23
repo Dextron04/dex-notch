@@ -81,7 +81,6 @@
 		B5FFFDE8384442D927A06AE6 /* DictationAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD114EE923AC2783EE69C5D4 /* DictationAnalyzer.swift */; };
 		BBAE32CD0DA114C2AE0286D4 /* ScreenCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CBBFE06DBCF2FCC5FD5C7E /* ScreenCapture.swift */; };
 		BFF5DE6C28BCA61791F88A08 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0972AF61B5A41CDE05013CA5 /* KeychainStore.swift */; };
-		C0AB99F9582D5BB8EDC30270 /* DictationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 325889CC13A29F9F50CCBE1D /* DictationView.swift */; };
 		C1E493FDAF1341459B05B3C3 /* Addons.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8544183AD3EF18DC864B247 /* Addons.swift */; };
 		C4A7D343747225AF85665EBB /* DictationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0DFD7E45777FAF0F57E13D /* DictationTests.swift */; };
 		C7D2A3408E46CB0BBFCAD224 /* AnswerBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE562AE9C74255701B08F531 /* AnswerBody.swift */; };
@@ -118,7 +117,6 @@
 		2D31B10BCA190AE471459BF5 /* DualScreenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DualScreenTests.swift; sourceTree = "<group>"; };
 		2F1487592A6A941D9CB95947 /* AgentRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRunner.swift; sourceTree = "<group>"; };
 		2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gmail.swift; sourceTree = "<group>"; };
-		325889CC13A29F9F50CCBE1D /* DictationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationView.swift; sourceTree = "<group>"; };
 		34B56D0B5E24A59E4A23F196 /* RecallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecallView.swift; sourceTree = "<group>"; };
 		3B7D87E48BF594612257808A /* ConversationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStoreTests.swift; sourceTree = "<group>"; };
 		3ED3A72A153FD60EEF8E9E06 /* WhatsNewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewView.swift; sourceTree = "<group>"; };
@@ -220,7 +218,6 @@
 				D8F3106BE5A172F840440EC3 /* Dictation.swift */,
 				FD114EE923AC2783EE69C5D4 /* DictationAnalyzer.swift */,
 				58BB4112A72F3ED313A54D47 /* DictationLogic.swift */,
-				325889CC13A29F9F50CCBE1D /* DictationView.swift */,
 				6DF7D52391A25626A30D8C8B /* DualJudge.swift */,
 				88ACFBCE79212F6384821091 /* DualStageView.swift */,
 				2FB215EFA9BE1D1E4A11BB74 /* Gmail.swift */,
@@ -477,7 +474,6 @@
 				9B8EE9403C24BED1588ADA99 /* Dictation.swift in Sources */,
 				B5FFFDE8384442D927A06AE6 /* DictationAnalyzer.swift in Sources */,
 				62016BB15FE617B86B61023C /* DictationLogic.swift in Sources */,
-				C0AB99F9582D5BB8EDC30270 /* DictationView.swift in Sources */,
 				80D02B2BEDB19300A282F223 /* DualJudge.swift in Sources */,
 				8B6BECB551BDDF74F33429F4 /* DualStageView.swift in Sources */,
 				0999A29BFF7BFEF67D4DB6DD /* Gmail.swift in Sources */,

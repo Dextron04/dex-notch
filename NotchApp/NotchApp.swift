@@ -73,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(for: .seconds(TapOrHold.threshold))
             guard !Task.isCancelled, let self, self.space.thresholdPassed() else { return }
             self.assistant.open(.prompt)
-            self.spaceAsking = Dictation.shared.start(.ask)
+            self.spaceAsking = Dictation.shared.start()
         }
     }
 
@@ -94,8 +94,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Hotkey(id: 1, keyCode: kVK_Space, modifiers: optionKey, action: { [weak self] in self?.spacePressed() }, onRelease: { [weak self] in self?.spaceReleased() }),   // tap toggles, hold asks by voice
             Hotkey(id: 2, keyCode: kVK_Space, modifiers: optionKey | shiftKey) { [assistant] in assistant.toggleRecall() },
             Hotkey(id: 3, keyCode: kVK_ANSI_S, modifiers: optionKey | cmdKey) { [assistant] in assistant.screenHotkey() },
-            Hotkey(id: 4, keyCode: kVK_ANSI_V, modifiers: optionKey, action: { [assistant] in Dictation.shared.start(assistant.isOpen && assistant.mode == .prompt ? .ask : .paste) }, onRelease: { Dictation.shared.stop() }),   // hold to dictate (id 3 is the screen hotkey)
-            Hotkey(id: 5, keyCode: kVK_ANSI_V, modifiers: optionKey | shiftKey) { Dictation.shared.cycleLanguage() },   // next dictation language
         ]
         Dictation.shared.assistant = assistant
         assistant.connect()

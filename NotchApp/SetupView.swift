@@ -745,7 +745,7 @@ struct SetupView: View {
         let v = VoiceLanguages.shared
         let slots = ["Main language", "Also switch to", "Also switch to"]
         return VStack(alignment: .leading, spacing: 0) {
-            header("Voice", "Hold ⌥V to dictate, or ⌥Space to ask out loud. Dex Notch hears one language at a time and does not guess, so pick yours here and press ⌥⇧V to switch between up to three.")
+            header("Voice", "Hold ⌥Space and speak to ask. Dex Notch hears one language at a time and does not guess, so pick yours here, then switch between up to three with the small language chip in the notch. Language choice and Hinglish need macOS 26 or later.")
             card {
                 ForEach(0..<min(v.selected.count + 1, DictationLogic.maxLanguages), id: \.self) { i in
                     let id = i < v.selected.count ? v.selected[i] : nil

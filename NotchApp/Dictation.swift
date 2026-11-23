@@ -1,20 +1,12 @@
-import AppKit
 import AVFoundation
-import Carbon.HIToolbox
 import Speech
 
-/// Hold ⌥V anywhere: speak, release, and the words are pasted into the focused field. Raw text, on-device recognition only
+/// Hold ⌥Space: speak, release, and the words are asked of the notch. On-device recognition only
 /// (unless settings.json opts in to Apple's servers). The microphone is open only while the key is held.
 @MainActor @Observable
 final class Dictation {
     static let shared = Dictation()
 
-    enum State: Equatable { case idle, listening(partial: String, level: Float), message(String) }
-    private(set) var state: State = .idle
-
-    /// Where the words go: pasted into the frontmost app, or asked of the assistant (the notch is open; the clipboard is never touched).
-    enum Target { case paste, ask }
-    private var target: Target = .paste
     weak var assistant: Assistant?
 
     private var engine: AVAudioEngine?
@@ -23,21 +15,17 @@ final class Dictation {
     private var held = false                 // the key is down (autorepeat presses are ignored while this is true)
     private var session = 0                  // bumped per press; stale callbacks and timers compare against it
     private var latest = ""
-    private var clear: Task<Void, Never>?
     private var analyzer: (end: () -> Void, cancel: () -> Void)?   // the macOS 26 engine, when it is the one running
-    /// "EN", "HI": the language the next dictation will use. Observable, shown in the listening bar.
+    /// "EN", "HI": the language the next dictation will use. Observable, shown in the notch's language chip.
     private(set) var currentLanguageCode = DictationLogic.code(for: DictationLogic.stored(at: Settings.defaultURL).primary)
-    private var prompted = false             // ask for Accessibility once per launch
 
     /// False when a session is already running (the caller must then not stop it).
     @discardableResult
-    func start(_ to: Target = .paste) -> Bool {
+    func start() -> Bool {
         guard !held else { return false }
-        finish(session)      // a fast re-press: deliver the previous utterance now (to its own target) instead of dropping it
-        target = to
+        finish(session)      // a fast re-press: deliver the previous utterance now instead of dropping it
         held = true; session += 1; latest = ""
         let mine = session
-        clear?.cancel()
         Task {
             guard await Self.authorized() else { if held, session == mine { held = false; say("Allow microphone and speech in System Settings") }; return }
             guard held, session == mine else { return }   // released while the permission sheet was up
@@ -49,8 +37,8 @@ final class Dictation {
     func stop() {
         guard held else { return }
         held = false
-        guard engine != nil else { state = .idle; return }
-        if target == .ask { assistant?.voiceLevel = 0 }
+        guard engine != nil else { return }
+        assistant?.voiceLevel = 0
         let mine = session
         teardownAudio()
         request?.endAudio()
@@ -101,8 +89,7 @@ final class Dictation {
             input.installTap(onBus: 0, bufferSize: 1024, format: format, block: run.tapBlock(mine))
             do { try eng.start() } catch { input.removeTap(onBus: 0); run.cancel(); held = false; return say("Couldn't open the microphone") }
             engine = eng; analyzer = (run.end, run.cancel)
-            state = .listening(partial: "", level: 0)
-            if target == .ask { assistant?.voiceBegan() }
+            assistant?.voiceBegan()
             Task { try? await Task.sleep(for: .seconds(60)); if held, session == mine { stop() } }   // release never arrived
         } catch {
             guard session == mine else { return }
@@ -129,8 +116,7 @@ final class Dictation {
         input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.tapBlock(req, mine))
         do { try eng.start() } catch { input.removeTap(onBus: 0); held = false; return say("Couldn't open the microphone") }
         engine = eng; request = req
-        state = .listening(partial: "", level: 0)
-        if target == .ask { assistant?.voiceBegan() }
+        assistant?.voiceBegan()
         task = rec.recognitionTask(with: req, resultHandler: Self.resultHandler(mine))
         Task { try? await Task.sleep(for: .seconds(60)); if held, session == mine { stop() } }   // release never arrived
     }
@@ -161,16 +147,13 @@ final class Dictation {
     }
 
     func setLevel(_ l: Float, _ mine: Int) {
-        guard mine == session, case .listening(let p, _) = state else { return }
-        state = .listening(partial: p, level: l)
-        if target == .ask, held { assistant?.voiceLevel(l) }
+        guard mine == session, held else { return }
+        assistant?.voiceLevel(l)
     }
 
     func heard(_ text: String?, final: Bool, _ mine: Int) {
         guard mine == session else { return }
-        if let text { latest = text }
-        if held, case .listening(_, let l) = state { state = .listening(partial: latest, level: l) }
-        if target == .ask, text != nil { assistant?.voiceHeard(latest) }   // the words become the prompt text, in place
+        if let text { latest = text; assistant?.voiceHeard(latest) }   // the words become the prompt text, in place
         if final && !held { finish(mine) }
     }
 
@@ -188,22 +171,10 @@ final class Dictation {
         teardownAudio()
         let text = DictationLogic.cleaned(latest)
         latest = ""
-        state = .idle
-        if target == .ask { assistant?.voiceEnded(text); return }   // nil (nothing heard) leaves the notch open and focused
-        guard let text else { return }
-        paste(text)
+        assistant?.voiceEnded(text)     // nil (nothing heard) leaves the notch open and focused
     }
 
-    private func say(_ s: String) {
-        if target == .ask { state = .idle; assistant?.voiceFailed(s); return }
-        banner(s)
-    }
-
-    private func banner(_ s: String) {
-        state = .message(s)
-        clear?.cancel()
-        clear = Task { try? await Task.sleep(for: .seconds(2.5)); if !Task.isCancelled { state = .idle } }
-    }
+    private func say(_ s: String) { assistant?.voiceFailed(s) }
 
     // MARK: language
 
@@ -212,42 +183,12 @@ final class Dictation {
         VoiceLanguages.shared.reload()
     }
 
-    /// ⌥⇧V: the next language in the quick-switch set, saved to settings.json. Ignored while a dictation is running.
+    /// The chip in the notch: the next language in the quick-switch set, saved to settings.json. Ignored while a dictation is running.
     func cycleLanguage() {
         guard !held else { return }
         let s = DictationLogic.stored(at: Settings.defaultURL)
-        guard let next = DictationLogic.next(after: s.primary, in: s.list), s.list.count > 1 else { return banner("Add languages in Settings, Voice") }
-        do { try DictationLogic.setPrimary(at: Settings.defaultURL, next) } catch { return banner("Couldn't save the language") }
+        guard s.list.count > 1, let next = DictationLogic.next(after: s.primary, in: s.list) else { return }
+        do { try DictationLogic.setPrimary(at: Settings.defaultURL, next) } catch { return say("Couldn't save the language") }
         refreshLanguage()
-        banner("Language: \(VoiceLanguages.name(next))")
-    }
-
-    // MARK: paste
-
-    private func paste(_ text: String) {
-        let pb = NSPasteboard.general
-        let saved: [NSPasteboardItem] = (pb.pasteboardItems ?? []).map { old in
-            let copy = NSPasteboardItem()
-            for t in old.types { if let d = old.data(forType: t) { copy.setData(d, forType: t) } }
-            return copy
-        }
-        pb.clearContents()
-        pb.setString(text, forType: .string)
-        let ours = pb.changeCount
-        guard AXIsProcessTrusted() else {
-            if !prompted { prompted = true; _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary) }
-            return say("Copied, allow Accessibility to paste")     // the transcript stays on the clipboard
-        }
-        for down in [true, false] {
-            let e = CGEvent(keyboardEventSource: CGEventSource(stateID: .combinedSessionState), virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: down)
-            e?.flags = .maskCommand      // exactly ⌘: a still-held ⌥ would make it ⌥⌘V
-            e?.post(tap: .cghidEventTap)
-        }
-        Task {
-            try? await Task.sleep(for: .milliseconds(400))
-            guard DictationLogic.shouldRestore(setCount: ours, currentCount: pb.changeCount) else { return }
-            pb.clearContents()
-            if !saved.isEmpty { pb.writeObjects(saved) }
-        }
     }
 }
