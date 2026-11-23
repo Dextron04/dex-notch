@@ -25,6 +25,15 @@ final class DictationTests: XCTestCase {
         XCTAssertEqual(k.release(), .endHold)
         XCTAssertFalse(k.thresholdPassed())                            // timer firing after release does nothing
     }
+
+    func testTapOrHoldHealsALostRelease() {
+        var k = TapOrHold(), t = Date()
+        XCTAssertTrue(k.press(at: t))
+        XCTAssertFalse(k.press(at: t.addingTimeInterval(0.5)))         // autorepeat inside the window
+        XCTAssertFalse(k.press(at: t.addingTimeInterval(2.0)))         // autorepeat keeps it alive (2 s after the last press, not the first)
+        XCTAssertTrue(k.press(at: t.addingTimeInterval(5)))            // release was lost: a press after a long gap is fresh
+        XCTAssertEqual(k.release(), .tap)
+    }
 }
 
 final class DictationLanguageTests: XCTestCase {

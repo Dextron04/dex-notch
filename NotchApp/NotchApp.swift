@@ -72,8 +72,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         spaceTimer = Task { [weak self] in
             try? await Task.sleep(for: .seconds(TapOrHold.threshold))
             guard !Task.isCancelled, let self, self.space.thresholdPassed() else { return }
-            self.assistant.open(.prompt)
             self.spaceAsking = Dictation.shared.start()
+            if self.spaceAsking { self.assistant.open(.prompt) }
         }
     }
 

@@ -32,7 +32,7 @@ final class AnalyzerRun: @unchecked Sendable {
                     let live = Self.join(done, volatile)
                     await MainActor.run { Dictation.shared.heard(live, final: false, mine) }
                 }
-            } catch {}
+            } catch { Dictation.log.error("results ended with error: \(error.localizedDescription, privacy: .public)") }
             let all = Self.join(done, volatile)
             await MainActor.run { Dictation.shared.heard(all, final: true, mine) }
         }
@@ -45,8 +45,9 @@ final class AnalyzerRun: @unchecked Sendable {
     }
 
     nonisolated func tapBlock(_ mine: Int) -> @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void {
-        { [self] buf, _ in
-            if let level = Dictation.level(buf) { Task { @MainActor in Dictation.shared.setLevel(level, mine) } }
+        let gate = Dictation.LevelGate()
+        return { [self] buf, _ in
+            if gate.pass(), let level = Dictation.level(buf) { Task { @MainActor in Dictation.shared.setLevel(level, mine) } }
             let cap = AVAudioFrameCount(Double(buf.frameLength) * target.sampleRate / buf.format.sampleRate) + 32
             guard let out = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: cap) else { return }
             nonisolated(unsafe) var fed = false

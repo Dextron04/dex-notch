@@ -1,11 +1,13 @@
 import AVFoundation
 import Speech
+import os
 
 /// Hold ⌥Space: speak, release, and the words are asked of the notch. On-device recognition only
 /// (unless settings.json opts in to Apple's servers). The microphone is open only while the key is held.
 @MainActor @Observable
 final class Dictation {
     static let shared = Dictation()
+    nonisolated static let log = Logger(subsystem: "com.tushin.NotchApp", category: "voice")
 
     weak var assistant: Assistant?
 
@@ -27,7 +29,7 @@ final class Dictation {
         held = true; session += 1; latest = ""
         let mine = session
         Task {
-            guard await Self.authorized() else { if held, session == mine { held = false; say("Allow microphone and speech in System Settings") }; return }
+            guard await Self.authorized(speech: !Self.usesAnalyzer) else { if held, session == mine { held = false; say("Allow the microphone in System Settings") }; return }
             guard held, session == mine else { return }   // released while the permission sheet was up
             begin(mine)
         }
@@ -44,18 +46,28 @@ final class Dictation {
         request?.endAudio()
         analyzer?.end()
         // the final result usually lands within a moment; don't wait on it forever
-        Task { try? await Task.sleep(for: .seconds(1.5)); finish(mine) }
+        let wait = analyzer != nil ? 4.0 : 1.5      // the analyzer finalizes the tail of the sentence after the audio ends; cut it short and the last words are lost
+        Task { try? await Task.sleep(for: .seconds(wait)); finish(mine) }
     }
 
-    nonisolated private static func authorized() async -> Bool {
+    /// The macOS 26 engine (SpeechAnalyzer) is a system asset: the SDK has no authorization API for it, only the microphone is asked for.
+    private static var usesAnalyzer: Bool {
+        #if compiler(>=6.2)
+        if #available(macOS 26, *) { return SpeechTranscriber.isAvailable }
+        #endif
+        return false
+    }
+
+    nonisolated private static func authorized(speech: Bool) async -> Bool {
         guard await AVCaptureDevice.requestAccess(for: .audio) else { return false }
+        guard speech else { return true }
         return await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0 == .authorized) } }
     }
 
     private func begin(_ mine: Int) {
         let v = DictationLogic.voice(at: Settings.defaultURL)
         #if compiler(>=6.2)
-        if #available(macOS 26, *), SpeechTranscriber.isAvailable {      // better than SFSpeechRecognizer for every language it supports, English included
+        if #available(macOS 26, *), Self.usesAnalyzer {      // better than SFSpeechRecognizer for every language it supports, English included
             Task {
                 if let loc = await SpeechTranscriber.supportedLocale(equivalentTo: v.locale) { await beginAnalyzer(loc, mine) }
                 else if held, session == mine { beginClassic(v, mine) }
@@ -74,9 +86,11 @@ final class Dictation {
         guard (await SpeechTranscriber.installedLocales).contains(where: { VoiceLanguages.key($0) == key }) else {
             guard held, session == mine else { return }
             held = false
-            VoiceLanguages.shared.download(loc.identifier(.bcp47))      // the model comes down once; audio never leaves the Mac
-            let name = loc.language.languageCode.flatMap { Locale.current.localizedString(forLanguageCode: $0.identifier) } ?? loc.identifier
-            return say("Downloading \(name)… open Settings to see progress")
+            let id = loc.identifier(.bcp47)
+            if let p = VoiceLanguages.shared.problem { VoiceLanguages.shared.clearProblem(); return say(p) }   // the last download failed: say why, the next try downloads again
+            VoiceLanguages.shared.download(id)      // the model comes down once; audio never leaves the Mac
+            assistant?.voiceNote("Downloading \(VoiceLanguages.shortName(id))…")
+            return
         }
         do {
             try await VoiceLanguages.shared.reserve(loc)
@@ -87,11 +101,12 @@ final class Dictation {
             let run = try await AnalyzerRun.make(locale: loc, input: format, mine)
             guard held, session == mine else { run.cancel(); return }      // released while the model loaded: the mic never opens
             input.installTap(onBus: 0, bufferSize: 1024, format: format, block: run.tapBlock(mine))
-            do { try eng.start() } catch { input.removeTap(onBus: 0); run.cancel(); held = false; return say("Couldn't open the microphone") }
+            do { try eng.start() } catch { Self.log.error("engine start failed: \(error.localizedDescription, privacy: .public)"); input.removeTap(onBus: 0); run.cancel(); held = false; return say("Couldn't open the microphone") }
             engine = eng; analyzer = (run.end, run.cancel)
             assistant?.voiceBegan()
             Task { try? await Task.sleep(for: .seconds(60)); if held, session == mine { stop() } }   // release never arrived
         } catch {
+            Self.log.error("analyzer start failed: \(error.localizedDescription, privacy: .public)")
             guard session == mine else { return }
             held = false; say("Couldn't start dictation")
         }
@@ -114,7 +129,7 @@ final class Dictation {
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else { held = false; return say("No microphone found") }   // installTap throws on a 0 Hz format
         input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.tapBlock(req, mine))
-        do { try eng.start() } catch { input.removeTap(onBus: 0); held = false; return say("Couldn't open the microphone") }
+        do { try eng.start() } catch { Self.log.error("engine start failed: \(error.localizedDescription, privacy: .public)"); input.removeTap(onBus: 0); held = false; return say("Couldn't open the microphone") }
         engine = eng; request = req
         assistant?.voiceBegan()
         task = rec.recognitionTask(with: req, resultHandler: Self.resultHandler(mine))
@@ -125,11 +140,18 @@ final class Dictation {
     // when AVFoundation (realtime audio thread) or Speech (its own queue) calls it.
     nonisolated private static func tapBlock(_ req: SFSpeechAudioBufferRecognitionRequest, _ mine: Int) -> @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void {
         nonisolated(unsafe) let req = req
+        let gate = LevelGate()
         return { buf, _ in
             req.append(buf)
-            guard let level = Dictation.level(buf) else { return }
+            guard gate.pass(), let level = Dictation.level(buf) else { return }
             Task { @MainActor in Dictation.shared.setLevel(level, mine) }
         }
+    }
+
+    /// Lets one level update through every ~33 ms; the audio thread calls this, so it is never shared.
+    nonisolated final class LevelGate: @unchecked Sendable {
+        private var last: TimeInterval = 0
+        func pass() -> Bool { let t = ProcessInfo.processInfo.systemUptime; guard t - last >= 1.0 / 30 else { return false }; last = t; return true }
     }
 
     nonisolated static func level(_ buf: AVAudioPCMBuffer) -> Float? {

@@ -84,14 +84,21 @@ enum DictationLogic {
 }
 
 /// One key, two meanings: a quick tap and a hold. The caller starts a threshold timer on `press`, calls `thresholdPassed` when it fires,
-/// and acts on `release`. Autorepeat presses are ignored.
+/// and acts on `release`. Autorepeat presses are ignored. If a release is ever lost, a press more than `stale` seconds after the last one
+/// counts as fresh, so the key can't stay dead.
 struct TapOrHold {
     static let threshold: TimeInterval = 0.25
+    static let stale: TimeInterval = 2
     enum Release { case tap, endHold, ignored }
     private var down = false
     private var holding = false
+    private var last = Date.distantPast
 
-    mutating func press() -> Bool { if down { return false }; down = true; holding = false; return true }
+    mutating func press(at now: Date = Date()) -> Bool {
+        defer { last = now }
+        if down && now.timeIntervalSince(last) < Self.stale { return false }
+        down = true; holding = false; return true
+    }
     /// True once, if the key is still down: the hold begins.
     mutating func thresholdPassed() -> Bool { guard down, !holding else { return false }; holding = true; return true }
     mutating func release() -> Release {

@@ -213,7 +213,7 @@ struct NotchView: View {
     // MARK: input
 
     private var placeholder: String {
-        a.listening ? "Listening…" : a.needsSetup ? "Install claude or codex to begin" : a.backend == .gemma ? (hasAnswer ? "Follow up…" : "Ask anything") : (a.work && !hasAnswer ? "Ask \(a.backend.rawValue) · ⌘F folder" : "Ask \(a.backend.rawValue)…")
+        a.listening ? "Listening…" : a.voiceMsg != nil ? a.voiceMsg! : a.needsSetup ? "Install claude or codex to begin" : a.backend == .gemma ? (hasAnswer ? "Follow up…" : "Ask anything") : (a.work && !hasAnswer ? "Ask \(a.backend.rawValue) · ⌘F folder" : "Ask \(a.backend.rawValue)…")
     }
 
     /// Per typed keystroke: strength from rhythm (fast typing glows harder), then the edge glow plays once and dies. Nothing runs while idle.
@@ -236,10 +236,11 @@ struct NotchView: View {
                 .foregroundStyle(a.listening ? Ink.text.opacity(0.85) : Ink.text)
                 .tint(Ink.ember)
                 .focused($focused)          // stays enabled while answering: draft the follow-up, Return waits
+                .onSubmit { a.send() }      // Return: SwiftUI respects marked (half-composed IME) text; send() ignores it while busy
                 .onKeyPress(.return, phases: .down) { k in
-                    if k.modifiers.contains(.shift) { a.draft += "\n"; return .handled }   // ⇧↩ newline (⌥↩ is the field's own)
-                    if k.modifiers.contains(.option) { return .ignored }
-                    a.send(); return .handled                                                // send() ignores it while busy
+                    // ⇧↩ newline at the caret (⌥↩ is the field's own). Everything else, and IME composition, falls through to onSubmit.
+                    guard k.modifiers.contains(.shift), let tv = NSApp.keyWindow?.firstResponder as? NSTextView, !tv.hasMarkedText() else { return .ignored }
+                    tv.insertNewlineIgnoringFieldEditor(nil); return .handled
                 }
                 .background(GeometryReader { Color.clear.preference(key: FieldHKey.self, value: $0.size.height) })
                 .onPreferenceChange(FieldHKey.self) { if $0 > 0, $0 != fieldH { fieldH = $0 } }

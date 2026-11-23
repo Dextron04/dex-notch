@@ -21,6 +21,11 @@ final class VoiceLanguages {
     private(set) var problem: String?
 
     nonisolated static func key(_ l: Locale) -> String { DictationLogic.normalized(l.identifier(.bcp47)).lowercased() }
+    /// "Hindi", for a one-line message.
+    nonisolated static func shortName(_ id: String) -> String {
+        DictationLogic.isHinglish(id) ? "Hinglish" : Locale.current.localizedString(forLanguageCode: String(DictationLogic.normalized(id).split(separator: "-").first ?? "")) ?? id
+    }
+    func clearProblem() { problem = nil }
     nonisolated static func name(_ id: String) -> String {
         DictationLogic.isHinglish(id) ? "Hinglish · Hindi + English (India)" : Locale.current.localizedString(forIdentifier: id) ?? id
     }
@@ -88,8 +93,14 @@ final class VoiceLanguages {
     /// AssetInventory only lets an app hold a few languages: drop the ones that aren't in the person's set, then take this one.
     @available(macOS 26, *)
     func reserve(_ loc: Locale) async throws {
-        let keep = Set(DictationLogic.stored(at: Settings.defaultURL).list.map { $0.lowercased() } + [Self.key(loc)])
-        for r in await AssetInventory.reservedLocales where !keep.contains(Self.key(r)) { await AssetInventory.release(reservedLocale: r) }
+        var keep: Set<String> = [Self.key(loc)]
+        for id in DictationLogic.stored(at: Settings.defaultURL).list {      // the system's own spelling of each chosen language, so keys match what is reserved
+            keep.insert(Self.key(await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: id)) ?? Locale(identifier: id)))
+        }
+        let reserved = await AssetInventory.reservedLocales
+        if reserved.count >= AssetInventory.maximumReservedLocales {
+            for r in reserved where !keep.contains(Self.key(r)) { await AssetInventory.release(reservedLocale: r) }
+        }
         do { try await AssetInventory.reserve(locale: loc) } catch {
             // already holding it is success; anything else is real
             if await AssetInventory.reservedLocales.contains(where: { Self.key($0) == Self.key(loc) }) { return }
@@ -116,6 +127,7 @@ final class VoiceLanguages {
                 try await req.downloadAndInstall()
             }
             problem = nil
+            Dictation.shared.assistant?.voiceNote("\(Self.shortName(id)) ready, hold ⌥Space")
         } catch {
             let e = error as NSError
             Self.log.error("download failed step=\(step, privacy: .public) locale=\(id, privacy: .public) domain=\(e.domain, privacy: .public) code=\(e.code, privacy: .public)")
