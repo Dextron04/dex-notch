@@ -45,6 +45,12 @@ If you switch it on:
 - **What you say becomes text in the question field,** and when you let go it is sent as a prompt exactly like typed text, so it goes to the model you chose and is covered by the same notes as anything you type.
 - macOS asks for microphone access (and, on macOS before 26, Speech Recognition) the first time. You can withdraw either in System Settings → Privacy & Security.
 
+## Notch chat history (local)
+
+Dex Notch keeps every conversation you have in the notch on your Mac, so you can come back to it (⌘Y). Each one is a private file (readable only by you) in `~/Library/Application Support/NotchApp/history`, holding your messages, the answers, and the session ids that let Claude or Codex continue. It is never uploaded. Delete a conversation in the History view (⌘⌫ twice) and its file is removed.
+
+**These chats stay out of your vault unless you save them.** The recorder ignores the Claude and Codex sessions the notch starts, and nothing from the notch is added to your vault by itself. Press ⌘S ("Save to vault") on a conversation and its messages are written to your vault like any other recorded chat, and from there are covered by the notes below on the local-model server and hosted memory.
+
 ## Hosted memory (optional, off until you connect it)
 
 An optional Dex account keeps your recorded AI conversations on a server so Claude and ChatGPT can search them from anywhere. Nothing is uploaded unless you sign in to a Dex account in the welcome window and leave **Keep my AI conversations in my account** on (change it in Settings → Memory).
