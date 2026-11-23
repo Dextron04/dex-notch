@@ -54,7 +54,14 @@ enum ScreenMarks {
             append(ns.substring(with: NSRange(location: last, length: m.range.location - last))); last = m.range.location + m.range.length
             guard marks.count < maxMarks, let r = rect(ns.substring(with: m.range(at: 1)), clamp: imageSize) else { seam = true; continue }   // malformed or over the cap: stripped anyway
             marks.append(Mark(rect: r.rect, label: ns.substring(with: m.range(at: 2)).trimmingCharacters(in: .whitespacesAndNewlines), bubble: r.bubble))
-            if badges, let b = UnicodeScalar(0x245F + marks.count) { out += String(Character(b)); seam = false } else { seam = true }
+            if badges, let b = UnicodeScalar(0x245F + marks.count) {
+                out += String(Character(b)); seam = false
+                // alone on its line (bare, or after a list marker): the note goes inline, since the overlay isn't there to explain a bare badge once the chat is reopened or saved
+                let before = out.dropLast().split(separator: "\n", omittingEmptySubsequences: false).last.map(String.init) ?? "", after = ns.substring(from: last).prefix { $0 != "\n" }
+                if marks[marks.count - 1].label.isEmpty == false, before.range(of: #"^\s*(?:[-*•]|\d+[.)])?\s*$"#, options: .regularExpression) != nil, after.allSatisfy({ $0.isWhitespace }) {
+                    out += " " + marks[marks.count - 1].label
+                }
+            } else { seam = true }
         }
         append(ns.substring(from: last))
         out = closer.stringByReplacingMatches(in: out, range: NSRange(location: 0, length: (out as NSString).length), withTemplate: "")
