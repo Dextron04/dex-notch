@@ -22,6 +22,10 @@ final class Dictation {
     /// "EN", "HI": the language the next dictation will use. Observable, shown in the notch's language chip.
     private(set) var currentLanguageCode = DictationLogic.code(for: DictationLogic.stored(at: Settings.defaultURL).primary)
 
+    #if DEBUG
+    func demoLanguage(_ code: String) { currentLanguageCode = code }      // release screenshots only; nothing is saved
+    #endif
+
     /// False when a session is already running (the caller must then not stop it).
     @discardableResult
     func start() -> Bool {

@@ -119,6 +119,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let p = ProcessInfo.processInfo.environment["NOTCH_OPEN_SETTINGS"], !p.isEmpty {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [assistant] in SetupWindow.shared.show(assistant: assistant) }
         }
+        #if DEBUG
+        // NOTCH_DEMO=voice|typing opens a fresh, empty notch in that state with no mic and no speech (release screenshots)
+        if let d = ProcessInfo.processInfo.environment["NOTCH_DEMO"], !d.isEmpty {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [assistant] in
+                assistant.newConversation(); assistant.open(.prompt); Dictation.shared.demoLanguage("EN")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {     // after the field has focus, so no text is left selected
+                if d == "typing" { assistant.draft = "Draft a short reply about moving our Thursday sync\nto Friday morning, and keep it friendly." }
+                else {
+                    assistant.voiceBegan(); assistant.voiceHeard("what's on my calendar tomorrow")
+                    var t = 0.0
+                    Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { _ in
+                        t += 1.0 / 30
+                        let l = 0.25 + 0.35 * sin(t * 5.1) * sin(t * 1.7) + 0.2 * sin(t * 11.3)
+                        MainActor.assumeIsolated { assistant.voiceLevel(Float(max(0.05, min(1, l)))) }
+                    }
+                }
+                }
+            }
+        }
+        #endif
         // rebuild on display changes (plug/unplug, resolution)
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
