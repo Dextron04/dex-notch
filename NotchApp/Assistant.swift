@@ -279,7 +279,7 @@ final class Assistant {
         voiceWrote = voiceText(partial); draft = voiceWrote
     }
     func voiceLevel(_ l: Float) { let t = Float(pow(Double(l), 0.7)); voiceLevel += (t - voiceLevel) * (t > voiceLevel ? 0.7 : 0.18) }
-    func voiceFailed(_ message: String) { if listening { draft = voiceBase }; listening = false; voiceLevel = 0; error = message; voiceNote(message) }
+    func voiceFailed(_ message: String) { if listening, draft == voiceWrote { draft = voiceBase }; listening = false; voiceLevel = 0; voiceNote(message) }   // not `error`: that would replace the last answer on screen until the next send
     /// A short line in the input row's placeholder (the transcript is empty before the first answer, so `error` alone would never show).
     var voiceMsg: String?
     private var voiceMsgTask: Task<Void, Never>?

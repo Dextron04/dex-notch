@@ -74,6 +74,7 @@ struct NotchView: View {
         .onChange(of: a.sentTick) {
             showGlint = true
             if !reduce, !lastTyped.isEmpty { ghost = lastTyped }
+            lastTyped = ""      // an empty-field send (eye armed) must not lift the previous question again
             Task { try? await Task.sleep(for: .milliseconds(450)); showGlint = false; ghost = nil }
         }
         // focus the moment the notch opens (no sleep: the first keystrokes land in the field); one runloop tick later in case SwiftUI hadn't built it yet
@@ -270,7 +271,7 @@ struct NotchView: View {
                 eyeChip
                 ZStack {
                     if a.listening {
-                        Wave(level: a.voiceLevel, still: reduce, live: true).frame(width: 54, height: 20).transition(.opacity)
+                        Wave(level: a.voiceLevel, still: reduce).frame(width: 54, height: 20).transition(.opacity)
                     } else {
                         ReturnGlyph(ready: ready, busy: a.busy, reduce: reduce).transition(.opacity)
                     }
@@ -398,11 +399,10 @@ struct NotchView: View {
 struct Wave: View {
     let level: Float
     let still: Bool
-    let live: Bool
 
     var body: some View {
-        // paused whenever nothing is listening, so an idle app draws no frames
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !live || still)) { tl in
+        // only on screen while listening, so an idle app draws no frames
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still)) { tl in
             let t = tl.date.timeIntervalSinceReferenceDate
             Canvas { ctx, size in
                 let n = 11, pitch: CGFloat = 5, w: CGFloat = 2.5
