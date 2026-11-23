@@ -48,6 +48,18 @@ final class DictationLanguageTests: XCTestCase {
         XCTAssertEqual(DictationLogic.code(for: "hi_IN"), "HI")
     }
 
+    func testHinglish() throws {
+        XCTAssertEqual(DictationLogic.normalized("mul_IN"), "mul-IN")
+        XCTAssertEqual(DictationLogic.normalized("MUL-IN"), "mul-IN")
+        XCTAssertEqual(DictationLogic.code(for: "mul_IN"), "HG")
+        XCTAssertEqual(DictationLogic.normalized(Locale(identifier: "mul_IN").identifier(.bcp47)), "mul-IN")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("lang-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try DictationLogic.save(at: url, languages: ["mul_IN", "en-US"])
+        let s = DictationLogic.stored(at: url)
+        XCTAssertEqual(s.primary, "mul-IN"); XCTAssertEqual(s.list, ["mul-IN", "en-US"])
+    }
+
     func testStoredAndSaveKeepOtherKeys() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("lang-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: url) }

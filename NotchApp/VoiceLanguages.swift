@@ -1,5 +1,6 @@
 import AVFoundation
 import Speech
+import os
 
 /// Which languages dictation can use on this Mac, whether each one's model is installed, and the download. Drives Settings > Voice
 /// and the "download on first use" path in Dictation. macOS 26+: SpeechTranscriber models (system storage, on-device).
@@ -7,6 +8,7 @@ import Speech
 @MainActor @Observable
 final class VoiceLanguages {
     static let shared = VoiceLanguages()
+    nonisolated private static let log = Logger(subsystem: "com.tushin.NotchApp", category: "voice")
 
     enum Status: Equatable { case installed, download, downloading(Double), unavailable }
     struct Option: Hashable { let id: String; let name: String }
@@ -19,7 +21,12 @@ final class VoiceLanguages {
     private(set) var problem: String?
 
     nonisolated static func key(_ l: Locale) -> String { DictationLogic.normalized(l.identifier(.bcp47)).lowercased() }
-    nonisolated static func name(_ id: String) -> String { Locale.current.localizedString(forIdentifier: id) ?? id }
+    nonisolated static func name(_ id: String) -> String {
+        DictationLogic.isHinglish(id) ? "Hinglish · Hindi + English (India)" : Locale.current.localizedString(forIdentifier: id) ?? id
+    }
+
+    /// Hinglish goes first for people in India or who picked Hindi; everything else stays A to Z.
+    private var hinglishFirst: Bool { Locale.current.region?.identifier == "IN" || selected.contains { DictationLogic.normalized($0).lowercased().hasPrefix("hi-") } }
 
     init() { reload() }
 
@@ -54,7 +61,10 @@ final class VoiceLanguages {
         #endif
         let ids = supported.map { DictationLogic.normalized($0.identifier(.bcp47)) }
         let extra = selected.filter { s in !ids.contains { $0.lowercased() == s.lowercased() } }     // a saved choice this Mac can't offer still shows
-        options = (ids + extra).map { Option(id: $0, name: Self.name($0)) }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        options = (ids + extra).map { Option(id: $0, name: Self.name($0)) }.sorted {
+            if hinglishFirst, DictationLogic.isHinglish($0.id) != DictationLogic.isHinglish($1.id) { return DictationLogic.isHinglish($0.id) }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
         supportedKeys = Set(ids.map { $0.lowercased() }); installedKeys = installed
     }
 
@@ -67,7 +77,9 @@ final class VoiceLanguages {
 
     func download(_ id: String) {
         #if compiler(>=6.2)
-        guard #available(macOS 26, *), progress[DictationLogic.normalized(id).lowercased()] == nil else { return }
+        let k = DictationLogic.normalized(id).lowercased()
+        guard #available(macOS 26, *), progress[k] == nil else { return }
+        progress[k] = 0      // claimed now, so a second tap or the first-use path can't start a second install
         Task { await install(id) }
         #endif
     }
@@ -78,7 +90,11 @@ final class VoiceLanguages {
     func reserve(_ loc: Locale) async throws {
         let keep = Set(DictationLogic.stored(at: Settings.defaultURL).list.map { $0.lowercased() } + [Self.key(loc)])
         for r in await AssetInventory.reservedLocales where !keep.contains(Self.key(r)) { await AssetInventory.release(reservedLocale: r) }
-        try await AssetInventory.reserve(locale: loc)
+        do { try await AssetInventory.reserve(locale: loc) } catch {
+            // already holding it is success; anything else is real
+            if await AssetInventory.reservedLocales.contains(where: { Self.key($0) == Self.key(loc) }) { return }
+            throw error
+        }
     }
 
     @available(macOS 26, *)
@@ -86,9 +102,12 @@ final class VoiceLanguages {
         let k = DictationLogic.normalized(id).lowercased()
         progress[k] = 0
         defer { progress[k] = nil }
+        var step = "locale"
         do {
             guard let loc = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: id)) else { throw CocoaError(.featureUnsupported) }
+            step = "reserve"
             try await reserve(loc)
+            step = "download"
             let t = SpeechTranscriber(locale: loc, transcriptionOptions: [], reportingOptions: [], attributeOptions: [])
             if let req = try await AssetInventory.assetInstallationRequest(supporting: [t]) {
                 let p = req.progress
@@ -97,7 +116,11 @@ final class VoiceLanguages {
                 try await req.downloadAndInstall()
             }
             problem = nil
-        } catch { problem = "Couldn't download \(Self.name(id)): \(error.localizedDescription)" }
+        } catch {
+            let e = error as NSError
+            Self.log.error("download failed step=\(step, privacy: .public) locale=\(id, privacy: .public) domain=\(e.domain, privacy: .public) code=\(e.code, privacy: .public)")
+            problem = "Couldn't download \(Self.name(id)): \(error.localizedDescription) (\(e.domain) \(e.code), \(step))"
+        }
         await refresh()
     }
     #endif

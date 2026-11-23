@@ -8,6 +8,8 @@ The newest version is at the top. Every release is on the [Releases page](https:
 
 ## Unreleased
 
+**Hinglish dictation.** Pick "Hinglish · Hindi + English (India)" in Settings, under Voice, to dictate sentences that mix Hindi and English; it uses Apple's on-device model, and download errors in Settings now say what went wrong.
+
 **Dictate in your own language (macOS 26 and later).** Choose your language in Settings, under Voice, and add up to two more. Press ⌥⇧V to switch between them; the notch shows the new one, and a small code such as EN or HI sits in the bar while you speak. Dex Notch does not guess the language you are speaking, so it uses the one you picked. The first time you use a language, its speech model downloads to your Mac (Settings shows the progress), and you can keep dictating in other languages meanwhile. Everything is recognized on this Mac and your voice never leaves it. On older macOS versions dictation works as before.
 
 **Hold ⌥V anywhere to dictate.** Speak while you hold the keys, let go, and your words are pasted into whatever you were typing in. The notch shows what it hears while you talk. Nothing is rewritten, and it never presses Return. It uses your Mac's built-in speech recognition, on this Mac, and the microphone is on only while you hold the keys. The first time, macOS asks for microphone, speech and Accessibility access; without Accessibility the text is copied instead.

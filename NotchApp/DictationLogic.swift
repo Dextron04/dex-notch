@@ -47,8 +47,14 @@ enum DictationLogic {
         return list[((i ?? -1) + 1) % list.count]
     }
 
-    /// "hi-IN" -> "HI", the chip in the listening bar.
-    static func code(for id: String) -> String { String(normalized(id).split(separator: "-").first ?? "").uppercased() }
+    /// Apple's "multiple languages, India" model: Hindi and English in one sentence.
+    static let hinglish = "mul-IN"
+    static func isHinglish(_ id: String) -> Bool { normalized(id).lowercased() == hinglish.lowercased() }
+
+    /// "hi-IN" -> "HI", the chip in the listening bar. Hinglish is "HG" (the chip is 18 pt wide).
+    static func code(for id: String) -> String {
+        isHinglish(id) ? "HG" : String(normalized(id).split(separator: "-").first ?? "").uppercased()
+    }
 
     /// The primary language and the stored quick-switch list, in the order saved (primary included).
     static func stored(at url: URL) -> (primary: String, list: [String]) {
