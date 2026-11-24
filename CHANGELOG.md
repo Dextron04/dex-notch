@@ -6,6 +6,12 @@
 
 The newest version is at the top. Every release is on the [Releases page](https://github.com/Dextron04/dex-notch/releases), where you can download it.
 
+## v0.9.9: Mark notes stay put
+
+*23 November 2026*
+
+**Each number keeps its note.** When the notch points at several spots on your screen as a list, every number now stays next to its note in the answer, also in reopened chats and saved notes. Chats answered before this update keep their bare numbers.
+
 ## v0.9.8: Chat history
 
 *23 November 2026*
