@@ -40,6 +40,16 @@ final class ScreenMarksTests: XCTestCase {
         let p = ScreenMarks.parse(t, imageSize: size, badges: true)
         XCTAssertEqual(p.clean, "Open ① then ②, done."); XCTAssertEqual(p.marks.count, 2)
     }
+    func testStandaloneMarksCarryTheirNote() {
+        func m(_ n: String) -> String { #"<mark x="1" y="1" w="5" h="5">"# + n + "</mark>" }
+        let p = ScreenMarks.parse("Here:\n\n\(m("Wi-Fi"))\n\(m("Bluetooth"))\n", imageSize: size, badges: true)
+        XCTAssertEqual(p.clean, "Here:\n\n① Wi-Fi\n② Bluetooth")
+        XCTAssertEqual(ScreenMarks.parse("Open \(m("Wi-Fi")) now\n\(m("x")) trailing", imageSize: size, badges: true).clean, "Open ① now\n② trailing")
+        XCTAssertEqual(ScreenMarks.parse("- \(m("a"))\n1. \(m("b"))\n  * \(m("c"))", imageSize: size, badges: true).clean, "- ① a\n1. ② b\n  * ③ c")
+        XCTAssertEqual(ScreenMarks.parse("Open \(m("Wi-Fi")) then done.", imageSize: size, badges: true).clean, "Open ① then done.")
+        XCTAssertEqual(ScreenMarks.parse("A\n\(m("Wi-Fi"))\n\(m("Bl").replacingOccurrences(of: "</mark>", with: ""))", imageSize: size, streaming: true, badges: true).clean, "A\n① Wi-Fi")   // tag at the very end of the stream; the unfinished one is hidden
+        XCTAssertEqual(ScreenMarks.parse("A\n\(m("Wi-Fi"))", imageSize: size, streaming: true, badges: true).clean, "A\n① Wi-Fi")
+    }
     func testCodeIndentationSurvives() {
         let code = "```python\ndef f(x):\n    if x:\n        return  1\n```"
         XCTAssertEqual(ScreenMarks.parse(code, imageSize: size).clean, code)
