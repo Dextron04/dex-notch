@@ -5,7 +5,7 @@ This is the whole path for a closed-beta tester, from invitation to your first c
 **What you need**
 
 - A Mac on **macOS 14 or later** (Apple silicon or Intel).
-- An **invitation**. Ask for one on the waitlist at <https://vault.dextron04.in/waitlist>; you'll get an email when there is room.
+- An **invitation**. Ask for one on the waitlist at <https://vault.dextron04.in/waitlist>; you'll get an email when there is room. The email carries a one-time **access code** (twelve characters, like `ABCD-EFGH-JKLM`). Keep the email until you have finished step 2.
 - **Python 3.9 or later**, only for recording your terminal conversations. Most developer Macs already have it. If yours doesn't, Dex Notch tells you to run `xcode-select --install`.
 - A **Claude** or **ChatGPT** account to connect, and optionally Claude Code, Codex or Gemini on the Mac.
 
@@ -21,9 +21,15 @@ This is the whole path for a closed-beta tester, from invitation to your first c
 ## 2. Create your account
 
 1. A **Welcome to Dex Notch** window opens. Leave **Keep my AI conversations in my account** on if you want the memory to work (it is what the service is for). Read the small print beside it: conversations are uploaded with passwords and keys removed, and encrypted on the server, but not end-to-end.
-2. Press **Continue in browser**. Your browser opens a page and the window shows an 8-character code.
+2. Type the **access code** from your invitation into the **Access code** field. Case, spaces and dashes don't matter. The code works only with the email address the invitation went to, and only once, for your first Mac; a second Mac signs in with your email and no code (use **Already have an account? Sign in**). Codes expire after 14 days: if yours has, ask for a new invitation, which replaces the old code. Then press **Continue in browser**. Your browser opens a page and the window shows an 8-character code.
 3. Sign in with **the email address your invitation went to**. You get a one-time link by email (no password). Open it and press the button on the page.
 4. **Check that the code on the page matches the one on your Mac**, then continue.
+
+### Your 30-day trial, and basic mode
+
+Your first sign-in starts a 30-day trial with every feature. A few days before it ends, Settings → Memory shows how many days are left (and a notice appears at 7 days and at 1 day). When it ends, or if the operator sets your account to basic, Dex Notch keeps working in **basic mode**: you can still ask one model at a time, keep your chat history, and record conversations on your Mac. Memory upload and the assistant connector, voice, screen help, dual answers, mail alerts, iPhone alerts and reminders show **Not included in your access** and do nothing. Nothing is deleted: your notes stay on the server and you can view, export or delete them on your account page. Ask the operator if you want more time.
+
+**Daily check-in.** Dex Notch asks the server once a day, and at launch, what your account may use, and keeps the signed answer for 30 hours. If it can't reach the server it retries every 15 minutes; if no answer arrives within 30 hours the locked features switch off until one does, and switch back on by themselves. Basic features always work. Your **Mac's clock must be right to within 5 minutes**: a clock set back by more than that puts the app in basic mode until the next successful check-in, so leave **Set time and date automatically** on in System Settings → General → Date & Time.
 
 ## 3. Lock your vault
 
@@ -104,6 +110,9 @@ If your notes aren't in `~/Vault`, add `--vault /your/folder` to the first comma
 |---|---|
 | macOS says the app "can't be verified" | [Step 1](#1-download-and-open-the-app): **Open Anyway**, or right-click → Open. |
 | "This address isn't on the list yet" | Use the same email your invitation went to, or ask on the waitlist again. |
+| "That code isn't valid, or it has expired" | Recheck the twelve characters (like `ABCD-EFGH-2345`), or ask for a new invitation (it replaces the old code; each code works once). Use the same email address the invitation went to. |
+| "This account isn't activated yet" | The Mac is linked but no trial has started. Settings → Memory → Access → **Enter access code**, or ask for an invitation. |
+| Features say "Not included in your access" | Your trial ended or your account is on basic. If it shouldn't be: check the Mac's clock is automatic, then quit and reopen Dex Notch to check in again. |
 | The welcome window never moves on | Check the code on the page matches, and that you pressed **Add this Mac**. The code expires after 10 minutes: press **Start over**. |
 | Dex Notch returns to the sign-in window | The server no longer recognises this Mac (you removed it, or locked your vault after linking it). Sign in again; nothing is lost. |
 | Nothing is uploading | Settings → Memory → **Record my conversations** must say *Recording*. Also check that **Keep my conversations in my account** is on. |

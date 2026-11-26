@@ -438,7 +438,7 @@ xcodebuild -scheme NotchApp -configuration Debug build   # or open NotchApp.xcod
 scripts/make-dmg.sh v0.2.0                               # a universal, ad-hoc signed "Dex Notch.app" in a DMG and zip in build/dist/
 ```
 
-Releases are built by GitHub Actions: push a tag (`git tag v0.2.0 && git push --tags`) and a DMG is attached to a new release. CI runs every test on each push. A release also carries the app's own Google sign-in, read from the `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` repository secrets.
+Releases are built and signed by GitHub Actions in the private `dex-notch-app` repo: push a tag there (`git tag v0.2.0 && git push --tags`) and `scripts/publish-release.sh` syncs the docs to the public `dex-notch` repo and publishes the DMG, zip, appcast and checksums there as the latest release (the public repo's own Release workflow stays disabled, and the build number is the run number plus 1000). CI runs every test on each push. A release also carries the app's own Google sign-in, read from the `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` repository secrets; publishing uses the `PUBLIC_RELEASE_TOKEN` secret.
 
 **Demo mode.** `NOTCH_VAULT`, `NOTCH_SETTINGS` and `NOTCH_CLIS` (for example `none`, or `claude,codex`) point the app at other data or pretend which CLIs are installed. `NOTCH_ADDONS` points the alert queue and accounts at a throwaway file, `NOTCH_ALERT_DEMO` (`gmail`, `phone`, or anything else for all of them) shows made-up alert cards, and `NOTCH_OPEN_SETTINGS` (`models`, `folders`, `mail`, `iphone`, `memory`, `updates`) opens Settings on a page. That is how the screenshots here were made, and how to rehearse the first run:
 
