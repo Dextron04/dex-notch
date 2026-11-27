@@ -16,17 +16,12 @@ The newest version is at the top. Every release is on the [Releases page](https:
 - New closed-beta invitations will come with a one-time access code. New installs ask for it when invitations switch over.
 - If your Mac cannot reach the server for more than a day, the extra features pause until it reconnects. Recording on your Mac and asking keep working.
 
-## Unreleased: Access codes, a 30-day trial and basic mode
+## v0.9.11: Notes saved elsewhere show up here
 
-*Not released yet*
+*26 November 2026*
 
-**Your invitation now carries an access code.** The first time you open Dex Notch it asks for the code from your invitation email, then signs you in in the browser. The code works once and only with the email it was sent to. Already have an account? Choose **Already have an account? Sign in** and skip the code. Current testers are not asked for anything and stay on full access.
-
-**30 days of everything, then basic mode.** A new account gets a 30-day trial. Settings → Memory shows the days left, with a notice at 7 days and at 1 day. After that Dex Notch keeps working in basic mode: ask one model at a time, keep your chat history and record conversations on your Mac. Memory upload and the assistant connector, voice, screen help, dual answers, mail alerts, iPhone alerts and reminders are switched off and say "Not included in your access". Nothing you saved is deleted, and you can still view, export and delete your notes on the web.
-
-**A daily check-in.** The app asks the server once a day what your account may use and keeps a signed answer for 30 hours. It sends your device token, a hashed machine identifier and the app version; [PRIVACY.md](PRIVACY.md) has the details. A Mac whose clock is more than 5 minutes behind goes to basic mode until the next check-in, and the old 7-day offline grace is gone: a linked Mac that cannot reach the server opens in basic mode.
-
-**For the operator.** `/admin` shows each account's access mode, days left and last check-in, and can set Full, Basic or Custom, extend a trial or end it. New server options `--pass-key-file`, `--registration` and `--open-all` are all off by default; `docs/hosted-operations.md` has the rollout order, the rollback switches and key rotation.
+- Chats saved to your Dex memory from Claude, ChatGPT and your other Macs now appear on this Mac, so the notch can find them, offline too.
+- Your first sync downloads the notes already saved in your hosted vault.
 
 ## v0.9.9: Mark notes stay put
 
